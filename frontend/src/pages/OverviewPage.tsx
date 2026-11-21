@@ -11,6 +11,7 @@ import { CountUp } from "@/motion/CountUp";
 import { ProgressRing } from "@/motion/ProgressRing";
 import { Stagger, StaggerItem } from "@/motion/Stagger";
 import { NAV_ITEMS } from "@/routes/navigation";
+import { Metric } from "@/components/common/Metric";
 
 /** `done` stays false until the stage that builds each step can tell from real data (see the Stage badge). */
 const STEPS = [
@@ -54,12 +55,13 @@ export default function OverviewPage() {
   const done = STEPS.filter((s) => s.done).length;
   return (
     <>
-      <PageHeader title={nav.label} description={nav.description} glow />
+      <PageHeader title={nav.label} description={nav.description} eyebrow="Workspace" />
       <Stagger className="grid gap-6 lg:grid-cols-3">
         <StaggerItem className="lg:col-span-2">
           <Card className="h-full">
             <CardHeader className="flex-row items-start justify-between gap-4">
-              <div className="space-y-1">
+              <div className="space-y-3">
+                <Metric label="Setup progress" value={done} suffix={` of ${STEPS.length}`} />
                 <CardTitle>Getting started</CardTitle>
                 <CardDescription>
                   Nothing has been set up yet, so there is nothing to chart. These steps will tick off by themselves once real data exists;
@@ -67,9 +69,8 @@ export default function OverviewPage() {
                 </CardDescription>
               </div>
               <ProgressRing value={done} max={STEPS.length} label="Getting started steps done" size={88}>
-                <span className="text-heading font-semibold leading-none">
-                  <CountUp value={done} />
-                  <span className="text-muted-foreground">/{STEPS.length}</span>
+                <span className="text-heading font-bold leading-none">
+                  <CountUp value={Math.round((done / STEPS.length) * 100)} suffix="%" className="text-gradient" />
                 </span>
                 <span className="mt-0.5 text-caption text-muted-foreground">done</span>
               </ProgressRing>
@@ -80,7 +81,7 @@ export default function OverviewPage() {
                   <li key={s.label}>
                     <Link
                       to={s.to}
-                      className="group flex items-center gap-3 rounded-md py-3 text-label font-medium transition-colors duration-[var(--duration-fast)] hover:text-primary"
+                      className="group flex items-center gap-3 rounded-md py-3 text-label font-medium transition-colors duration-[var(--duration-fast)] hover:text-primary-ink"
                     >
                       <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full border border-dashed text-caption text-muted-foreground tabular-nums">
                         {i + 1}

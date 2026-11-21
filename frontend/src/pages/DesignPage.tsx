@@ -1,5 +1,7 @@
 import { Check, Play, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Brand } from "@/components/common/Brand";
+import { Metric } from "@/components/common/Metric";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -9,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTheme } from "@/contexts/ThemeContext";
 import { contrastRatio, cssColorToRgb, MIN_TEXT_CONTRAST, type Rgb } from "@/lib/contrast";
 import { CountUp } from "@/motion/CountUp";
 import { PageTransition } from "@/motion/PageTransition";
@@ -27,6 +28,30 @@ const SLATE_BG: Record<number, string> = {
   600: "bg-slate-600", 700: "bg-slate-700", 800: "bg-slate-800", 900: "bg-slate-900", 950: "bg-slate-950",
 };
 
+const VIOLET_BG: Record<number, string> = { 400: "bg-violet-400", 500: "bg-violet-500", 600: "bg-violet-600", 700: "bg-violet-700" };
+const ORCHID_BG: Record<number, string> = { 300: "bg-orchid-300", 400: "bg-orchid-400", 500: "bg-orchid-500", 600: "bg-orchid-600", 700: "bg-orchid-700" };
+const SERIES = [
+  { n: 1, name: "indigo", bg: "bg-series-1", fill: "fill-series-1", shape: "circle" },
+  { n: 2, name: "teal", bg: "bg-series-2", fill: "fill-series-2", shape: "square" },
+  { n: 3, name: "orchid", bg: "bg-series-3", fill: "fill-series-3", shape: "diamond" },
+  { n: 4, name: "gold", bg: "bg-series-4", fill: "fill-series-4", shape: "triangle" },
+  { n: 5, name: "sky", bg: "bg-series-5", fill: "fill-series-5", shape: "circle-ring" },
+  { n: 6, name: "lime", bg: "bg-series-6", fill: "fill-series-6", shape: "square-ring" },
+] as const;
+
+function Marker({ shape, fill }: { shape: (typeof SERIES)[number]["shape"]; fill: string }) {
+  const ring = shape.endsWith("ring");
+  const common = ring ? { fill: "none", strokeWidth: 2, className: fill.replace("fill-", "stroke-") } : { className: fill };
+  return (
+    <svg viewBox="0 0 12 12" className="size-3.5 shrink-0" aria-hidden="true" focusable="false">
+      {shape.startsWith("circle") && <circle cx="6" cy="6" r={ring ? 4 : 5} {...common} />}
+      {shape.startsWith("square") && <rect x={ring ? 2 : 1} y={ring ? 2 : 1} width={ring ? 8 : 10} height={ring ? 8 : 10} rx="1.5" {...common} />}
+      {shape === "diamond" && <path d="M6 0.5 11.5 6 6 11.5 0.5 6z" {...common} />}
+      {shape === "triangle" && <path d="M6 1 11.5 11H0.5z" {...common} />}
+    </svg>
+  );
+}
+
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
     <section aria-labelledby={`sec-${title.replace(/\W+/g, "-").toLowerCase()}`} className="mb-12">
@@ -40,6 +65,13 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
+/** Shows a token's authored value, read from the live CSS (so the page never repeats a literal). */
+function TokenValue({ name }: { name: string }) {
+  const [v, setV] = useState("");
+  useEffect(() => setV(getComputedStyle(document.documentElement).getPropertyValue(name).trim()), [name]);
+  return <span className="font-mono">{v}</span>;
+}
+
 function Swatch({ className, label, note }: { className: string; label: string; note?: string }) {
   return (
     <div className="min-w-0">
@@ -51,14 +83,26 @@ function Swatch({ className, label, note }: { className: string; label: string; 
 }
 
 const PAIRS: { label: string; fg: string; bg: string }[] = [
-  { label: "Body text on background", fg: "--foreground", bg: "--background" },
+  { label: "Body text on page", fg: "--foreground", bg: "--background" },
   { label: "Body text on card", fg: "--card-foreground", bg: "--card" },
-  { label: "Muted text on background", fg: "--muted-foreground", bg: "--background" },
+  { label: "Body text on raised surface", fg: "--foreground", bg: "--raised" },
+  { label: "Muted text on page", fg: "--muted-foreground", bg: "--background" },
   { label: "Muted text on card", fg: "--muted-foreground", bg: "--card" },
-  { label: "Muted text on muted surface", fg: "--muted-foreground", bg: "--muted" },
+  { label: "Muted text on raised surface", fg: "--muted-foreground", bg: "--raised" },
+  { label: "Muted text on muted well", fg: "--muted-foreground", bg: "--muted" },
   { label: "Muted text on sidebar", fg: "--muted-foreground", bg: "--sidebar" },
-  { label: "Primary button text", fg: "--primary-foreground", bg: "--primary" },
-  { label: "Primary link text on background", fg: "--primary", bg: "--background" },
+  { label: "Indigo text and links on page", fg: "--primary", bg: "--background" },
+  { label: "Indigo text and links on card", fg: "--primary", bg: "--card" },
+  { label: "Eyebrow and link ink on page", fg: "--primary-ink", bg: "--background" },
+  { label: "Eyebrow and link ink on card", fg: "--primary-ink", bg: "--card" },
+  { label: "Button text on gradient: start", fg: "--on-gradient", bg: "--strong-from" },
+  { label: "Button text on gradient: middle", fg: "--on-gradient", bg: "--strong-via" },
+  { label: "Button text on gradient: end", fg: "--on-gradient", bg: "--strong-to" },
+  { label: "Gradient text: start on card", fg: "--text-from", bg: "--card" },
+  { label: "Gradient text: middle on card", fg: "--text-via", bg: "--card" },
+  { label: "Gradient text: end on card", fg: "--text-to", bg: "--card" },
+  { label: "Gradient text: start on page", fg: "--text-from", bg: "--background" },
+  { label: "Gradient text: end on page", fg: "--text-to", bg: "--background" },
   { label: "Active navigation item", fg: "--selected-foreground", bg: "--selected" },
   { label: "Brand badge", fg: "--primary-soft-foreground", bg: "--primary-soft" },
   { label: "On track badge", fg: "--on-track-ink", bg: "--on-track-soft" },
@@ -69,55 +113,104 @@ const PAIRS: { label: string; fg: string; bg: string }[] = [
   { label: "Off track text on card", fg: "--off-track-ink", bg: "--card" },
 ];
 
-/** Contrast of the live theme's token pairs, computed in this browser from the actual CSS values. */
-function ContrastTable() {
-  const { theme } = useTheme();
-  const [rows, setRows] = useState<{ label: string; ratio: number | null }[]>([]);
+type Ratios = Record<string, number | null>;
+function measure(el: HTMLElement | null): Ratios {
+  const out: Ratios = {};
+  if (!el) return out;
+  const cs = getComputedStyle(el);
+  const toRgb = (v: string): Rgb | null => cssColorToRgb(cs.getPropertyValue(v).trim());
+  for (const p of PAIRS) {
+    const a = toRgb(p.fg);
+    const b = toRgb(p.bg);
+    out[p.label] = a && b ? contrastRatio(a, b) : null;
+  }
+  return out;
+}
+
+function Result({ ratio }: { ratio: number | null | undefined }) {
+  if (ratio == null) return <span className="text-muted-foreground">n/a</span>;
+  const pass = ratio >= MIN_TEXT_CONTRAST;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="tabular-nums">{ratio.toFixed(2)}:1</span>
+      {pass ? (
+        <Badge variant="onTrack"><Check aria-hidden="true" /> Pass</Badge>
+      ) : (
+        <Badge variant="offTrack"><X aria-hidden="true" /> Below {MIN_TEXT_CONTRAST}</Badge>
+      )}
+    </span>
+  );
+}
+
+/** Contrast of the token pairs for BOTH themes, computed in this browser from the live CSS values of the two previews. */
+function ContrastTable({ light, dark }: { light: HTMLElement | null; dark: HTMLElement | null }) {
+  const [rows, setRows] = useState<{ light: Ratios; dark: Ratios }>({ light: {}, dark: {} });
   useEffect(() => {
-    const cs = getComputedStyle(document.documentElement);
-    const toRgb = (v: string): Rgb | null => cssColorToRgb(cs.getPropertyValue(v).trim());
-    setRows(
-      PAIRS.map((p) => {
-        const a = toRgb(p.fg);
-        const b = toRgb(p.bg);
-        return { label: p.label, ratio: a && b ? contrastRatio(a, b) : null };
-      }),
-    );
-  }, [theme]);
+    setRows({ light: measure(light), dark: measure(dark) });
+  }, [light, dark]);
   return (
     <Card lift={false}>
       <CardHeader>
-        <CardTitle>Measured contrast ({theme} theme)</CardTitle>
-        <CardDescription>Minimum for text is {MIN_TEXT_CONTRAST}:1. Toggle the theme to see the other one.</CardDescription>
+        <CardTitle>Measured contrast, light and dark</CardTitle>
+        <CardDescription>Minimum for text is {MIN_TEXT_CONTRAST}:1. Computed in this browser from the live token values.</CardDescription>
       </CardHeader>
       <CardContent>
-        <table className="w-full text-label">
-          <caption className="sr-only">Contrast ratios of text and background token pairs</caption>
-          <thead>
-            <tr className="text-left text-muted-foreground">
-              <th scope="col" className="py-1.5 pr-4 font-medium">Pair</th>
-              <th scope="col" className="py-1.5 pr-4 text-right font-medium">Ratio</th>
-              <th scope="col" className="py-1.5 font-medium">Result</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {rows.map((r) => (
-              <tr key={r.label}>
-                <td className="py-1.5 pr-4">{r.label}</td>
-                <td className="py-1.5 pr-4 text-right tabular-nums">{r.ratio ? `${r.ratio.toFixed(2)}:1` : "n/a"}</td>
-                <td className="py-1.5">
-                  {r.ratio === null ? null : r.ratio >= MIN_TEXT_CONTRAST ? (
-                    <Badge variant="onTrack"><Check aria-hidden="true" /> Pass</Badge>
-                  ) : (
-                    <Badge variant="offTrack"><X aria-hidden="true" /> Below {MIN_TEXT_CONTRAST}</Badge>
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[34rem] text-label">
+            <caption className="sr-only">Contrast ratios of text and background token pairs, light and dark</caption>
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th scope="col" className="py-1.5 pr-4 font-medium">Pair</th>
+                <th scope="col" className="py-1.5 pr-4 font-medium">Light</th>
+                <th scope="col" className="py-1.5 font-medium">Dark</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y">
+              {PAIRS.map((p) => (
+                <tr key={p.label}>
+                  <td className="py-1.5 pr-4">{p.label}</td>
+                  <td className="py-1.5 pr-4"><Result ratio={rows.light[p.label]} /></td>
+                  <td className="py-1.5"><Result ratio={rows.dark[p.label]} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** One theme's sample screen, forced into that theme whatever the page theme is. */
+function ThemePanel({ theme, setRef }: { theme: "light" | "dark"; setRef: (el: HTMLDivElement | null) => void }) {
+  return (
+    <div ref={setRef} className={`theme-preview ${theme === "dark" ? "theme-dark" : "theme-light"} relative isolate overflow-hidden rounded-2xl border p-5`}>
+      <div className="heading-glow relative isolate mb-5">
+        <p className="eyebrow mb-1.5 text-primary-ink">{theme} theme</p>
+        <p className="text-title font-bold">Performance overview</p>
+        <p className="mt-1.5 text-label text-muted-foreground">Calm, data-first, with a confident indigo-violet accent.</p>
+      </div>
+      <div className="card-surface card-lift mb-4 p-4">
+        <Metric label="Objective progress" value={72} suffix="%" />
+        <div className="mt-3"><ProgressBar value={0.72} label={`${theme} sample progress`} /></div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button size="sm">Primary</Button>
+          <Button size="sm" variant="outline">Outline</Button>
+          <a href="#design-top" className="text-label font-medium text-primary-ink underline-offset-4 hover:underline">Text link</a>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <StatusBadge status="on-track" /> <StatusBadge status="at-risk" /> <StatusBadge status="off-track" /> <StatusBadge status="info" />
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {SERIES.map((x) => (
+          <span key={x.n} className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
+            <Marker shape={x.shape} fill={x.fill} /> {x.name}
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 flex justify-center"><Illustration name="chart" /></div>
+    </div>
   );
 }
 
@@ -130,13 +223,14 @@ function Replay({ onClick, label }: { onClick: () => void; label: string }) {
 }
 
 const TYPE_SAMPLES = [
-  { token: "text-display", cls: "text-display font-semibold", sample: "1,284", note: "2rem · metric numbers" },
-  { token: "text-title", cls: "text-title font-semibold", sample: "Performance overview", note: "1.625rem · page titles" },
-  { token: "text-heading", cls: "text-heading font-semibold", sample: "Getting started", note: "1.0625rem · card headings" },
+  { token: "text-hero", cls: "text-hero font-bold tabular-nums text-gradient", sample: "1,284", note: "2.75rem · hero metrics, bold, gradient" },
+  { token: "text-display", cls: "text-display font-bold tabular-nums", sample: "86.5%", note: "2rem · metric numbers" },
+  { token: "text-title", cls: "text-title font-bold", sample: "Performance overview", note: "1.75rem · page titles, bold, tight" },
+  { token: "text-heading", cls: "text-heading font-semibold", sample: "Getting started", note: "1.0625rem · card headings, semibold" },
   { token: "text-body", cls: "text-body", sample: "Reading text for descriptions and long copy.", note: "0.9375rem · body" },
   { token: "text-label", cls: "text-label font-medium", sample: "Control and table label", note: "0.8125rem · labels" },
   { token: "text-caption", cls: "text-caption text-muted-foreground", sample: "Help text and timestamps", note: "0.75rem · caption" },
-  { token: "text-overline", cls: "text-overline font-semibold uppercase text-muted-foreground", sample: "Group label", note: "0.6875rem · overline" },
+  { token: "text-overline", cls: "eyebrow text-primary-ink", sample: "Section label", note: "0.6875rem · tiny uppercase label (eyebrow)" },
 ];
 
 const TONES: { tone: Tone; label: string; value: number }[] = [
@@ -149,16 +243,18 @@ const TONES: { tone: Tone; label: string; value: number }[] = [
 
 export default function DesignPage() {
   const [replay, setReplay] = useState(0);
+  const [lightEl, setLightEl] = useState<HTMLElement | null>(null);
+  const [darkEl, setDarkEl] = useState<HTMLElement | null>(null);
   const again = () => setReplay((n) => n + 1);
   return (
     <>
       <PageHeader
         title="Design system"
-        description="The palette, type, components and motion every screen is built from. An unlisted page for review; the values shown in the motion samples are examples, not data."
-        glow
+        eyebrow="Style guide · Aurora indigo"
+        description="The palette, gradient, type, components and motion every screen is built from. An unlisted page for review; the numbers shown in samples are examples, not data."
       />
 
-      <Section title="Brand and neutrals" description="Indigo/violet brand from the Z logo (700), cool slate neutrals, and one accent (orchid). Edit frontend/src/styles/tokens.css to retune.">
+      <Section title="Brand and neutrals" description="Vivid indigo (500 is the bright solid, 600 the primary), violet and orchid for the gradient, lavender-grey neutrals. Edit frontend/src/styles/tokens.css to retune.">
         <div className="space-y-5">
           <div>
             <p className="mb-2 text-label font-medium">Brand</p>
@@ -166,23 +262,88 @@ export default function DesignPage() {
               {RAMP.map((n) => <Swatch key={n} className={BRAND_BG[n]!} label={`brand-${n}`} />)}
             </div>
           </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-label font-medium">Violet</p>
+              <div className="grid grid-cols-4 gap-3">
+                {[400, 500, 600, 700].map((n) => <Swatch key={n} className={VIOLET_BG[n]!} label={`violet-${n}`} />)}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-label font-medium">Orchid (the one accent)</p>
+              <div className="grid grid-cols-5 gap-3">
+                {[300, 400, 500, 600, 700].map((n) => <Swatch key={n} className={ORCHID_BG[n]!} label={`orchid-${n}`} />)}
+              </div>
+            </div>
+          </div>
           <div>
-            <p className="mb-2 text-label font-medium">Slate</p>
+            <p className="mb-2 text-label font-medium">Lavender-grey</p>
             <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-11">
               {RAMP.map((n) => <Swatch key={n} className={SLATE_BG[n]!} label={`slate-${n}`} />)}
             </div>
           </div>
           <div>
             <p className="mb-2 text-label font-medium">Interface roles (change with the theme)</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
               <Swatch className="bg-background" label="background" note="page" />
-              <Swatch className="bg-card" label="card" note="surfaces" />
+              <Swatch className="bg-card" label="card" note="surface" />
+              <Swatch className="bg-raised" label="raised" note="layer above a card" />
               <Swatch className="bg-muted" label="muted" note="wells" />
-              <Swatch className="bg-primary" label="primary" note="actions" />
+              <Swatch className="bg-primary" label="primary" note="text, links" />
               <Swatch className="bg-selected" label="selected" note="active item" />
               <Swatch className="bg-accent" label="accent" note="highlights" />
             </div>
           </div>
+        </div>
+      </Section>
+
+      <Section
+        title="Brand gradient"
+        description="135 degrees: indigo to violet to orchid. Used on the primary button, logo tile, active sidebar indicator, progress ring, hero numbers and the glow behind headings. Elsewhere the bright solid indigo."
+      >
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card lift={false}>
+            <CardHeader><CardTitle>The two fills</CardTitle><CardDescription>Exact aurora for decoration; deepened for under text.</CardDescription></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="bg-gradient-brand h-16 rounded-xl" />
+              <p className="text-caption text-muted-foreground">
+                --gradient-brand · <TokenValue name="--brand-from" /> → <TokenValue name="--brand-via" /> → <TokenValue name="--brand-to" />
+              </p>
+              <p className="text-caption text-muted-foreground">logo tile, ring, indicator, glows</p>
+              <div className="bg-gradient-brand-strong h-16 rounded-xl" />
+              <p className="text-caption text-muted-foreground">
+                --gradient-brand-strong · <TokenValue name="--strong-from" /> → <TokenValue name="--strong-via" /> → <TokenValue name="--strong-to" />
+              </p>
+              <p className="text-caption text-muted-foreground">buttons: white text stays above 4.5:1 on every stop</p>
+            </CardContent>
+          </Card>
+          <Card lift={false}>
+            <CardHeader><CardTitle>Where it appears</CardTitle><CardDescription>Logo, button, hero number, ring, bar.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <Brand />
+              <div className="flex flex-wrap items-center gap-3">
+                <Button>Primary button</Button>
+                <ProgressRing value={2} max={4} label="Sample ring" size={56} strokeWidth={6}>
+                  <span className="text-caption font-bold text-gradient">50%</span>
+                </ProgressRing>
+              </div>
+              <Metric label="Hero metric" value={1284} />
+              <ProgressBar value={0.64} label="Sample bar" />
+            </CardContent>
+          </Card>
+          <Card lift={false}>
+            <CardHeader><CardTitle>Indicator and glow</CardTitle><CardDescription>Active sidebar item; the light behind page headings.</CardDescription></CardHeader>
+            <CardContent className="space-y-5">
+              <div className="relative h-10 w-full max-w-60">
+                <span className="nav-indicator" style={{ height: 40 }} aria-hidden="true" />
+                <span className="relative z-10 flex h-10 items-center px-3 text-label font-semibold text-selected-foreground">Active item</span>
+              </div>
+              <div className="heading-glow relative isolate pb-2 pt-4">
+                <p className="text-heading font-bold">Heading with glow</p>
+                <p className="text-label text-muted-foreground">Three soft lights, indigo, violet, orchid.</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </Section>
 
@@ -213,6 +374,31 @@ export default function DesignPage() {
           <Badge variant="primary">Brand</Badge>
           <Badge variant="outline">Outline</Badge>
         </div>
+      </Section>
+
+      <Section
+        title="Data series"
+        description="Six distinct hues for charts in later stages, chosen to stay apart for common colour-blindness. Always give a series a legend entry or a label, and a marker shape when several share a chart. Never use them to mean a status."
+      >
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          {SERIES.map((x) => (
+            <Card key={x.n} lift={false}>
+              <CardContent className="space-y-2 p-3">
+                <div className={`h-12 rounded-lg ${x.bg}`} />
+                <p className="flex items-center gap-1.5 text-label font-medium"><Marker shape={x.shape} fill={x.fill} /> {x.name}</p>
+                <p className="text-caption text-muted-foreground">series-{x.n} · <TokenValue name={`--color-series-${x.n}`} /></p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card lift={false} className="mt-4">
+          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
+            <span className="eyebrow text-muted-foreground">Sample legend</span>
+            {SERIES.map((x) => (
+              <span key={x.n} className="inline-flex items-center gap-2 text-label"><Marker shape={x.shape} fill={x.fill} /> Series {x.n} ({x.name})</span>
+            ))}
+          </CardContent>
+        </Card>
       </Section>
 
       <Section title="Typography" description="Inter variable, self-hosted. Tabular numbers keep metric columns aligned.">
@@ -400,8 +586,15 @@ export default function DesignPage() {
         </div>
       </Section>
 
-      <Section title="Accessibility" description="Measured in this browser from the live CSS values.">
-        <ContrastTable />
+      <Section title="Light and dark side by side" description="The same screen forced into each theme, so you can compare them without switching.">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ThemePanel theme="light" setRef={setLightEl} />
+          <ThemePanel theme="dark" setRef={setDarkEl} />
+        </div>
+      </Section>
+
+      <Section title="Accessibility" description="Measured in this browser from the live CSS values of both previews above.">
+        <ContrastTable light={lightEl} dark={darkEl} />
       </Section>
     </>
   );

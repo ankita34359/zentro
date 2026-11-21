@@ -48,8 +48,9 @@ export function ProgressRing({
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="var(--primary)" />
-            <stop offset="100%" stopColor="var(--accent)" />
+            <stop offset="0%" stopColor="var(--brand-from)" />
+            <stop offset="52%" stopColor="var(--brand-via)" />
+            <stop offset="100%" stopColor="var(--brand-to)" />
           </linearGradient>
         </defs>
         <circle cx={c} cy={c} r={r} fill="none" strokeWidth={strokeWidth} className="stroke-muted" />

@@ -115,6 +115,6 @@ describe("routes", () => {
     await screen.findByText("2 of 2 applied");
     expect(screen.getByText("abc1234", { selector: "dd" })).toBeTruthy();
     expect(screen.getByText("Getting started")).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/\d+\s*%/);
+    expect(document.body.textContent).not.toMatch(/(?<![\d.])(?!0\s*%)\d+\s*%/); // only the derived 0% of the setup ring, no sample percentages
   });
 });

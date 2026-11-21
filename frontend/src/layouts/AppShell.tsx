@@ -43,7 +43,7 @@ export function AppShell() {
   }, [pathname]);
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-background text-foreground">
+    <div className="min-h-screen overflow-x-clip text-foreground">
       <a
         href="#main"
         className="sr-only z-50 rounded-lg bg-primary px-3 py-2 text-label font-medium text-primary-foreground shadow-md focus:not-sr-only focus:fixed focus:left-3 focus:top-3"

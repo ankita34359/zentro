@@ -6,7 +6,7 @@ import { duration, ease, riseDistance, staggerStep } from "@/lib/motion";
 const src = path.resolve(import.meta.dirname, "../../frontend/src");
 const tokens = fs.readFileSync(path.join(src, "styles/tokens.css"), "utf8");
 
-/** The text of one top-level block such as ":root {" or ".dark {". */
+/** The text of one top-level block such as ":root,\n.theme-light {" or "@theme {". */
 function block(selector: string): string {
   const start = tokens.indexOf(`\n${selector} {`);
   expect(start, `${selector} block`).toBeGreaterThan(-1);
@@ -21,8 +21,8 @@ const names = (b: string) => [...b.matchAll(/^\s*(--[a-z0-9-]+):/gm)].map((m) =>
 const value = (b: string, name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(b)?.[1]?.trim();
 
 describe("design tokens (one file decides the look)", () => {
-  const light = block(":root");
-  const dark = block(".dark");
+  const light = block(":root,\n.theme-light");
+  const dark = block(".dark,\n.theme-dark");
 
   it("every themed role defined for light is also defined for dark (and nothing extra)", () => {
     const themed = (b: string) => names(b).filter((n) => !/^--(sidebar-width|header-height|page-max-width|duration-|stagger|ease-|rise-)/.test(n));
@@ -53,13 +53,54 @@ describe("design tokens (one file decides the look)", () => {
     for (const v of ["--sidebar-width", "--header-height", "--page-max-width"]) expect(tokens).toContain(`${v}:`);
   });
 
-  it("uses a deep navy for dark mode, not black, and an off-white for light mode", () => {
-    const lightness = (v: string | undefined) => Number(/oklch\(([\d.]+)/.exec(v ?? "")?.[1]);
-    expect(lightness(value(dark, "--background"))).toBeGreaterThan(0.1);
-    expect(lightness(value(dark, "--background"))).toBeLessThan(0.25);
-    expect(/oklch\([\d.]+ ([\d.]+)/.exec(value(dark, "--background") ?? "")?.[1]).not.toBe("0");
-    expect(lightness(value(light, "--background"))).toBeGreaterThan(0.97);
-    expect(lightness(value(light, "--background"))).toBeLessThan(1);
+  const hex = (b: string, name: string) => (value(b, name) ?? "").toLowerCase();
+  const luminance = (h: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
+  };
+
+  it("dark mode is a deep rich navy with layered surfaces, never black", () => {
+    expect(hex(dark, "--background")).toBe("#070b1a");
+    expect(hex(dark, "--card")).toBe("#0e1530");
+    expect(hex(dark, "--raised")).toBe("#151d3f");
+    // each layer is lighter than the one below it, and none is pure black
+    expect(luminance(hex(dark, "--card"))).toBeGreaterThan(luminance(hex(dark, "--background")));
+    expect(luminance(hex(dark, "--raised"))).toBeGreaterThan(luminance(hex(dark, "--card")));
+    expect(luminance(hex(dark, "--background"))).toBeGreaterThan(0.002);
+    expect(value(dark, "--card-highlight")).toMatch(/rgb\(255 255 255 \/ 0\.\d+\)/); // faint top highlight
+  });
+
+  it("light mode is crisp white cards on a very light cool lavender-grey page", () => {
+    expect(hex(light, "--background")).toBe("#f4f5fb");
+    expect(hex(light, "--card")).toBe("#ffffff");
+    expect(luminance(hex(light, "--background"))).toBeGreaterThan(0.9);
+    expect(luminance(hex(light, "--background"))).toBeLessThan(1);
+    expect(hex(light, "--primary")).toBe("#4f46e5"); // vivid indigo, white text on it passes
+    expect(value(light, "--shadow-ink")).toContain("79 70 229"); // indigo-tinted shadows
+  });
+
+  it("defines the aurora brand gradient at 135 degrees from indigo to violet to orchid", () => {
+    for (const b of [light, dark]) {
+      expect(hex(b, "--brand-from")).toBe("#4f46e5");
+      expect(hex(b, "--brand-via")).toBe("#8b5cf6");
+      expect(hex(b, "--brand-to")).toBe("#d946ef");
+      expect(value(b, "--gradient-brand")).toMatch(/^linear-gradient\(135deg, var\(--brand-from\)/);
+      expect(value(b, "--gradient-brand-strong")).toMatch(/^linear-gradient\(135deg/);
+      for (const t of ["--text-from", "--text-via", "--text-to", "--strong-from", "--strong-via", "--strong-to", "--on-gradient"]) expect(value(b, t), t).toBeTruthy();
+    }
+  });
+
+  it("has the six data-series tokens with the specified hues", () => {
+    const want: Record<string, string> = { 1: "#6366f1", 2: "#14b8a6", 3: "#d946ef", 4: "#f59e0b", 5: "#38bdf8", 6: "#84cc16" };
+    for (const [n, h] of Object.entries(want)) expect(value(tokens, `--color-series-${n}`)?.toLowerCase()).toBe(h);
+  });
+
+  it("status colours are untouched in meaning: emerald, amber, rose, sky hues", () => {
+    const hue = (n: string) => Number(/oklch\([\d.]+ [\d.]+ ([\d.]+)\)/.exec(value(light, n) ?? "")?.[1]);
+    expect(hue("--on-track")).toBeCloseTo(160, 0);
+    expect(hue("--at-risk")).toBeCloseTo(75, 0);
+    expect(hue("--off-track")).toBeCloseTo(18, 0);
+    expect(hue("--info")).toBeCloseTo(235, 0);
   });
 
   it("keeps the motion timings in lib/motion.ts in step with the CSS tokens", () => {

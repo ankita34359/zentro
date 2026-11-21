@@ -6,7 +6,7 @@ import { useMotionReady } from "./MotionProvider";
 
 export type Tone = "primary" | "on-track" | "at-risk" | "off-track" | "info";
 const TONE: Record<Tone, string> = {
-  primary: "bg-primary",
+  primary: "bg-gradient-brand",
   "on-track": "bg-on-track",
   "at-risk": "bg-at-risk",
   "off-track": "bg-off-track",

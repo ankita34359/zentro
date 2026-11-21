@@ -27,7 +27,7 @@ export function SheetLeft({
         <Dialog.Overlay className="sheet-overlay fixed inset-0 z-40" />
         <Dialog.Content
           onCloseAutoFocus={onCloseAutoFocus}
-          className={cn("sheet-panel fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r bg-sidebar shadow-lg", className)}
+          className={cn("sheet-panel fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r bg-raised shadow-lg", className)}
         >
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
           <Dialog.Description className="sr-only">{description}</Dialog.Description>
