@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · Stage 1.2 **deployed (version `6fc8aac`), waiting for the owner to type the two secrets** · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · Stage 1.2 **deployed (version `6fc8aac`), secrets set, live ready** · live at https://zentro.embarko.app
 
 ---
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · St
 
 Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
 
-**Stage 1.2 (backend foundation) is built, tested on Node 20.20.2, and deployed from branch `claude/stage-1-2`** (version `6fc8aac`; nothing merged to `main`). The live app is in **holding mode until the owner types `SESSION_SECRET` and `ENCRYPTION_KEY` and presses Apply changes**. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
+**Stage 1.2 (backend foundation) is built, tested on Node 20.20.2, and deployed from branch `claude/stage-1-2`** (version `6fc8aac`; nothing merged to `main`). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko and the live app is **ready** (see "Secrets set" below). Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -170,7 +170,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.2: backend foundation (deployed, waiting for the secrets)
+## Stage 1.2: backend foundation (deployed, live)
 
 **Implemented** (branch `claude/stage-1-2`, commit message starts "Stage 1.2"; design notes in `docs/architecture.md` section 8.1):
 - **Config validation + holding page.** Required: `SESSION_SECRET`, `ENCRYPTION_KEY` (each at least 32 characters, different). Optional and validated if set: `APP_URL`, `LOG_LEVEL`, `TRUST_PROXY`. If anything is missing or invalid the server **still listens** in holding mode: the site address shows a plain notice, every `/api/*` answers `503 server_missing_settings` with `Server is missing: SESSION_SECRET` (names only; a bad value is never echoed), `/healthz` answers `ok:true, ready:false`, the cron route authenticates and does nothing, and **the database is not opened**.
@@ -220,3 +220,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 - Live checks I ran (no secrets were set yet, so holding mode is the expected result): `/` 200 with "Server is missing: SESSION_SECRET, ENCRYPTION_KEY"; `/healthz` `{"ok":true,"ready":false,"version":"6fc8aac","node":"20.20.2","migrations":null,"missing":[...]}`; `/api/anything` 503 `server_missing_settings`; `/api/cron/tick` 401 without a secret. Embarko log: `holding mode` warning, Node 20.20.2, no restarts.
 - **Not yet verified (needs the owner's secrets):** normal mode live, `migrations 2/2`, the pre-migration copy of the 1.1 database (log field `preMigrationCopy` at the first normal start), `lastTick`, and the heartbeat counter. The 5-minute ticks do nothing while in holding mode.
 - 1.2 is ticked only after the owner types the secrets, presses Apply changes, and these checks pass.
+
+### Secrets set (2026-11-21)
+- The owner could not find Embarko's App setup page (screens changed) and asked me to set the two secrets through the env-vars API (`PUT /api/apps/zentro/env-vars`, `apply: true`, as documented in `docs/env-vars.md`). I generated each with `openssl rand -hex 32` (64 hex characters, different from each other) into shell variables and sent them on stdin; the values were never printed, logged, stored in the repo or read back. Only those two keys were sent; `CRON_SECRET` and `STORAGE_TOKEN` were not touched. Reply: HTTP 202.
+- Because the values were never shown to anyone, **the owner does not know them**. That is fine for `SESSION_SECRET` and `ENCRYPTION_KEY` (the app is the only user). Consequence for later: if they are ever lost, set new ones the same way; a new `SESSION_SECRET` signs everyone out and a new `ENCRYPTION_KEY` makes already-encrypted values unreadable (nothing is encrypted yet).
+- Names set on the app now: `CRON_SECRET`, `ENCRYPTION_KEY`, `SESSION_SECRET`, `STORAGE_TOKEN`.
+- Live after Apply: `/healthz` `ready:true`, `migrations {applied:2,total:2}`, version `6fc8aac`; the site no longer shows the holding page. For a few seconds while Embarko swapped instances, one probe still hit the old (holding) instance; repeated probes afterwards were all ready.
+- Still to confirm: a `lastTick` after the next 5-minute tick, the tick counter on the page, and Embarko's "Scheduled jobs" showing ok. Then tick 1.2.
