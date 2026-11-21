@@ -13,7 +13,7 @@ export default function SectionPage({ sectionKey }: { sectionKey: string }) {
   return (
     <>
       <PageHeader title={nav.label} description={nav.description} />
-      <EmptyState icon={section.icon} title={section.title}>
+      <EmptyState illustration={section.illustration} title={section.title}>
         <p>{section.body}</p>
         <p className="mt-4">
           <Badge variant="outline">

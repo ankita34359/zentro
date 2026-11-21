@@ -1,101 +1,103 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+@import "./styles/tokens.css";
 
 /* Dark mode is a class on <html> (set by the theme provider), not only the OS setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Design tokens. Light first, dark under .dark. Colors always pair with text or an icon (never color alone). */
-:root {
-  --background: oklch(0.99 0.002 270);
-  --foreground: oklch(0.2 0.02 270);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 270);
-  --muted: oklch(0.96 0.006 270);
-  --muted-foreground: oklch(0.45 0.02 270);
-  --border: oklch(0.9 0.008 270);
-  --input: oklch(0.9 0.008 270);
-  --ring: oklch(0.5 0.2 275);
-  --primary: oklch(0.46 0.2 275);
-  --primary-foreground: oklch(0.99 0 0);
-  --accent: oklch(0.95 0.02 275);
-  --accent-foreground: oklch(0.3 0.12 275);
-  --success: oklch(0.45 0.13 150);
-  --success-soft: oklch(0.95 0.04 150);
-  --warning: oklch(0.45 0.11 70);
-  --warning-soft: oklch(0.96 0.05 85);
-  --destructive: oklch(0.5 0.2 27);
-  --destructive-soft: oklch(0.96 0.03 25);
-  --sidebar: oklch(0.975 0.005 270);
-  --radius: 0.625rem;
-}
-
-.dark {
-  --background: oklch(0.17 0.015 270);
-  --foreground: oklch(0.96 0.005 270);
-  --card: oklch(0.21 0.017 270);
-  --card-foreground: oklch(0.96 0.005 270);
-  --muted: oklch(0.25 0.017 270);
-  --muted-foreground: oklch(0.72 0.02 270);
-  --border: oklch(0.31 0.02 270);
-  --input: oklch(0.34 0.02 270);
-  --ring: oklch(0.7 0.16 275);
-  --primary: oklch(0.72 0.15 275);
-  --primary-foreground: oklch(0.18 0.03 275);
-  --accent: oklch(0.3 0.05 275);
-  --accent-foreground: oklch(0.93 0.03 275);
-  --success: oklch(0.78 0.15 150);
-  --success-soft: oklch(0.28 0.05 150);
-  --warning: oklch(0.82 0.13 85);
-  --warning-soft: oklch(0.3 0.05 80);
-  --destructive: oklch(0.75 0.15 27);
-  --destructive-soft: oklch(0.3 0.06 25);
-  --sidebar: oklch(0.19 0.016 270);
-}
-
-@theme inline {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-success: var(--success);
-  --color-success-soft: var(--success-soft);
-  --color-warning: var(--warning);
-  --color-warning-soft: var(--warning-soft);
-  --color-destructive: var(--destructive);
-  --color-destructive-soft: var(--destructive-soft);
-  --color-sidebar: var(--sidebar);
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
-}
-
 @layer base {
   * { border-color: var(--border); }
   html { -webkit-text-size-adjust: 100%; }
-  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-feature-settings: "cv11", "ss03"; /* single-storey a, round digits: calmer numbers */
+    -webkit-font-smoothing: antialiased;
+  }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  ::selection { background: color-mix(in oklab, var(--primary) 28%, transparent); }
 }
 
-/* Slide-in panel for the phone navigation (Radix Dialog sets data-state). */
+@layer components {
+  /* Cards: fine border, soft shadow, a gentle lift on hover. */
+  .card-surface {
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xs);
+    transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out);
+  }
+  .card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: color-mix(in oklab, var(--primary) 22%, var(--border));
+  }
+
+  /* Skeleton shimmer: runs only while something is loading. */
+  .skeleton {
+    background-color: var(--muted);
+    background-image: linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--foreground) 7%, transparent) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: zentro-shimmer 1.4s var(--ease-in-out) infinite;
+  }
+
+  /* Online pill: a soft expanding ring behind the dot. The only decorative loop. */
+  .pulse-dot { position: relative; display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: var(--on-track); }
+  .pulse-dot::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--on-track);
+    animation: zentro-pulse 2.4s var(--ease-out) infinite;
+  }
+
+  /* Theme toggle: the sun and moon icons morph by rotating and scaling into each other. */
+  .theme-icon { position: absolute; inset: 0; margin: auto; transition: transform var(--duration-slow) var(--ease-out), opacity var(--duration-base) var(--ease-out); }
+  .theme-icon[data-active="false"] { opacity: 0; transform: rotate(-90deg) scale(0.4); }
+  .theme-icon[data-active="true"] { opacity: 1; transform: rotate(0) scale(1); }
+
+  /* Page header glow: two soft gradients behind the heading. Decorative, never takes space. */
+  .heading-glow::before {
+    content: ""; position: absolute; z-index: -1; inset: -2.5rem -2rem -1rem -2rem; pointer-events: none;
+    background:
+      radial-gradient(40% 70% at 12% 20%, var(--glow-primary), transparent 70%),
+      radial-gradient(30% 60% at 62% 0%, var(--glow-accent), transparent 70%);
+    filter: blur(14px);
+    mask-image: linear-gradient(to bottom, black 60%, transparent);
+  }
+
+  /* Phone menu: slides in over a blurred backdrop. */
+  .sheet-overlay { background: var(--overlay); backdrop-filter: blur(4px); }
+  .sheet-overlay[data-state="open"] { animation: zentro-fade-in var(--duration-base) var(--ease-out); }
+  .sheet-overlay[data-state="closed"] { animation: zentro-fade-out var(--duration-fast) var(--ease-in-out); }
+  .sheet-panel[data-state="open"] { animation: zentro-slide-in var(--duration-slow) var(--ease-out); }
+  .sheet-panel[data-state="closed"] { animation: zentro-slide-out var(--duration-base) var(--ease-in-out); }
+
+  /* Sidebar: a single indicator slides between items. */
+  .nav-indicator {
+    position: absolute; left: 0; right: 0; top: 0; border-radius: var(--radius-md); background: var(--selected);
+    transition: transform var(--duration-base) var(--ease-out), height var(--duration-base) var(--ease-out), opacity var(--duration-fast) linear;
+  }
+  .nav-indicator::before {
+    content: ""; position: absolute; left: 0; top: 22%; bottom: 22%; width: 3px; border-radius: 0 3px 3px 0; background: var(--primary);
+  }
+}
+
 @keyframes zentro-fade-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes zentro-fade-out { from { opacity: 1 } to { opacity: 0 } }
 @keyframes zentro-slide-in { from { transform: translateX(-100%) } to { transform: translateX(0) } }
 @keyframes zentro-slide-out { from { transform: translateX(0) } to { transform: translateX(-100%) } }
-.sheet-overlay[data-state="open"] { animation: zentro-fade-in 150ms ease-out; }
-.sheet-overlay[data-state="closed"] { animation: zentro-fade-out 120ms ease-in; }
-.sheet-panel[data-state="open"] { animation: zentro-slide-in 200ms ease-out; }
-.sheet-panel[data-state="closed"] { animation: zentro-slide-out 150ms ease-in; }
+@keyframes zentro-shimmer { from { background-position: 100% 0 } to { background-position: -100% 0 } }
+@keyframes zentro-pulse { 0% { transform: scale(1); opacity: 0.55 } 70%, 100% { transform: scale(2.6); opacity: 0 } }
 
+/* Reduced motion: no movement at all. Things fade or change instantly; nothing loops. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+  .card-lift:hover { transform: none; }
+  .skeleton { animation: none; background-image: none; }
+  .pulse-dot::after { animation: none; opacity: 0; }
+  .theme-icon[data-active="false"], .theme-icon[data-active="true"] { transform: none; }
+  .sheet-panel[data-state="open"], .sheet-panel[data-state="closed"] { animation-name: zentro-fade-in; }
+  .sheet-panel[data-state="closed"] { animation-name: zentro-fade-out; }
 }

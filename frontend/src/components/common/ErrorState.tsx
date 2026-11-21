@@ -18,12 +18,14 @@ export function ErrorState({
   const api = error instanceof ApiError ? error : null;
   const message = api ? api.message : error instanceof Error ? "An unexpected error occurred." : undefined;
   return (
-    <div role="alert" className={cn("flex flex-col items-center gap-3 rounded-lg border border-destructive/40 bg-destructive-soft px-6 py-10 text-center", className)}>
-      <AlertTriangle aria-hidden="true" className="size-6 text-destructive" />
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {message && <p className="max-w-prose text-sm text-foreground/80">{message}</p>}
+    <div role="alert" className={cn("flex flex-col items-center gap-3 rounded-xl border border-off-track/30 bg-off-track-soft px-6 py-10 text-center", className)}>
+      <span className="flex size-10 items-center justify-center rounded-full bg-card text-off-track-ink shadow-xs">
+        <AlertTriangle aria-hidden="true" className="size-5" />
+      </span>
+      <h2 className="text-heading font-semibold text-off-track-ink">{title}</h2>
+      {message && <p className="max-w-prose text-body text-foreground/80">{message}</p>}
       {api?.requestId && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-foreground/70">
           Request id: <code className="font-mono">{api.requestId}</code>
         </p>
       )}

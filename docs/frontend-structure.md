@@ -159,7 +159,7 @@ Every chart has: loading skeleton, empty state, accessible table alternative, no
 ## 7. Design system and UX
 
 - **Direction:** modern enterprise SaaS, clean and minimal; consistent 4 px spacing scale; Inter (variable, self-hosted via `@fontsource-variable/inter` as in Curevia, so no third-party font request); lucide icons; restrained palette with semantic colors for health (on track, at risk, delayed, completed, no data) that always pair color with an icon and label.
-- **Tokens:** Tailwind 4 CSS variables for light and dark (follows system, user override stored in `user_preferences`).
+- **Tokens:** Tailwind 4 CSS variables for light and dark (follows system, user override stored in `user_preferences`). Since stage 1.4 they live in one file, `frontend/src/styles/tokens.css`; see section 11.
 - **Layout:** fixed left sidebar (collapses to a sheet below 1024 px), header with organization switcher, date range, notifications bell and user menu. Tables become stacked cards below 640 px; the org chart falls back to a list.
 - **Feedback:** toasts for mutations (with the request id on errors), inline field errors, skeletons not spinners for page loads, empty states with a primary action, error states with retry and request id.
 - **Accessibility target:** WCAG 2.1 AA for the main flows: semantic landmarks, labelled controls (Radix primitives via shadcn), visible focus, keyboard operable tree/table/dialogs, `prefers-reduced-motion`, contrast-checked tokens, chart table alternatives. Verified by component tests, an automated axe pass on key pages in M9, and a manual keyboard pass; full certification is out of scope (known-limitations).
@@ -209,3 +209,53 @@ Every chart has: loading skeleton, empty state, accessible table alternative, no
 | Tests | `tests/frontend/` | Navigation (eleven items, order, hrefs, `aria-current`, phone menu, focus), routes and 404, theme (system, saved choice, storage failure), API client, components, and source-level safety rules (no `dangerouslySetInnerHTML`, browser storage only through `lib/safeStorage.ts`, no `VITE_*`). |
 
 Not built yet (by design, later stages): auth context and route guards (2.1, 2.3), organization switcher, date-range filter, notifications bell, toasts, the data-table and confirm-dialog primitives, charts.
+
+---
+
+## 11. Visual design system and motion (stage 1.4, added at the owner's request)
+
+Goal: calm, trustworthy, data-first, professional. Everything below is implemented; review it live on the unlisted page `/design` (not in the sidebar). **Frontend only: no API, database or backend change.**
+
+### 11.1 One file decides the look
+
+`frontend/src/styles/tokens.css` holds, as Tailwind 4 theme variables: the raw palette, the semantic roles for light and dark, the type scale, radii, shadows, layout sizes and motion timings. `styles.css` imports it and holds only base rules, the few shared component rules (card, skeleton, pulse, glow, sheet, indicator) and the reduced-motion overrides. **Retune the whole look by editing `tokens.css`.** Components use token names (`bg-card`, `text-on-track-ink`, `rounded-xl`, `shadow-md`, `text-heading`), never raw values: `tests/frontend/tokens.test.ts` fails on any hex, `rgb()`, `hsl()` or `oklch()` outside `tokens.css`, on any hard-coded animation duration, if a themed role is missing in dark mode, or if `lib/motion.ts` drifts from the CSS timings.
+
+### 11.2 Palette
+
+| Group | Tokens | Use |
+| --- | --- | --- |
+| Brand (indigo/violet; 700 is the Z logo colour) | `brand-50` to `brand-950` | Primary actions, active states, focus ring, links |
+| Slate neutrals (cool) | `slate-50` to `slate-950` | Reference ramp; the roles below are what components use |
+| Accent (orchid), the one accent | `accent`, `accent-soft` | Logo gradient, heading glow, illustration highlights. Never for meaning. |
+| Surfaces and text | `background` (soft off-white, deep navy in dark), `card`, `muted`, `foreground`, `muted-foreground`, `border`, `input`, `sidebar`, `header` | Dark mode is navy (`oklch` lightness about 0.16 with blue chroma), not black |
+| Brand roles | `primary`, `primary-foreground`, `primary-soft`, `primary-soft-foreground`, `selected`, `selected-foreground` | Buttons, icon wells, the active sidebar item |
+| **Status (fixed meaning, used the same way everywhere)** | `on-track` (emerald), `at-risk` (amber), `off-track` (rose), `info` (sky), each with `-soft` (badge background) and `-ink` (text) | `StatusBadge` and `Badge` variants. Colour is always paired with an icon and words, never alone. |
+
+Rule: **status colours mean exactly one thing**. Emerald is only "on track", amber only "at risk", rose only "off track", sky only "information". Do not use them decoratively and do not invent a fifth.
+
+### 11.3 Typography
+
+Inter variable, self-hosted from `@fontsource-variable/inter` (no external font link or CDN). Scale (utility class, size, role): `text-display` 2rem (metric numbers), `text-title` 1.625rem (page titles), `text-heading` 1.0625rem (card and section headings), `text-body` 0.9375rem (reading text), `text-label` 0.8125rem (controls, nav, table headers), `text-caption` 0.75rem (help text), `text-overline` 0.6875rem uppercase (group labels). **Metrics and any column of numbers use `tabular-nums`** so digits align and do not jitter.
+
+### 11.4 Shape, depth and layout
+
+Radii `sm` to `2xl` (`rounded-lg` for controls, `rounded-xl` for cards). Shadows `xs`, `sm`, `md`, `lg` are tinted by the theme (`--shadow-ink`), soft in light and deeper in dark. Layout tokens: `--sidebar-width` 16rem, `--header-height` 3.5rem, `--page-max-width` 72rem. Cards have a fine border, a soft shadow and a gentle 2 px hover lift (shadow only under reduced motion); `lift={false}` for dense containers. The page header can carry a soft gradient glow (`PageHeader glow`, used on Overview and `/design`). The header has a soft blur (`bg-header` plus `backdrop-blur`). The sidebar is grouped (Strategy, Execution, Insight, System; the eleven items keep the master order) with one indicator that slides to the active item.
+
+### 11.5 Motion rules (later stages must follow these)
+
+1. **Purposeful and restrained.** Motion explains a change (a page arrived, a value counted up, a panel opened). No decorative movement.
+2. **Timing.** Interface motion is **150 to 350 ms**: `--duration-fast` 150, `--duration-base` 220, `--duration-slow` 350. Data reveals (count-up, ring, bar) may take up to **700 ms** (`--duration-data`). Stagger step is 50 ms. Easing is `--ease-out` for entrances and `--ease-in-out` for exits. Use the tokens, not numbers.
+3. **Never block content, never shift layout.** Animate only `opacity` and `transform` (and the width of a bar inside a fixed-size track). No exit animations on navigation. Content is visible and usable from the first frame.
+4. **Nothing loops** except two things: the Online pill pulse, and the skeleton shimmer, which runs only while something is loading.
+5. **Reduced motion is honoured fully** (the operating system's setting): no transform is ever applied, not even for one frame; the page and cards fade only; count-up, ring and bar show their final value at once; the sidebar indicator jumps; the phone menu fades; hover lift is shadow only; the pulse and the shimmer stop. CSS rules live in `styles.css`; the motion library is set to `reducedMotion="user"` and components that animate other properties also check `useReducedMotion()`.
+6. **Failure-safe.** The animation engine is a separate lazy chunk. Until it has loaded, every animated component renders in its final state (a test blocks the chunk and checks nothing is hidden). Read `useMotionReady()` once at mount to decide whether to play an entrance.
+7. **Small and lazy.** Use `LazyMotion` with the `m` components (never the full `motion` component; the provider is `strict`). Keep heavy pieces off the first paint (the phone menu and `/design` are separate chunks). **Main entry chunk must stay under 150 KB gzipped**; total first-load JavaScript is tracked in PROGRESS.md.
+8. **Where each effect lives.** `motion` library: page transition (`PageTransition`), staggered entrance (`Stagger`, `StaggerItem`), progress ring and bar (`ProgressRing`, `ProgressBar`). CSS: card lift, sidebar indicator, theme-icon morph, Online pulse, skeleton shimmer, phone-menu slide and blurred backdrop (robust and free of JavaScript). The count-up (`CountUp`) is a 20-line `requestAnimationFrame` tween on the same easing curve, because motion's `animate()` added about 13 KB gzipped to the first load.
+
+### 11.6 Components added in 1.4
+
+`StatusBadge`, `Illustration` (ten in-code SVG illustrations: org, target, chart, tasks, team, gauge, spark, leadership, plug, settings, plus compass for 404; decorative, hidden from screen readers, built from tokens so they follow the theme), `EmptyState` (now takes `illustration`), `ProgressRing`, `ProgressBar` (tones: primary, on-track, at-risk, off-track, info), `CountUp`, `PageTransition`, `Stagger`/`StaggerItem`, `MotionProvider`, `Badge` status variants, and `lib/contrast.ts`.
+
+### 11.7 Contrast
+
+Every text and background pair must be at least **4.5:1** in both themes (3:1 only for large text). The `/design` page computes the token pairs live in the browser. Measured on the built app in real Chromium (all visible text nodes on Overview, a section page, the 404 page and `/design`, desktop and phone, light and dark): see the numbers in PROGRESS.md. After changing any colour in `tokens.css`, re-run that measurement.

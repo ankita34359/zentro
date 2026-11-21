@@ -17,11 +17,12 @@ export const json = (body: unknown, status = 200, headers: Record<string, string
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
 
 /** Replace window.matchMedia (jsdom has none). Returns a function that fires a "change" with the new answer. */
-export function stubMatchMedia(initialDark: boolean) {
+export function stubMatchMedia(initialDark: boolean, reducedMotion = false) {
   let dark = initialDark;
   const listeners = new Set<() => void>();
   vi.stubGlobal("matchMedia", (q: string) => ({
     get matches() {
+      if (q.includes("reduced-motion")) return reducedMotion;
       return q.includes("dark") ? dark : false; // live, like a real MediaQueryList
     },
     media: q,

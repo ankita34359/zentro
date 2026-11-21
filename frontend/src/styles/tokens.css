@@ -1,0 +1,230 @@
+/*
+ * ZENTRO DESIGN TOKENS: the single place that decides how the product looks.
+ * Colors, type scale, radii, shadows, layout sizes and motion timings all live here, as Tailwind 4 theme variables.
+ * Retune the look by editing THIS file only; components use the names, never raw values (a test enforces it).
+ *
+ *   1. Raw palette        brand (indigo/violet, from the Z logo), accent (orchid), slate neutrals
+ *   2. Semantic roles     what the interface uses: background, card, primary, status colours; light and dark
+ *   3. Tailwind mapping   makes the roles available as utility classes (bg-card, text-on-track-ink, ...)
+ *   4. Type, radii, shadows, layout, motion
+ *
+ * Contrast: every text/background pair the app uses is measured in a real browser, in both themes, and must be
+ * at least 4.5:1 (see docs/frontend-structure.md section 11). If you change a value, re-run that measurement.
+ */
+
+/* 1. RAW PALETTE (same in light and dark) ------------------------------------------------------------------ */
+@theme {
+  /* Brand: indigo/violet. 700 is the Z logo colour (#4338ca family). */
+  --color-brand-50: oklch(0.97 0.012 280);
+  --color-brand-100: oklch(0.94 0.03 280);
+  --color-brand-200: oklch(0.89 0.06 280);
+  --color-brand-300: oklch(0.81 0.11 279);
+  --color-brand-400: oklch(0.72 0.15 278);
+  --color-brand-500: oklch(0.6 0.21 277);
+  --color-brand-600: oklch(0.53 0.23 277);
+  --color-brand-700: oklch(0.47 0.22 277);
+  --color-brand-800: oklch(0.4 0.19 277);
+  --color-brand-900: oklch(0.33 0.14 277);
+  --color-brand-950: oklch(0.25 0.09 277);
+
+  /* Cool slate neutrals. */
+  --color-slate-50: oklch(0.985 0.004 262);
+  --color-slate-100: oklch(0.96 0.008 262);
+  --color-slate-200: oklch(0.91 0.01 262);
+  --color-slate-300: oklch(0.85 0.014 262);
+  --color-slate-400: oklch(0.7 0.022 262);
+  --color-slate-500: oklch(0.58 0.028 262);
+  --color-slate-600: oklch(0.47 0.03 262);
+  --color-slate-700: oklch(0.38 0.035 263);
+  --color-slate-800: oklch(0.3 0.04 264);
+  --color-slate-900: oklch(0.22 0.035 265);
+  --color-slate-950: oklch(0.16 0.035 265);
+
+  /* Orchid: the one accent, used sparingly (gradient glow, highlights). */
+  --color-orchid-100: oklch(0.95 0.035 320);
+  --color-orchid-300: oklch(0.8 0.12 320);
+  --color-orchid-500: oklch(0.66 0.21 320);
+  --color-orchid-600: oklch(0.58 0.22 320);
+  --color-orchid-700: oklch(0.49 0.2 320);
+}
+
+/* 2. SEMANTIC ROLES ---------------------------------------------------------------------------------------- */
+:root {
+  --background: oklch(0.985 0.004 262); /* soft off-white */
+  --foreground: oklch(0.22 0.035 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.035 265);
+  --muted: oklch(0.96 0.008 262);
+  --muted-foreground: oklch(0.47 0.03 262);
+  --border: oklch(0.91 0.01 262);
+  --input: oklch(0.87 0.012 262);
+  --ring: oklch(0.6 0.21 277);
+
+  --primary: oklch(0.47 0.22 277);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-soft: oklch(0.95 0.03 280); /* tinted wells behind icons */
+  --primary-soft-foreground: oklch(0.4 0.19 277);
+  --selected: oklch(0.94 0.035 280); /* active navigation item */
+  --selected-foreground: oklch(0.33 0.14 277);
+
+  --accent: oklch(0.58 0.22 320);
+  --accent-soft: oklch(0.96 0.03 320);
+
+  --sidebar: oklch(0.975 0.006 262);
+  --header: oklch(0.985 0.004 262 / 0.72);
+  --overlay: oklch(0.2 0.04 265 / 0.45);
+
+  /* Status colours: fixed meaning everywhere. solid = icons, dots, bars; soft = badge background; ink = text. */
+  --on-track: oklch(0.62 0.15 160); /* emerald */
+  --on-track-soft: oklch(0.96 0.04 160);
+  --on-track-ink: oklch(0.4 0.1 160);
+  --at-risk: oklch(0.75 0.16 75); /* amber */
+  --at-risk-soft: oklch(0.97 0.05 90);
+  --at-risk-ink: oklch(0.42 0.09 65);
+  --off-track: oklch(0.6 0.21 18); /* rose */
+  --off-track-soft: oklch(0.96 0.03 15);
+  --off-track-ink: oklch(0.45 0.18 18);
+  --info: oklch(0.65 0.14 235); /* sky */
+  --info-soft: oklch(0.96 0.03 235);
+  --info-ink: oklch(0.42 0.1 240);
+
+  --shadow-ink: oklch(0.3 0.06 265 / 0.1);
+  --glow-primary: oklch(0.6 0.21 277 / 0.3);
+  --glow-accent: oklch(0.66 0.21 320 / 0.24);
+}
+
+.dark {
+  --background: oklch(0.16 0.035 265); /* deep navy, not black */
+  --foreground: oklch(0.96 0.01 262);
+  --card: oklch(0.2 0.038 265);
+  --card-foreground: oklch(0.96 0.01 262);
+  --muted: oklch(0.245 0.04 265);
+  --muted-foreground: oklch(0.75 0.025 262);
+  --border: oklch(0.3 0.04 265);
+  --input: oklch(0.34 0.04 265);
+  --ring: oklch(0.72 0.15 278);
+
+  --primary: oklch(0.72 0.15 278);
+  --primary-foreground: oklch(0.17 0.04 270);
+  --primary-soft: oklch(0.3 0.08 278);
+  --primary-soft-foreground: oklch(0.88 0.07 280);
+  --selected: oklch(0.29 0.07 278);
+  --selected-foreground: oklch(0.93 0.04 280);
+
+  --accent: oklch(0.74 0.17 320);
+  --accent-soft: oklch(0.3 0.08 320);
+
+  --sidebar: oklch(0.185 0.038 265);
+  --header: oklch(0.16 0.035 265 / 0.7);
+  --overlay: oklch(0.08 0.03 265 / 0.6);
+
+  --on-track: oklch(0.75 0.16 160);
+  --on-track-soft: oklch(0.28 0.06 160);
+  --on-track-ink: oklch(0.86 0.12 160);
+  --at-risk: oklch(0.82 0.15 80);
+  --at-risk-soft: oklch(0.3 0.06 80);
+  --at-risk-ink: oklch(0.9 0.11 85);
+  --off-track: oklch(0.72 0.17 18);
+  --off-track-soft: oklch(0.3 0.08 15);
+  --off-track-ink: oklch(0.88 0.09 15);
+  --info: oklch(0.76 0.12 235);
+  --info-soft: oklch(0.29 0.06 240);
+  --info-ink: oklch(0.88 0.07 235);
+
+  --shadow-ink: oklch(0.05 0.03 265 / 0.5);
+  --glow-primary: oklch(0.72 0.15 278 / 0.3);
+  --glow-accent: oklch(0.74 0.17 320 / 0.2);
+}
+
+/* 3. TAILWIND MAPPING (roles become utility classes) ------------------------------------------------------- */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-sidebar: var(--sidebar);
+  --color-header: var(--header);
+  --color-overlay: var(--overlay);
+  --color-on-track: var(--on-track);
+  --color-on-track-soft: var(--on-track-soft);
+  --color-on-track-ink: var(--on-track-ink);
+  --color-at-risk: var(--at-risk);
+  --color-at-risk-soft: var(--at-risk-soft);
+  --color-at-risk-ink: var(--at-risk-ink);
+  --color-off-track: var(--off-track);
+  --color-off-track-soft: var(--off-track-soft);
+  --color-off-track-ink: var(--off-track-ink);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+}
+
+/* 4a. TYPE SCALE: Inter variable, self-hosted. Heading, body and label roles; tabular numbers for metrics. */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --text-display: 2rem; /* big metric numbers */
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.03em;
+  --text-title: 1.625rem; /* page titles */
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.025em;
+  --text-heading: 1.0625rem; /* card and section headings */
+  --text-heading--line-height: 1.35;
+  --text-heading--letter-spacing: -0.01em;
+  --text-body: 0.9375rem; /* reading text */
+  --text-body--line-height: 1.55;
+  --text-label: 0.8125rem; /* controls, table headers, nav items */
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.005em;
+  --text-caption: 0.75rem; /* help text, timestamps */
+  --text-caption--line-height: 1.4;
+  --text-overline: 0.6875rem; /* group labels, uppercase */
+  --text-overline--line-height: 1.2;
+  --text-overline--letter-spacing: 0.08em;
+}
+
+/* 4b. RADII, 4c. SHADOWS (soft, tinted by the theme), 4d. LAYOUT SIZES */
+@theme inline {
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --shadow-xs: 0 1px 2px 0 var(--shadow-ink);
+  --shadow-sm: 0 1px 3px 0 var(--shadow-ink), 0 1px 2px -1px var(--shadow-ink);
+  --shadow-md: 0 4px 12px -2px var(--shadow-ink), 0 2px 4px -2px var(--shadow-ink);
+  --shadow-lg: 0 12px 28px -6px var(--shadow-ink), 0 4px 8px -4px var(--shadow-ink);
+}
+
+:root {
+  --sidebar-width: 16rem;
+  --header-height: 3.5rem;
+  --page-max-width: 72rem;
+
+  /* 4e. MOTION. Interface motion is 150 to 350 ms; data reveals (count-up, ring, bar) may take up to 800 ms.
+     lib/motion.ts mirrors these numbers for the motion library; a test keeps the two in step. */
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+  --duration-slow: 350ms;
+  --duration-data: 700ms;
+  --stagger-step: 50ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --rise-distance: 8px;
+}
