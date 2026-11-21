@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · Stage 1.2 built and tested, **not deployed (waiting for the owner's "yes, deploy")** · live at https://zentro.embarko.app
 
 ---
 
@@ -10,7 +10,9 @@ Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · li
 
 **Stage 1.1 (deploy spike) is DEPLOYED** as app `zentro` (kind `service`, `claimed: true`): **https://zentro.embarko.app** (app id `cmwq8dc5l047m7p7fwgtufeuu`, now in `embarko.json`; now on version `f3fca7d`). Branch `claude/stage-1-1` is pushed; nothing merged to `main` (ask first).
 
-Stage 1.1 is complete and live-checked. Next: **stage 1.2** (backend foundation) in a new session from `main` (merge `claude/stage-1-1` first, with the owner's approval).
+Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
+
+**Stage 1.2 (backend foundation) is built and tested on Node 20.20.2 on branch `claude/stage-1-2`** (from `main`; nothing merged, nothing deployed). The live app is still stage 1.1 until the owner says "yes, deploy". Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -70,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[ ]` 1.2 Backend foundation · `[ ]` 1.3 Frontend foundation
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[~]` 1.2 Backend foundation (built and tested, awaiting deploy approval) · `[ ]` 1.3 Frontend foundation
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -93,7 +95,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | When | Need |
 | --- | --- |
 | Before 1.1 deploy | `DEPLOY_TOKEN` is set in the environment (see the token note in the Stage 1.1 section); the owner's "yes, deploy"; after deploy: **claim the app** in the Embarko dashboard (schedules need a kept app) |
-| 1.2 | `SESSION_SECRET`, `ENCRYPTION_KEY` typed on Embarko's App setup page, then **Apply changes** |
+| 1.2 | `SESSION_SECRET` and `ENCRYPTION_KEY` typed by the owner on Embarko's App setup page (each a long random string, at least 32 characters, **different from each other**; a password-manager generator works), then **Apply changes**. Where: https://embarko.ai/app, choose `zentro`, open **App setup**. |
 | 2.1 | `REGISTRATION_CODE` typed on Embarko's App setup page (mode is `code`) |
 | 2.2 | viaSocket keys (`VIASOCKET_*`) typed on Embarko, and one viaSocket "send email" flow built; its run URL typed as `VIASOCKET_EMAIL_FLOW_URL` |
 | 2.8 | Nothing (view-as is approved) |
@@ -117,6 +119,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 blueprint | Research done; 11 docs plus this file written; branch `claude/blueprint` pushed |
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
+| 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.2 built | Branch `claude/stage-1-2` (from `main`). Backend foundation built; 78 tests pass on Node 20.20.2 from a clean checkout. **Not deployed.** Details in "Stage 1.2" below. |
 
 ---
 
@@ -162,3 +166,50 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 - **Redeploy test (owner said "redeploy now, counter was 7")**: before: visits 7, ticks 3, version `5440c31`. Redeployed `f3fca7d` (reply `action: updated`, `claimed:true`); after: **visits 7, ticks 3** (same last tick time), version `f3fca7d`, Node 20.20.2, database `/data/zentro.db`. So **the database survives a redeploy**. Ticks 3 at that time (1 manual + 2 automatic) shows the 5-minute schedule fires by itself; the owner was also to check Embarko's Scheduled jobs page (not seen by me).
 - 1.1 is done. Nothing merged to `main` yet: the owner must approve the merge of `claude/stage-1-1`. Stage 1.2 starts in a new session from `main`.
 
+
+---
+
+## Stage 1.2: backend foundation (built and tested, NOT deployed)
+
+**Implemented** (branch `claude/stage-1-2`, commit message starts "Stage 1.2"; design notes in `docs/architecture.md` section 8.1):
+- **Config validation + holding page.** Required: `SESSION_SECRET`, `ENCRYPTION_KEY` (each at least 32 characters, different). Optional and validated if set: `APP_URL`, `LOG_LEVEL`, `TRUST_PROXY`. If anything is missing or invalid the server **still listens** in holding mode: the site address shows a plain notice, every `/api/*` answers `503 server_missing_settings` with `Server is missing: SESSION_SECRET` (names only; a bad value is never echoed), `/healthz` answers `ok:true, ready:false`, the cron route authenticates and does nothing, and **the database is not opened**.
+- **Error envelope, request ids, logger.** `{data, meta.requestId}` / `{error:{code,message,details?}, meta.requestId}`; `X-Request-Id` on every answer; JSON logs with the route *pattern* only; sensitive field names redacted; unexpected errors become a generic 500 and log only the message. Malformed JSON → 400 `invalid_json`; body over 100 KB → 413.
+- **Route registry with permission markers.** `public` (needs a written reason) / `cron` / `baseline` / `permission(key)`, Zod validation, boot-time check that nothing bypasses the registry. Until sessions exist (2.1) `baseline` and `permission` routes fail closed (401).
+- **Tenant-scoped data layer + SQL lint + strict mode.** `createTenantDb(db, ctx)` binds `@organization_id` from the session context only; strict mode (tests, or `ZENTRO_STRICT_TENANT=1`) lints every statement and checks every returned row. Tests also enforce: SQL only in `db/` and `modules/*/repositories/`, and every table in a migration has `organization_id` or is on the explicit global list.
+- **Migrations.** Checksums verified *before* anything runs; consistent copy (`VACUUM INTO`) to `$DATA_DIR/backups/pre-NNNN-<time>.db` before applying to an existing database, newest 3 kept; reports migrations the database has but the code does not.
+- **Job registry + `scheduled_job_runs`** (migration `0002`): one tick at a time, 200 s budget, stale-tick limit 10 min, per-job `minIntervalSeconds`, rows for the tick and every job, interrupted rows marked failed. Jobs: `platform.heartbeat` (keeps the 1.1 "Scheduled ticks" counter alive), `platform.housekeeping` (daily, prunes runs older than 30 days).
+- **`/healthz`** now shows `migrations: {applied, total}`, `lastTick`, `node`, `memoryMb`, `ready`. No paths, no secrets.
+- Field encryption helper (AES-256-GCM, key derived from `ENCRYPTION_KEY`), unused by data until stage 8.
+- Vitest harness: `tests/helpers/app.ts` (temp database, fake secrets, captured log lines), `npm run typecheck` (backend and tests).
+- The 1.1 spike page and routes stay (now in the envelope) until 1.3 replaces them.
+
+**Files.** New: `backend/src/{config/{env,holding}.ts, http/{envelope,errorHandler,registry,requestId,requestLog,spa}.ts, db/{health,jobRuns,sqlLint,tenant}.ts, jobs/{index,registry}.ts, jobs/jobs/{heartbeat,housekeeping}.ts, lib/{crypto,errors,ids,logger}.ts, routes/{spike,system}.ts}`, `database/migrations/0002_scheduled_job_runs.sql`, `tests/{config,crypto,foundation,holding,http,jobs,layering,migrate,registry,sqllint,tenant}.test.ts`, `tests/helpers/app.ts`, `tests/tsconfig.json`. Changed: `backend/src/{app,server}.ts`, `backend/src/db/migrate.ts`, `backend/src/jobs/tick.ts`, `frontend/src/App.tsx` (reads the envelope), `package.json` (+`zod ^4.6.7`, `typecheck` script, version 0.1.2), `.env.example`, `docs/{architecture,api-documentation,database-design}.md`. Removed: `tests/spike.test.ts` (its cases moved into `foundation.test.ts` and `migrate.test.ts`).
+
+**Decisions / changes to the blueprint.**
+- **`ENCRYPTION_KEY` is any long random string (>= 32 characters), not exactly "32 random bytes base64"**: the AES key is derived with HKDF-SHA256. Reason: the owner has no code editor and types it by hand; same strength. (`docs/architecture.md` section 11 updated.)
+- **`APP_URL` is optional in 1.2** (required from 2.1) so this stage needs only the two secrets the owner agreed to type. `NODE_ENV` is not required either.
+- **Holding page returns HTTP 200 at the site address** (the notice) while `/api/*` returns 503: a 200 root cannot make the platform think the process is unhealthy; `/healthz` says `ready:false`.
+- `scheduled_job_runs.organization_id` has **no foreign key** (operational log; SQLite cannot add one later without a table rebuild).
+- `REGISTRATION_MODE` / `REGISTRATION_CODE` are **not** read yet; they arrive in 2.1, so the owner is not forced to set them now.
+- The layering test found two real slips while I wrote it (a `prepare` in a route file, a regex `.exec` false positive); fixed (SQL moved to `db/health.ts`, test pattern tightened).
+
+**Tests run (all with a real Node 20.20.2 from `npm i node@20.20.2`, not the sandbox's 22).**
+- Clean checkout from `git archive HEAD` (committed state): `npm ci` → `npm run build` (check-node20: 248 packages accept 20.20.2; tsc; Vite) → `npm run typecheck` → `npm test`: **11 files, 78 of 78 tests pass**. `npm ci --omit=dev` + build ok; `npm audit`: 0 vulnerabilities.
+- Compiled server (`node build/backend/src/server.js`): **holding mode** with no secrets (`/` shows "Server is missing: SESSION_SECRET, ENCRYPTION_KEY", `/api/*` 503 with the same sentence, `/healthz` `ready:false`, tick 401 without a secret and 202 with it, no database file created); **normal mode** with temporary random local secrets (`/healthz` migrations 2/2, tick 202 then `lastTick` set, visit counter, SPA fallback 200, JSON 404); stop and restart: data persisted. The log contained neither secret.
+- Real Chromium: the holding page text is correct; the normal page loads with no console or page errors.
+- `DRY_RUN=1 scripts/embarko-deploy.sh zentro`: archive has no `.env`, `node_modules`, `dist`, `data` or `.git`.
+
+**Embarko state before deploying 1.2** (checked with `read_app`, names only): env vars set are `CRON_SECRET` and `STORAGE_TOKEN` (Embarko's own). `SESSION_SECRET` and `ENCRYPTION_KEY` are **not set**, so the first deploy of 1.2 will correctly show the holding page until the owner types them and presses Apply changes.
+
+**Where the secrets page is (from Embarko's docs, `docs/env-vars.md` and `docs/quickstart.md`).** Open `https://embarko.ai/app`, choose the app `zentro`, open its **App setup** tab, add the name and value, save, then press **Apply changes** (saving alone only stores; Apply restarts the app without a rebuild). The deep link `https://embarko.ai/app/projects/<project-id>/environment` that I gave earlier is only a URL pattern from the docs (which say no reply contains it ready-made) and it redirected to the app overview, so use the `https://embarko.ai/app` route instead. I cannot open the dashboard (login), so the exact button wording beyond "App setup" and "Apply changes" is from the docs and the HireDrive runbook.
+
+**Not done / incomplete.** Not deployed, so the live checks below are not yet run on the live link. Not built (by design, later stages): sessions and real guards (2.1/2.3), real repositories (first module), the route-table-vs-docs diff script, nightly snapshot and export (9.4), the System panel.
+
+**Live checklist for the owner (after "yes, deploy").**
+1. Open https://zentro.embarko.app: the **holding page** "Zentro is almost ready: Server is missing: SESSION_SECRET, ENCRYPTION_KEY".
+2. Open `/healthz`: `"ready":false` and `"missing":["SESSION_SECRET","ENCRYPTION_KEY"]`. Open `/api/anything`: the 503 with `Server is missing: ...`.
+3. On Embarko: `https://embarko.ai/app` → `zentro` → **App setup**: type `SESSION_SECRET` and `ENCRYPTION_KEY` yourself (long random, different), save, press **Apply changes**. Wait about a minute.
+4. Reload the site: the stage 1.2 page shows (Node 20.x, visit counter continues from before). `/healthz` shows `"ready":true`, `"migrations":{"applied":2,"total":2}`, and after the next 5-minute tick a `lastTick` time.
+5. Embarko **Scheduled jobs** still shows `zentro tick` ok. (Optional, for me: the app log line `preMigrationCopy` shows a copy of the 1.1 database was taken before migration 0002.)
+
+**Exact next step.** Show the owner these results; on "yes, deploy": push the branch, run `scripts/embarko-deploy.sh zentro`, run the live checklist (holding page first), then the owner types the secrets; record the result here and tick 1.2. Merge to `main` only with the owner's approval. Then stage 1.3 in a new session.
