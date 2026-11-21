@@ -1,89 +1,59 @@
-import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express } from "express";
 import type Database from "better-sqlite3";
-import { bump, read } from "./db/counters.js";
+import type { Config } from "./config/env.js";
+import { apiNotFound, errorHandler } from "./http/errorHandler.js";
+import { requestId } from "./http/requestId.js";
+import { requestLog } from "./http/requestLog.js";
+import { assertAllRegistered, denyAllGuards, RouteRegistry, type Guards } from "./http/registry.js";
+import { mountSpa } from "./http/spa.js";
+import { defaultJobs } from "./jobs/index.js";
+import type { JobRegistry } from "./jobs/registry.js";
 import { createTick } from "./jobs/tick.js";
+import type { Logger } from "./lib/logger.js";
+import { registerSpikeRoutes } from "./routes/spike.js";
+import { registerSystemRoutes } from "./routes/system.js";
 
 export interface AppOptions {
   db: Database.Database;
   dbFile: string;
+  config: Config;
   version: string;
   appName: string;
   cronSecret: string | undefined;
+  migrationsTotal: number;
+  log: Logger;
   /** Folder holding the Vite build (index.html). Omit in API-only tests. */
   staticDir?: string;
+  /** Replace the job list (tests). */
+  jobs?: JobRegistry;
+  /** Add routes (tests, later stages). They go through the same registry and boot check. */
+  extraRoutes?: (registry: RouteRegistry) => void;
+  /** Replace the sign-in guards (stage 2.1 supplies real ones; the default refuses everyone). */
+  guards?: Guards;
 }
 
-/** Constant-time check of "Authorization: Bearer <secret>". Always false when the secret is unset. */
-export function bearerMatches(header: string | undefined, secret: string | undefined): boolean {
-  if (!secret || !header) return false;
-  const m = /^Bearer (.+)$/.exec(header);
-  if (!m || m[1] === undefined) return false;
-  const a = crypto.createHash("sha256").update(m[1]).digest();
-  const b = crypto.createHash("sha256").update(secret).digest();
-  return crypto.timingSafeEqual(a, b);
-}
-
-export function createApp(opts: AppOptions): Express {
-  const { db } = opts;
+export function createApp(opts: AppOptions): { app: Express; registry: RouteRegistry; tick: ReturnType<typeof createTick> } {
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", 1);
+  app.set("trust proxy", opts.config.trustProxy);
 
-  const tick = createTick(db);
+  const jobs = opts.jobs ?? defaultJobs();
+  const tick = createTick(opts.db, jobs, opts.log);
+  const registry = new RouteRegistry();
 
-  app.get("/healthz", (_req: Request, res: Response) => {
-    res.json({ ok: true, version: opts.version, node: process.versions.node });
-  });
+  registerSystemRoutes(registry, { db: opts.db, version: opts.version, migrationsTotal: opts.migrationsTotal, tick });
+  registerSpikeRoutes(registry, { db: opts.db, dbFile: opts.dbFile, version: opts.version, appName: opts.appName });
+  opts.extraRoutes?.(registry);
 
-  // Embarko calls GET with "Authorization: Bearer <CRON_SECRET>". Answer 202 immediately, work in the background.
-  app.get("/api/cron/tick", (req: Request, res: Response) => {
-    if (!bearerMatches(req.header("authorization"), opts.cronSecret)) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    if (tick.isRunning()) {
-      res.status(202).json({ started: false, skipped: "already running" });
-      return;
-    }
-    res.status(202).json({ started: true });
-    void tick.run().catch((err: unknown) => {
-      console.error("tick failed:", err instanceof Error ? err.message : String(err));
-    });
-  });
+  app.use(requestId);
+  app.use(requestLog(opts.log));
+  app.use(express.json({ limit: "100kb" }));
+  registry.mount(app, opts.guards ?? denyAllGuards(opts.cronSecret));
+  assertAllRegistered(app, registry);
 
-  app.get("/api/spike", (_req: Request, res: Response) => {
-    const visits = read(db, "visits");
-    const ticks = read(db, "ticks");
-    res.json({
-      app: opts.appName,
-      version: opts.version,
-      node: process.versions.node,
-      dbPath: opts.dbFile,
-      visits: visits.value,
-      ticks: ticks.value,
-      lastTickAt: ticks.updatedAt,
-      serverTime: new Date().toISOString(),
-    });
-  });
-
-  app.post("/api/spike/visit", (_req: Request, res: Response) => {
-    res.json({ visits: bump(db, "visits").value });
-  });
-
-  app.use("/api", (_req: Request, res: Response) => {
-    res.status(404).json({ error: "Not found" });
-  });
-
-  if (opts.staticDir && fs.existsSync(path.join(opts.staticDir, "index.html"))) {
-    const dir = opts.staticDir;
-    app.use(express.static(dir));
-    app.get(/^(?!\/api\/).*/, (_req: Request, res: Response) => {
-      res.sendFile(path.join(dir, "index.html"));
-    });
-  }
-
-  return app;
+  app.use("/api", apiNotFound);
+  mountSpa(app, opts.staticDir);
+  app.use(apiNotFound);
+  app.use(errorHandler(opts.log));
+  return { app, registry, tick };
 }

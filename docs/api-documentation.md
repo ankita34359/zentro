@@ -252,8 +252,8 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
-| GET, POST | `/api/cron/tick` | `Authorization: Bearer $CRON_SECRET` (constant-time), **401 otherwise, always 401 if unset** | `202 {accepted, started, skipped?}` immediately; work continues in the background; one run at a time |
-| GET | `/healthz` | none | `{ok, ready, version, migrations}`; answers even on the holding page |
+| GET | `/api/cron/tick` | `Authorization: Bearer $CRON_SECRET` (constant-time), **401 otherwise, always 401 if unset** | **Built in 1.2.** `202 {accepted, started, skipped?}` immediately; work continues in the background; one run at a time. (GET only for now: Embarko calls GET.) |
+| GET | `/healthz` | none | **Built in 1.2.** Plain JSON (not the envelope, for monitors): `{ok, ready, version, node, migrations:{applied,total}, lastTick:{startedAt,finishedAt,status}\|null, memoryMb}`. On the holding page: `{ok:true, ready:false, migrations:null, missing:[names]}`. Never contains paths or secrets. |
 
 Embarko calls the tick with **GET** every 5 minutes (`embarko.json`), and it has 5 minutes to answer, hence the immediate `202`.
 
@@ -319,10 +319,21 @@ POST /api/ai/chat   { "message": "Which objectives are at risk?" }
 
 ---
 
+## 14a. Stage 1.2 notes
+
+- Registered today: `GET /healthz` (public), `GET /api/cron/tick` (cron), and the two stage 1.1 spike routes `GET /api/spike`, `POST /api/spike/visit` (public, removed in stage 1.3). The spike routes now answer in the standard envelope.
+- Every other `/api/*` path answers `404 not_found`. On the holding page every `/api/*` answers `503 server_missing_settings` (message `Server is missing: NAMES`).
+- Added error codes: `payload_too_large` (413, bodies over 100 KB), `invalid_json` (400), `server_missing_settings` (503).
+- Each response carries `X-Request-Id`; a caller-supplied `X-Request-Id` is echoed only if it is 8 to 64 characters of letters, digits, `_` or `-`.
+
+---
+
 ## 15. Route registry and tests
 
 Every route is registered through one helper that **requires** a permission key (or an explicit `public`/`baseline` marker), a Zod schema for params/query/body, and a flag for whether it takes an entity id. That registry drives:
 
 - the boot-time check that no route is unprotected;
 - the generated **tenancy matrix** (org B vs org A ids → 404) and **permission matrix** tests ([permission-model](permission-model.md) section 9);
-- this document's tables (kept in sync by a script that lists registered routes and diffs them against the tables here).
+- this document's tables (kept in sync by a script that lists registered routes and diffs them against the tables here: **not built yet**, planned with the first real module).
+
+**Built in 1.2:** `RouteRegistry` (`backend/src/http/registry.ts`) with the markers `public` (must give a reason), `cron`, `baseline`, `permission(key)`; Zod validation (a bad request returns paths and messages, never the submitted values); `assertAllRegistered` runs at boot and in tests and throws if a route was mounted on Express without the registry. `tests/registry.test.ts` lists the registered routes with their markers, which is the base the 2.3 tenancy and permission matrices will be generated from.

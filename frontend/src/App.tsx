@@ -11,10 +11,14 @@ interface Spike {
   serverTime: string;
 }
 
+/** Reads the API envelope: { data } on success, { error: { message } } on failure. */
 async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
-  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
-  return (await res.json()) as T;
+  const body = (await res.json().catch(() => null)) as { data?: T; error?: { message?: string } } | null;
+  if (!res.ok || !body || body.data === undefined) {
+    throw new Error(body?.error?.message ?? `${url} answered ${res.status}`);
+  }
+  return body.data;
 }
 
 export function App() {
@@ -45,7 +49,7 @@ export function App() {
   return (
     <main>
       <h1>Zentro</h1>
-      <p className="sub">Stage 1.1: deploy spike. Nothing here is real data yet; it only proves the platform works.</p>
+      <p className="sub">Stage 1.2: backend foundation (deploy spike page). Nothing here is real data yet; it only proves the platform works.</p>
       {error && <p className="bad">Could not load: {error}</p>}
       {!data && !error && <p>Loading…</p>}
       {data && (
