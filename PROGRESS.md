@@ -2,15 +2,15 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 built and tested on Node 20.20.2 · **Not deployed yet (waiting for the owner's "yes, deploy")**
+Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 deployed and live-checked by me (owner to click through) · live at https://zentro.embarko.app
 
 ---
 
 ## Current status
 
-**Stage 1.1 (deploy spike) is built and tested locally on a real Node 20.20.2, on branch `claude/stage-1-1`. It has NOT been deployed**: deploying waits for the owner's explicit "yes, deploy" after seeing the test results. Nothing is merged to `main`.
+**Stage 1.1 (deploy spike) is DEPLOYED** as app `zentro` (kind `service`, `claimed: true`): **https://zentro.embarko.app** (app id `cmwq8dc5l047m7p7fwgtufeuu`, now in `embarko.json`; deployed version `5440c31`). Branch `claude/stage-1-1` is pushed; nothing merged to `main` (ask first).
 
-Next action: the owner reviews the test results below and says "yes, deploy". Then run `scripts/embarko-deploy.sh zentro` (fallback name `zentro-ankita` on `409 app_name_taken`), put the reply's `app.id` into `embarko.json` as `appId`, commit, and walk the owner through the live checklist. Only after the live checks pass is 1.1 ticked and **stage 1.2** (backend foundation) next, in a new session from `main`.
+Remaining for 1.1: the owner clicks through the live checklist below, then 1.1 is ticked. Next: **stage 1.2** (backend foundation) in a new session from `main` (merge `claude/stage-1-1` first, with the owner's approval).
 
 ## Working rules (from the master prompt overrides)
 
@@ -70,7 +70,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[~]` 1.1 Deploy spike (built and tested, awaiting deploy approval) · `[ ]` 1.2 Backend foundation · `[ ]` 1.3 Frontend foundation
+**M1 Foundation** · `[~]` 1.1 Deploy spike (live; owner click-through pending) · `[ ]` 1.2 Backend foundation · `[ ]` 1.3 Frontend foundation
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -152,4 +152,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 5. Redeploy (I do this when you say so) and reload: the counter continues from where it was.
 
 **Exact next step.** After "yes, deploy": deploy, record `appId` and the live URL here, run the checklist, tick 1.1. Then stage 1.2 in a new session.
+
+### Stage 1.1 deploy record (2026-11-21)
+- Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded version `5440c31` (37 files, 160 KB): reply `claimed:true`, `kind:service`, action `created`, name `zentro` was free (no need for `zentro-ankita`). Build succeeded on Embarko; **live reported Node 20.20.2** (`/healthz` and the page).
+- The deploy token worked, so no new token was requested. (Earlier read-only probing could not tell, as the proxy supplies its own credential; the upload reply is the real proof.)
+- Live checks I ran: `/` 200; `/healthz` `{"ok":true,"version":"5440c31","node":"20.20.2"}`; database path `/data/zentro.db`; `/api/cron/tick` without a secret 401. Ran the schedule once through Embarko's run-schedules API: **outcome ok, HTTP 202, 58 ms**, and the page's tick counter went 0 → 1.
+- Not yet verified: the counter surviving a *redeploy* (the next deploy, which will also ship `appId` in `embarko.json`, is the test: note the counter, redeploy, reload); the automatic 5-minute schedule (only the manual run was exercised); the app being listed in the owner's dashboard (the `claimed:true` reply says it is).
+- Owner dashboard (App setup / env vars): `https://embarko.ai/app/projects/cmwq8dc5l047m7p7fwgtufeuu/environment` (pattern from the runbook; not opened by me, login required).
 
