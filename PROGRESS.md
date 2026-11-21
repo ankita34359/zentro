@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete (Milestone 1 done) · 1.3 live on version `d128fc5` and merged to `main` · stage 1.4 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete and merged · Stage 1.4 (visual design and motion, added at the owner's request) built and tested on branch `claude/stage-1-4`, **not deployed (waiting for the owner's "yes, deploy")** · live at https://zentro.embarko.app (still version `d128fc5`)
 
 ---
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 comple
 
 Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
 
-**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). **Stage 1.3 (frontend foundation) is complete and live** (version `d128fc5`, checked by the owner) and merged into `main` by pull request (owner-approved). **Milestone 1 (Foundation) is done.** Next: **stage 2.1** (auth core) in a new session from `main`; not started (it needs the owner to type `REGISTRATION_CODE`). First small backend follow-up to fold in: log requests that match no route (static files, app shell) at `debug` (see the 1.3 deploy record). Details in "Stage 1.3" below. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
+**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). **Stage 1.3 (frontend foundation) is complete and live** (version `d128fc5`, checked by the owner) and merged into `main` by pull request (owner-approved). **Milestone 1 (Foundation) was done at 1.3.** The owner then added **stage 1.4 "Visual design and motion (added at the owner's request)"** because the UI felt dull: it is built and tested on branch `claude/stage-1-4` (from `main` at `4641378`), frontend only, **not deployed, not merged**; details in "Stage 1.4" below. After 1.4 the next stage is **stage 2.1** (auth core) in a new session from `main`; not started (it needs the owner to type `REGISTRATION_CODE`). First small backend follow-up to fold in: log requests that match no route (static files, app shell) at `debug` (see the 1.3 deploy record). Details in "Stage 1.3" below. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -72,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[~]` 1.4 Visual design and motion (added at the owner's request; in progress)
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[~]` 1.4 Visual design and motion (added at the owner's request; built and tested, awaiting deploy approval)
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -120,6 +120,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.4 added and built | The owner asked for a new stage 1.4 "Visual design and motion" (the UI felt dull). Recorded in `docs/milestones.md` and here. Branch `claude/stage-1-4` from `main` (`4641378`). Frontend only. 156 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium. **Not deployed.** Details in "Stage 1.4" below. |
 | 2026-11-21 | 1.3 complete | The owner confirmed the live checks passed. Ticked. Pull request `claude/stage-1-3` → `main` opened and merged with the owner's explicit approval. Milestone 1 done. Nothing further started. |
 | 2026-11-21 | 1.3 deployed | Owner said "yes, deploy". Uploaded `d128fc5` (85 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.3 deploy record"). Not ticked until the owner confirms; not merged. |
 | 2026-11-21 | 1.3 built | Branch `claude/stage-1-3` (from `main` after the 1.2 merge). Frontend shell built, spike page removed; 125 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium at desktop and phone width, light and dark. **Not deployed.** Details in "Stage 1.3" below. |
@@ -290,3 +291,50 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 - Owner reported all live checks passed. Stage 1.3 ticked; Milestone 1 (1.1 to 1.3) is complete.
 - Owner approved this one merge: `claude/stage-1-3` → `main` by pull request. Nothing else merged or deployed.
 - Exact next step: stage 2.1 (auth core: `users`, `sessions`, register/login/logout/me, scrypt, JWT cookie + session row, rate limits, same-origin check, create organization, onboarding page, `REGISTRATION_MODE=code` with `REGISTRATION_CODE` typed by the owner). Start in a new session from `main`. Also in that stage: demote no-route request logging to `debug`, make `APP_URL` required, drop the unused `spike_counters` table in a later migration (not in the same deploy as the code change that stops using it, which was 1.3), and replace the placeholder sidebar visibility with the real capability check.
+
+---
+
+## Stage 1.4: visual design and motion (added at the owner's request; built and tested, NOT deployed)
+
+**Why.** The owner found the 1.3 UI dull. Goal: a calm, trustworthy, data-first, professional SaaS look in light and dark, with restrained, advanced animation. **Frontend only: no backend, API, database, script or `embarko.json` change** (checked: `git diff origin/main..HEAD -- backend database scripts embarko.json` is empty).
+
+**Implemented** (design rules and tokens are in `docs/frontend-structure.md` section 11):
+- **One token file** `frontend/src/styles/tokens.css` (Tailwind 4 theme variables): palette, semantic roles for light and dark, type scale, radii, shadows, layout sizes, motion timings. Edit it to retune the whole look. `lib/motion.ts` mirrors the timings for the motion library; tests keep them in step and ban raw colours and hard-coded durations in components.
+- **Palette:** indigo/violet brand (700 = the Z logo colour), one accent (orchid), cool slate neutrals, soft off-white light mode, deep navy dark mode (not black). Fixed status colours: emerald on track, amber at risk, rose off track, sky info; each with solid, soft and ink; always icon + words (`StatusBadge`).
+- **Typography:** Inter variable, self-hosted from `@fontsource-variable/inter`; display/title/heading/body/label/caption/overline scale; tabular numbers for metrics.
+- **Polish:** sidebar grouped (Strategy, Execution, Insight, System; all eleven items, master order) with one indicator that slides to the active item; header with a soft blur; cards with fine border, soft shadow and a gentle hover lift; gradient glow behind the Overview heading; one `PageHeader`; ten small SVG empty-state illustrations (+ compass for 404) drawn in code; refined buttons, badges, error state, skeletons; gradient Z logo.
+- **Motion** (`motion` library with `LazyMotion` and `m`): page transition (fade and 8 px rise), staggered card entrance, progress ring (used for Getting started, **0 of 6**) and progress bar. CSS: card lift, sliding indicator, theme-icon morph, Online pill pulse, skeleton shimmer, slide-in phone menu with a blurred backdrop. Count-up is a small `requestAnimationFrame` tween on the same easing (motion's `animate()` cost about 13 KB gzipped on first load).
+- **Motion rules** written into `docs/frontend-structure.md` section 11.5: purposeful; interface motion 150 to 350 ms, data reveals up to 700 ms; never block content or shift layout; **nothing loops except the Online pulse and the loading shimmer (only while loading)**; reduced motion fully honoured; failure-safe when the engine has not loaded.
+- **Unlisted `/design` page** (not in the sidebar): palette ramps and roles, status colours, type scale, radii and shadows, buttons, badges, cards, skeleton, error and empty states, all illustrations, replayable motion samples (page transition, stagger, count-up, ring, bars), timings, and a live contrast table for the current theme. Its motion numbers are labelled as examples, not data.
+- **Kept:** all stage 1.3 behaviour, the Skip to content link, keyboard access, the 404 page, the phone menu, the status pill, and all 125 earlier tests.
+
+**Files.** New: `frontend/src/styles/tokens.css`, `frontend/src/lib/{motion,contrast}.ts`, `frontend/src/motion/{MotionProvider,features,PageTransition,Stagger,CountUp,ProgressRing,ProgressBar}`, `frontend/src/components/illustrations/index.tsx`, `frontend/src/components/common/StatusBadge.tsx`, `frontend/src/pages/DesignPage.tsx`, `tests/frontend/{tokens,design,motion-reduced,motion-not-ready}.test.*`. Changed: `frontend/src/{styles.css,App.tsx}`, `frontend/src/layouts/{AppShell,SidebarNav}.tsx`, `frontend/src/routes/navigation.ts` (groups, `titleFor`), `frontend/src/components/ui/{badge,button,card,sheet,skeleton}.tsx`, `frontend/src/components/common/{Brand,EmptyState,ErrorState,PageHeader,PageSkeleton,StatusPill,ThemeToggle}.tsx`, `frontend/src/pages/{OverviewPage,SectionPage,NotFoundPage,sections}`, `tests/frontend/helpers.tsx`, `package.json`/lock (`motion ^14.14.0`), docs (`frontend-structure` section 11, `architecture`, `milestones`).
+
+**Decisions / changes.**
+- `motion` is `^14.14.0`; `npm run check:node20` passes (376 packages).
+- **Count-up is hand-rolled**, not motion's `animate()` (size). Theme-icon morph, pulse, shimmer, card lift, indicator and the phone menu are CSS (robust, no JavaScript, and they keep the main chunk small). Page transition, stagger, ring and bar use the motion library.
+- **The phone menu (Radix Dialog) is its own chunk**, prefetched while idle on narrow screens and held in state (not `React.lazy`: a suspended boundary made React wait about 300 ms before showing the menu; measured 330 ms, now 22 to 32 ms).
+- Renamed the shadcn-style `accent` role (it meant "subtle highlight") to `selected` / `primary-soft`; `accent` is now the real accent colour. Status classes are `on-track`, `at-risk`, `off-track`, `info` (the old `success`/`warning`/`destructive` names are gone).
+- Content for a loading or failed motion engine: components render their final state (tested by blocking the chunk).
+- Two real bugs found and fixed by my own measurements: (1) with reduced motion the page wrapper still showed an 8 px offset for one frame, now no transform at all; (2) the Z logo's gradient id was duplicated between the sidebar and the phone header, so on phones the hidden copy broke the logo's fill (washed out); now one id per instance, with a test. Also fixed a 16 px horizontal overflow on phones caused by the heading glow (clipped with `overflow-x: clip`).
+
+**Tests run (real Node 20.20.2 from `npm i node@20.20.2`, not the sandbox's 22).**
+- Clean checkout from `git archive HEAD`: `npm ci` → `npm run build` (check-node20 ok, tsc, Vite) → `npm run typecheck` → `npm test`: **20 files, 156 of 156 tests pass** (the 125 from 1.3 unchanged, plus 31 new: tokens, design page, status badges, illustrations, ring/bar/count-up, reduced motion, engine-not-loaded, logo). `npm ci --omit=dev` + build ok; `npm audit`: 0 vulnerabilities.
+- **Contrast, measured in real Chromium on the built app:** every visible text node (1,698 text nodes: Overview, a section page, the 404 page and `/design`; desktop 1280 and phone 390; light and dark; phone menu open) **at least 4.5:1, lowest ratio 6.09** (light) and 7.27 (dark); no failures. Text over the gradient glow, sampled from real screenshot pixels behind the heading and description: **lowest 5.37**. The `/design` page's own token-pair table also shows all 16 pairs passing in both themes.
+- **Bundle (gzip level 9, real first load of `/overview`):** **entry chunk 109.0 KB** (limit 150 KB); **all JavaScript fetched on first load 144.3 KB** in 8 files (this includes the 18 KB animation-engine chunk, which loads in the background right after start); CSS 8.6 KB. For comparison 1.3 was about 126 KB total. Not on the first load: phone menu 11.9 KB (idle prefetch on phones only), `/design` 5.0 KB, section and 404 pages under 2 KB each.
+- **Motion, measured frame by frame in the browser (reduced motion off / on):** page transition fade about 146 ms, 8 px rise / fade only with **0 px movement in every frame**; sidebar indicator slides 12 distinct positions settling at about 215 ms / jumps instantly; card hover lift 2 px / none; looping animations present: pulse and shimmer / **none**; count-up counts through 5 values / final value in the first frame; ring arc animates through 44 steps / final at once; phone menu slides in over a `blur(4px)` backdrop in 0.35 s / fades in 1 ms; theme icon morph 0.35 s and 0.22 s / 1 ms. **Cumulative layout shift 0** in both modes.
+- Real Chromium, desktop 1280x800 and phone 390x844, light and dark, reduced motion on and off: no horizontal overflow, no console or page errors. Stage 1.3 behaviours re-checked: Skip to content is the first Tab stop, focus moves to the page after navigation, Escape closes the phone menu and returns focus to its button, the theme toggles and follows the OS until a choice is made, an unreachable `/healthz` shows Offline with retry, a deep link loads.
+- `DRY_RUN=1 scripts/embarko-deploy.sh zentro`: 98 files, 232 KB; no `.env`, `node_modules`, `dist`, `data` or `.git`.
+
+**Not done / incomplete.** Not deployed, so the checklist below has not run on the live link. Not built: a user-facing choice of "system" theme (the toggle is light/dark and follows the OS until the first click), a custom 3-state theme menu, an automated axe pass (planned M9), contrast of hover states (hover only changes a background by 10% or less; the measured pairs are the resting states). The full animation engine (`domAnimation`, 18 KB gzipped) starts loading at once; it cannot delay or hide content.
+
+**Live checklist for the owner (after "yes, deploy").** On https://zentro.embarko.app:
+1. Open the site: Overview in the new look: grouped sidebar (Strategy, Execution, Insight, System), gradient Z logo, soft glow behind the heading, cards fading in one after another, a **ring showing 0/6** in Getting started, a pulsing dot in the green **Online** pill.
+2. Click through the sidebar: the highlight slides from item to item; each page fades in and shows a small illustration.
+3. Click the moon/sun icon: dark mode (deep navy), the icon morphs. Reload: it stays.
+4. Hover a card: it lifts slightly.
+5. Open `https://zentro.embarko.app/design` (not in the sidebar): palette, type scale, components, illustrations; press the **Replay** buttons for the motion samples; the contrast table at the bottom shows every pair passing.
+6. Narrow the window or use your phone: menu button top left opens a panel that slides in over a blurred backdrop and closes after you pick a page.
+7. Turn on your system's "reduce motion" setting (Windows: Settings > Accessibility > Visual effects > Animation effects off; macOS: Accessibility > Display > Reduce motion; iOS: Accessibility > Motion): reload. Nothing slides, lifts, counts or pulses; pages only fade.
+
+**Exact next step.** Show the owner these results; on "yes, deploy": push the branch, run `scripts/embarko-deploy.sh zentro`, run the checklist, record the result here and tick 1.4. Merge to `main` only with the owner's separate approval. Then stage 2.1 (auth core) in a new session.
