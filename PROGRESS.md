@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete and merged · Stage 1.4 (visual design and motion, added at the owner's request) deployed as `81f6d5c`; a **colour and depth refresh ("Aurora indigo")** on the same branch `claude/stage-1-4` is **deployed (live version `fce10f1`), waiting for the owner's live check**; 1.4 not ticked, not merged · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2, 1.3 and 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · live on version `fce10f1` and merged to `main` · next stage 2.1 not started · live at https://zentro.embarko.app
 
 ---
 
@@ -72,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[~]` 1.4 Visual design and motion (added at the owner's request; deployed, awaiting the owner's check and merge approval)
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner)
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -120,6 +120,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.4 complete | The owner confirmed the live checks passed for the design/motion stage and the Aurora indigo colour refresh. Ticked. Pull request `claude/stage-1-4` → `main` opened and merged with the owner's explicit approval. No further stage started. |
 | 2026-11-21 | 1.4 colour refresh deployed | Owner said "yes, deploy". Uploaded `fce10f1` (99 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Colour refresh deploy record"). Not ticked; not merged. |
 | 2026-11-21 | 1.4 colour refresh built | The owner found the colours still dull and asked me to choose a direction: "Aurora indigo". Frontend only, same branch `claude/stage-1-4`. 163 tests pass on Node 20.20.2 from a clean checkout; contrast measured from real pixels. **Not deployed, not merged.** Details in "Stage 1.4 colour and depth refresh" below. |
 | 2026-11-21 | 1.4 deployed | Owner said "yes, deploy". Uploaded `81f6d5c` (98 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.4 deploy record"). Not ticked until the owner confirms; not merged. |
@@ -297,7 +298,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.4: visual design and motion (added at the owner's request; deployed, awaiting the owner's check)
+## Stage 1.4: visual design and motion (added at the owner's request; complete, live)
 
 **Why.** The owner found the 1.3 UI dull. Goal: a calm, trustworthy, data-first, professional SaaS look in light and dark, with restrained, advanced animation. **Frontend only: no backend, API, database, script or `embarko.json` change** (checked: `git diff origin/main..HEAD -- backend database scripts embarko.json` is empty).
 
@@ -353,7 +354,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.4 colour and depth refresh, "Aurora indigo" (deployed, awaiting the owner's check)
+## Stage 1.4 colour and depth refresh, "Aurora indigo" (complete, live)
 
 **Why.** The owner still found the colours dull and wanted a more vibrant, premium, professional look, and asked me to choose. Direction chosen with the owner's brief: **Aurora indigo**, confident and vivid but not neon. Frontend only (`git diff origin/main..HEAD -- backend database scripts embarko.json` is empty). Branch `claude/stage-1-4`, commit `7fe4eb1`, on top of the deployed `81f6d5c`. Rules and tokens: `docs/frontend-structure.md` section 11.
 
@@ -404,3 +405,13 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
   3. Because of 2, the phone menu can take 0.3 to 0.6 s to open if it is tapped within a second of loading the page (its chunk is prefetched while idle but may not have arrived). After the chunk is cached it opens in about 30 ms. Compression and caching (finding 2) are the fix; the earlier local measurement (22 to 32 ms) assumed an instant network.
   4. Still open from before: prefetch the lazy page chunks while idle; log requests that match no route at `debug`.
 - Not yet verified by the owner: the live checklist in the colour refresh section above. 1.4 is ticked only after that, and merged to `main` only with a separate approval.
+
+### Stage 1.4 closed (2026-11-21)
+- Owner reported the live checks passed (design and motion stage and the Aurora indigo refresh). Stage 1.4 ticked; Milestone 1 (1.1 to 1.4) is complete.
+- Owner approved this one merge: `claude/stage-1-4` → `main` by pull request. Nothing else merged or deployed; the live app already runs the merged code (`fce10f1`).
+- **Exact next step: stage 2.1 (auth core)** in a new session from `main` (it needs the owner to type `REGISTRATION_CODE`). Fold in these small follow-ups, in this order of value:
+  1. **Backend/static serving (needs the owner's OK, was out of scope for the frontend-only 1.4):** compress responses (`compression` middleware or pre-compressed files) and send `cache-control: public, max-age=31536000, immutable` for the hashed files under `/assets` (keep `no-cache` for `index.html`). The live server currently sends the 350 KB entry script uncompressed with `max-age=0`.
+  2. Log requests that match no route (static files, the app shell) at `debug`, not `info`.
+  3. Prefetch the lazy page chunks while idle (first visit to each section commits about 300 ms late on a real network) and keep the phone-menu prefetch.
+  4. Make `APP_URL` required, drop the unused `spike_counters` table in a migration of its own, and replace the placeholder sidebar visibility with the real capability check (all from earlier notes).
+  5. Ask Embarko whether its bottom-left "Embarko" badge, which covers the phone-menu version footer, can be moved or removed; otherwise move that footer.
