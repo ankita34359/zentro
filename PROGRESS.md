@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete and merged · Stage 1.4 (visual design and motion, added at the owner's request) built and tested on branch `claude/stage-1-4`, **not deployed (waiting for the owner's "yes, deploy")** · live at https://zentro.embarko.app (still version `d128fc5`)
+Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete and merged · Stage 1.4 (visual design and motion, added at the owner's request) **deployed (version `81f6d5c`) from branch `claude/stage-1-4`, waiting for the owner's live check and a separate merge approval** · live at https://zentro.embarko.app
 
 ---
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 comple
 
 Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
 
-**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). **Stage 1.3 (frontend foundation) is complete and live** (version `d128fc5`, checked by the owner) and merged into `main` by pull request (owner-approved). **Milestone 1 (Foundation) was done at 1.3.** The owner then added **stage 1.4 "Visual design and motion (added at the owner's request)"** because the UI felt dull: it is built and tested on branch `claude/stage-1-4` (from `main` at `4641378`), frontend only, **not deployed, not merged**; details in "Stage 1.4" below. After 1.4 the next stage is **stage 2.1** (auth core) in a new session from `main`; not started (it needs the owner to type `REGISTRATION_CODE`). First small backend follow-up to fold in: log requests that match no route (static files, app shell) at `debug` (see the 1.3 deploy record). Details in "Stage 1.3" below. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
+**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). **Stage 1.3 (frontend foundation) is complete and live** (version `d128fc5`, checked by the owner) and merged into `main` by pull request (owner-approved). **Milestone 1 (Foundation) was done at 1.3.** The owner then added **stage 1.4 "Visual design and motion (added at the owner's request)"** because the UI felt dull: it is built, tested and **deployed** (live version `81f6d5c`) from branch `claude/stage-1-4` (from `main` at `4641378`), frontend only, **not merged**; details in "Stage 1.4" below. After 1.4 the next stage is **stage 2.1** (auth core) in a new session from `main`; not started (it needs the owner to type `REGISTRATION_CODE`). First small backend follow-up to fold in: log requests that match no route (static files, app shell) at `debug` (see the 1.3 deploy record). Details in "Stage 1.3" below. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -72,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[~]` 1.4 Visual design and motion (added at the owner's request; built and tested, awaiting deploy approval)
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[~]` 1.4 Visual design and motion (added at the owner's request; deployed, awaiting the owner's check and merge approval)
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -120,6 +120,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.4 deployed | Owner said "yes, deploy". Uploaded `81f6d5c` (98 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.4 deploy record"). Not ticked until the owner confirms; not merged. |
 | 2026-11-21 | 1.4 added and built | The owner asked for a new stage 1.4 "Visual design and motion" (the UI felt dull). Recorded in `docs/milestones.md` and here. Branch `claude/stage-1-4` from `main` (`4641378`). Frontend only. 156 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium. **Not deployed.** Details in "Stage 1.4" below. |
 | 2026-11-21 | 1.3 complete | The owner confirmed the live checks passed. Ticked. Pull request `claude/stage-1-3` → `main` opened and merged with the owner's explicit approval. Milestone 1 done. Nothing further started. |
 | 2026-11-21 | 1.3 deployed | Owner said "yes, deploy". Uploaded `d128fc5` (85 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.3 deploy record"). Not ticked until the owner confirms; not merged. |
@@ -294,7 +295,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.4: visual design and motion (added at the owner's request; built and tested, NOT deployed)
+## Stage 1.4: visual design and motion (added at the owner's request; deployed, awaiting the owner's check)
 
 **Why.** The owner found the 1.3 UI dull. Goal: a calm, trustworthy, data-first, professional SaaS look in light and dark, with restrained, advanced animation. **Frontend only: no backend, API, database, script or `embarko.json` change** (checked: `git diff origin/main..HEAD -- backend database scripts embarko.json` is empty).
 
@@ -338,3 +339,12 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 7. Turn on your system's "reduce motion" setting (Windows: Settings > Accessibility > Visual effects > Animation effects off; macOS: Accessibility > Display > Reduce motion; iOS: Accessibility > Motion): reload. Nothing slides, lifts, counts or pulses; pages only fade.
 
 **Exact next step.** Show the owner these results; on "yes, deploy": push the branch, run `scripts/embarko-deploy.sh zentro`, run the checklist, record the result here and tick 1.4. Merge to `main` only with the owner's separate approval. Then stage 2.1 (auth core) in a new session.
+
+### Stage 1.4 deploy record (2026-11-21)
+- Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `81f6d5c` (98 files, 236 KB): `action: updated`, `claimed:true`, `kind:service`, build success, status live.
+- Live checks I ran: `/healthz` `{"ok":true,"ready":true,"version":"81f6d5c","migrations":{"applied":2,"total":2},"lastTick":{...,"status":"ok"}}` (secrets and database kept; automatic ticks running); `/overview`, `/design`, `/okrs`, an unknown address and `/favicon.svg` answer 200 (the app shell, as designed). One probe right after the swap returned non-JSON from `/healthz` (the old instance being replaced); the next probes were fine.
+- The same real-Chromium scripts used before the deploy, pointed at the live URL: **contrast** 1,698 text nodes, lowest 6.09, no failures; **text over the glow** lowest 5.37; **bundle** entry chunk 109.0 KB gzipped and 144.3 KB total JavaScript on first load, identical to the local build; **motion** with reduced motion off: page rise 8 px, indicator slides through 12 positions, card lift 2 px, pulse and shimmer running; with reduced motion on: 0 px movement in every frame, no looping animations; **cumulative layout shift 0** in both; **phone menu** opens in 26 to 27 ms; desktop and phone, light and dark, no horizontal overflow, no console or page errors; skip link, Escape focus return, theme following the OS, offline and setup-incomplete states, deep link all as before.
+- **Follow-ups noticed on the live site (not fixed, to avoid a redeploy without approval):**
+  1. The first visit to each section commits about 300 ms late (measured 320 ms to Leadership, then 14 to 17 ms for the next two), because React Router wraps navigation in a transition and holds the old page until that page's lazy chunk (0.3 to 2 KB) has arrived. Fix in the next frontend change: prefetch the page chunks while idle after first paint (and on link hover). The sidebar indicator, title and focus all follow the committed navigation, so they lag by the same amount on that first visit. Not visible on localhost, which is why the pre-deploy numbers were faster.
+  2. Still open from the 1.3 deploy: log requests that match no route (static files, the app shell) at `debug`, not `info`.
+- Not yet verified by the owner: the live checklist in the stage section above. 1.4 is ticked only after that, and merged to `main` only with a separate approval.
