@@ -2,15 +2,15 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Branch: `claude/blueprint` · Not merged to `main` · Not deployed
+Last updated: 2026-11-21 · Blueprint approved by the owner · Open questions answered · Not deployed
 
 ---
 
 ## Current status
 
-**Milestone 0 (blueprint) is written and waiting for your approval.** No application code exists. No app packages are installed. Nothing is deployed.
+**Milestone 0 (blueprint) is approved and merged to `main`.** All ten open questions are answered (below). No application code exists. No app packages are installed. Nothing is deployed.
 
-Next action after approval: **Stage 1.1, the deploy spike** (proves a TypeScript backend compiled at build time runs on Embarko's Node 20). See `docs/milestones.md`.
+Next action, in a **new session**: **Stage 1.1, the deploy spike** (proves a TypeScript backend compiled at build time runs on Embarko's Node 20). See `docs/milestones.md`. Branch for stage work: create `claude/stage-1-1` (or the branch the owner names) from `main`; do not push to `main` or deploy without asking.
 
 ## Working rules (from the master prompt overrides)
 
@@ -32,7 +32,7 @@ Next action after approval: **Stage 1.1, the deploy spike** (proves a TypeScript
 | viaSocket docs (skill.md v2026-11-20.6, embed, apps-api, setup, connect, alerts, automations, ai) and npm `viasocket-apps@0.21.0` | Read / unpacked |
 | `ViaSocketActionEmbed` / `useGetViaSocketEmbedToken` | **Not found anywhere readable** (docs, npm package, your repos, 2 web searches). Plan uses the proven script embed behind our own component and hook. |
 | Docs written in `docs/` | architecture, database-design, permission-model, scoring-architecture, agent-specifications, viasocket-integration, frontend-structure, api-documentation, milestones, risks, known-limitations |
-| Branch `claude/blueprint` pushed | See the last commit |
+| Branch `claude/blueprint` pushed, reviewed and approved by the owner; merged into `main` by pull request (owner-approved, docs and `PROGRESS.md` only) | Done |
 
 Not readable: anything behind a viaSocket or Embarko login (dashboard "Install Code" snippets, Embarko dashboard).
 
@@ -49,22 +49,22 @@ Not readable: anything behind a viaSocket or Embarko login (dashboard "Install C
 
 ## Decisions locked in the blueprint (see `docs/architecture.md` section 16)
 
-SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3) · Express 5 (D4) · Tailwind 4 (D5) · JWT cookie + session row (D6, **needs your confirmation**) · scrypt (D7) · single tick + job registry (D8) · `AiProvider` interface, viaSocket default (D9) · in-process tool loop (D10) · evidence files as capped BLOBs (D11, **needs confirmation**) · person = membership id (D12) · one viaSocket project, per-organization `unique_identifier` (D13) · effective-dated hierarchy (D14) · text UUIDs (D15) · no CHECK on growing enums (D16) · transactional outbox (D17) · pure scoring function (D18) · demo data via `is_demo` (D19) · Node 20.20.2 verification (D20).
+SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, **confirmed**) · Express 5 (D4) · Tailwind 4 (D5) · JWT cookie + session row (D6, **confirmed**) · scrypt (D7) · single tick + job registry (D8) · `AiProvider` interface, viaSocket default (D9) · in-process tool loop (D10) · evidence files as capped BLOBs (D11, **confirmed**) · person = membership id (D12) · one viaSocket project, per-organization `unique_identifier` (D13) · effective-dated hierarchy (D14) · text UUIDs (D15) · no CHECK on growing enums (D16) · transactional outbox (D17) · pure scoring function (D18) · demo data via `is_demo` (D19) · Node 20.20.2 verification (D20).
 
-## Open decisions (questions for the owner)
+## Owner decisions (all answered 2026-11-21)
 
-Answers go here when received.
-
-1. **TypeScript compile approach.** OK to compile the backend with `tsc` at build and run `node build/…`, with `tsx` then plain JavaScript as fallbacks if stage 1.1 fails on Embarko? _(recommended: yes)_ → _unanswered_
-2. **Sessions.** Keep the JWT cookie as asked, but backed by a revocable `sessions` row (so logout and role changes take effect immediately)? _(recommended: yes)_ → _unanswered_
-3. **Registration on the live link.** `open`, `code` (anyone with a registration code), or `invite_only`? _(recommended: `code`)_ → _unanswered_
-4. **viaSocket credentials.** Your own `VIASOCKET_*` keys typed on Embarko (as in Curevia), or turn on Embarko's Integrations capability (needs a workspace Owner to enable "pay as you use")? _(recommended: your own keys)_ → _unanswered_
-5. **Evidence files.** Small files stored privately in the database (2 MB each, 100 MB per organization), everything else as links? Or are public Embarko file links acceptable for non-confidential demo files? _(recommended: private database storage)_ → _unanswered_
-6. **"View as demo persona"** (read-only, demo people only) so one presenter can show employee, manager and CEO views? _(recommended: yes)_ → _unanswered_
-7. **What the AI sees.** Aliases (`Person A`) re-hydrated with real names on the server (default), or real names always? _(recommended: aliases, names allowed for the fictional demo)_ → _unanswered_
-8. **Platform email flow.** Will you build one viaSocket "send email" flow for password reset and invitation emails (optional; otherwise admins copy links)? → _unanswered_
-9. **Embarko app name and deploy token.** Which app name should I use (for example `zentro-<something>`), and are you OK with providing the deploy token on the machine as described in the runbook (never in chat)? → _unanswered_
-10. **Where did `ViaSocketActionEmbed` / `useGetViaSocketEmbedToken` come from?** If you saw them in a specific viaSocket page, repo or message, tell me where and I will check it before stage 8.1. → _unanswered_
+| # | Question | Answer | Effect on the plan |
+| --- | --- | --- | --- |
+| 1 | TypeScript compile approach | **Yes**: compile the backend with `tsc` at build, run `node build/…` | D3 confirmed. Stage 1.1 proves it on Embarko; fallbacks are `tsx` at runtime, then plain JS (report to the owner if 1.1 fails) |
+| 2 | Sessions | **Yes**: JWT cookie backed by a revocable `sessions` row | D6 confirmed (`docs/permission-model.md` section 8) |
+| 3 | Registration mode on the live link | **`code`**: registration needs a registration code | Implement `REGISTRATION_MODE=code` with `REGISTRATION_CODE` (an Embarko secret the owner types) in stage 2.1; default the mode to `code` when unset |
+| 4 | viaSocket credentials | **The owner's own `VIASOCKET_*` keys typed on Embarko, as in Curevia** | Do not use Embarko's Integrations capability. Read `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET`; the `INTEGRATIONS_*` fallback stays unused |
+| 5 | Evidence files | **Private storage in the database** | D11 confirmed: capped BLOBs (2 MB per file, 100 MB per organization) behind the authenticated download route; no Embarko public file links |
+| 6 | View as demo persona | **Yes**: read-only, demo users only, bannered and audited | Build in stage 2.8 as specified in `docs/permission-model.md` section 6, item 7 |
+| 7 | What the AI sees | **Aliases**, with real names allowed for the fictional demo | `AI_REDACTION=refs` is the default; `names` allowed for the demo company (`docs/agent-specifications.md` section 2) |
+| 8 | Platform email flow | **Yes**: the owner will build one viaSocket "send email" flow **at stage 2.2** | Stage 2.2 should wire `VIASOCKET_EMAIL_FLOW_URL` (an Embarko secret the owner types) for password reset and invitation emails, with the admin-copied-link fallback kept. Earlier than the blueprint's stage 8 timing, so the owner needs the viaSocket keys (question 4) by 2.2 |
+| 9 | Embarko app name and deploy token | App name **`zentro`**; if taken, **`zentro-ankita`**. The owner puts the deploy token on the machine as **`DEPLOY_TOKEN` in the environment settings**, never in chat | Use `scripts/embarko-deploy.sh <app-name>` (reads `DEPLOY_TOKEN`). Never print the token. On `409 app_name_taken` use `zentro-ankita`, then tell the owner which name is live |
+| 10 | Source of `ViaSocketActionEmbed` / `useGetViaSocketEmbedToken` | **Nowhere**: they appeared only in the master prompt | Use our own `<ViaSocketEmbed>` and `useViaSocketEmbedToken` over the documented script embed (`docs/viasocket-integration.md` section 1). Still re-run `check:viasocket` at 8.1 |
 
 ## Stage checklist (details in `docs/milestones.md`)
 
@@ -92,18 +92,19 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 | When | Need |
 | --- | --- |
-| Before 1.1 | Answers to questions 1, 9; the Embarko deploy token placed on the machine (`DEPLOY_TOKEN` or `~/.embarko/credentials`), never in chat |
+| Before 1.1 | The Embarko deploy token available as `DEPLOY_TOKEN` in the session's environment settings (never in chat); app name `zentro` (fallback `zentro-ankita`) |
 | 1.2 | `SESSION_SECRET`, `ENCRYPTION_KEY` typed on Embarko's App setup page, then **Apply changes** |
-| 2.1 | Registration mode (question 3) |
-| 2.8 | View-as decision (question 6) |
-| 4.3 | Evidence storage decision (question 5) |
-| 7.1 / 8.1 | viaSocket embed keys (`VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET`) typed on Embarko; decision on question 4 and 7 |
-| 8.2 | Build Slack/Gmail flows inside the embed; add the alert addresses; optional platform email flow (question 8) |
+| 2.1 | `REGISTRATION_CODE` typed on Embarko's App setup page (mode is `code`) |
+| 2.2 | viaSocket keys (`VIASOCKET_*`) typed on Embarko, and one viaSocket "send email" flow built; its run URL typed as `VIASOCKET_EMAIL_FLOW_URL` |
+| 2.8 | Nothing (view-as is approved) |
+| 4.3 | Nothing (private database storage is approved) |
+| 7.1 / 8.1 | viaSocket keys already typed by 2.2; viaSocket workspace AI credits for 7.1 |
+| 8.2 | Build Slack/Gmail flows inside the embed; add the alert addresses |
 
 ## How to resume in a new session
 
 1. Read `ZENTRO_MASTER_PROMPT.md` (overrides first), then `docs/architecture.md` sections 3, 4 and 16, then this file.
-2. `git fetch && git checkout claude/blueprint` (or the current working branch named in the latest log entry below).
+2. `git fetch && git checkout main && git pull`, then create the stage branch named in the latest log entry below (never push to `main` or deploy without asking).
 3. Find the first unchecked stage above, open its row in `docs/milestones.md`, and build only that stage.
 4. For Node 20 verification: `mkdir -p /tmp/n20 && cd /tmp/n20 && npm init -y && npm i node@20.20.2`, then `export PATH=/tmp/n20/node_modules/node/bin:$PATH` before `npm ci && npm run build && npm test`.
 5. Re-verify external facts rather than trusting memory: Embarko docs `https://embarko.ai/llms.txt` (append `.md` to a docs page for plain text), viaSocket `https://flow.viasocket.com/documentation/skill.md`, the HireDrive runbook, and Curevia.
@@ -113,4 +114,5 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 | Date | Stage | Notes |
 | --- | --- | --- |
-| 2026-11-21 | M0 blueprint | Research done; 11 docs plus this file written; branch `claude/blueprint` pushed; awaiting approval and answers to the open questions |
+| 2026-11-21 | M0 blueprint | Research done; 11 docs plus this file written; branch `claude/blueprint` pushed |
+| 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
