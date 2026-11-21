@@ -1,101 +1,145 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+@import "./styles/tokens.css";
 
-/* Dark mode is a class on <html> (set by the theme provider), not only the OS setting. */
-@custom-variant dark (&:where(.dark, .dark *));
-
-/* Design tokens. Light first, dark under .dark. Colors always pair with text or an icon (never color alone). */
-:root {
-  --background: oklch(0.99 0.002 270);
-  --foreground: oklch(0.2 0.02 270);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 270);
-  --muted: oklch(0.96 0.006 270);
-  --muted-foreground: oklch(0.45 0.02 270);
-  --border: oklch(0.9 0.008 270);
-  --input: oklch(0.9 0.008 270);
-  --ring: oklch(0.5 0.2 275);
-  --primary: oklch(0.46 0.2 275);
-  --primary-foreground: oklch(0.99 0 0);
-  --accent: oklch(0.95 0.02 275);
-  --accent-foreground: oklch(0.3 0.12 275);
-  --success: oklch(0.45 0.13 150);
-  --success-soft: oklch(0.95 0.04 150);
-  --warning: oklch(0.45 0.11 70);
-  --warning-soft: oklch(0.96 0.05 85);
-  --destructive: oklch(0.5 0.2 27);
-  --destructive-soft: oklch(0.96 0.03 25);
-  --sidebar: oklch(0.975 0.005 270);
-  --radius: 0.625rem;
-}
-
-.dark {
-  --background: oklch(0.17 0.015 270);
-  --foreground: oklch(0.96 0.005 270);
-  --card: oklch(0.21 0.017 270);
-  --card-foreground: oklch(0.96 0.005 270);
-  --muted: oklch(0.25 0.017 270);
-  --muted-foreground: oklch(0.72 0.02 270);
-  --border: oklch(0.31 0.02 270);
-  --input: oklch(0.34 0.02 270);
-  --ring: oklch(0.7 0.16 275);
-  --primary: oklch(0.72 0.15 275);
-  --primary-foreground: oklch(0.18 0.03 275);
-  --accent: oklch(0.3 0.05 275);
-  --accent-foreground: oklch(0.93 0.03 275);
-  --success: oklch(0.78 0.15 150);
-  --success-soft: oklch(0.28 0.05 150);
-  --warning: oklch(0.82 0.13 85);
-  --warning-soft: oklch(0.3 0.05 80);
-  --destructive: oklch(0.75 0.15 27);
-  --destructive-soft: oklch(0.3 0.06 25);
-  --sidebar: oklch(0.19 0.016 270);
-}
-
-@theme inline {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-success: var(--success);
-  --color-success-soft: var(--success-soft);
-  --color-warning: var(--warning);
-  --color-warning-soft: var(--warning-soft);
-  --color-destructive: var(--destructive);
-  --color-destructive-soft: var(--destructive-soft);
-  --color-sidebar: var(--sidebar);
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
-}
+/* Dark mode is a class on <html> (set by the theme provider), not only the OS setting. .theme-light and .theme-dark
+   force one theme inside a region (the side-by-side preview on /design). */
+@custom-variant dark (&:where(.dark, .dark *, .theme-dark, .theme-dark *));
 
 @layer base {
   * { border-color: var(--border); }
-  html { -webkit-text-size-adjust: 100%; }
-  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+  html { -webkit-text-size-adjust: 100%; background: var(--background); }
+  body {
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-feature-settings: "cv11", "ss03"; /* single-storey a, round digits: calmer numbers */
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Ambient glow in the top corners: soft indigo/violet, fixed behind everything, never takes space. */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(52rem 26rem at 92% -8%, var(--ambient-a), transparent 65%),
+      radial-gradient(40rem 22rem at 2% -6%, var(--ambient-b), transparent 65%);
+  }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  ::selection { background: color-mix(in oklab, var(--brand-from) 28%, transparent); }
 }
 
-/* Slide-in panel for the phone navigation (Radix Dialog sets data-state). */
+/* Brand gradient helpers (see the notes at the top of styles/tokens.css). */
+@utility bg-gradient-brand { background-image: var(--gradient-brand); }
+@utility bg-gradient-brand-strong { background-image: var(--gradient-brand-strong); }
+@utility text-gradient {
+  display: inline-block;
+  background-image: linear-gradient(135deg, var(--text-from), var(--text-via) 52%, var(--text-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+@utility eyebrow {
+  font-size: var(--text-overline);
+  line-height: var(--text-overline--line-height);
+  letter-spacing: var(--text-overline--letter-spacing);
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+@layer components {
+  /* Cards: a fine border with a faint top highlight (dark mode), soft indigo-tinted shadow, a gentle hover lift,
+     and a gradient border glow on hover and keyboard focus. */
+  .card-surface {
+    position: relative;
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xs), inset 0 1px 0 var(--card-highlight);
+    transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out);
+  }
+  .card-surface::before {
+    content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: var(--gradient-brand);
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(black 0 0) content-box exclude, linear-gradient(black 0 0);
+    opacity: 0;
+    transition: opacity var(--duration-base) var(--ease-out);
+  }
+  .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-md), 0 10px 30px -12px var(--glow-a), inset 0 1px 0 var(--card-highlight); }
+  .card-lift:hover::before, .card-surface:focus-within::before { opacity: 1; }
+
+  .card-raised { background: var(--raised); }
+
+  /* Skeleton shimmer: runs only while something is loading. */
+  .skeleton {
+    background-color: var(--muted);
+    background-image: linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--foreground) 8%, transparent) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: zentro-shimmer 1.4s var(--ease-in-out) infinite;
+  }
+
+  /* Online pill: a soft expanding ring behind the dot. The only decorative loop. */
+  .pulse-dot { position: relative; display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: var(--on-track); }
+  .pulse-dot::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--on-track);
+    animation: zentro-pulse 2.4s var(--ease-out) infinite;
+  }
+
+  /* Theme toggle: the sun and moon icons morph by rotating and scaling into each other. */
+  .theme-icon { position: absolute; inset: 0; margin: auto; transition: transform var(--duration-slow) var(--ease-out), opacity var(--duration-base) var(--ease-out); }
+  .theme-icon[data-active="false"] { opacity: 0; transform: rotate(-90deg) scale(0.4); }
+  .theme-icon[data-active="true"] { opacity: 1; transform: rotate(0) scale(1); }
+
+  /* Page header glow: the brand gradient as three soft radial lights behind the heading. Decorative, takes no space. */
+  .heading-glow::before {
+    content: ""; position: absolute; z-index: -1; inset: -3rem -2rem -1.25rem -2rem; pointer-events: none;
+    background:
+      radial-gradient(34% 80% at 10% 22%, var(--glow-a), transparent 72%),
+      radial-gradient(30% 70% at 46% 0%, var(--glow-b), transparent 72%),
+      radial-gradient(28% 70% at 82% 30%, var(--glow-c), transparent 72%);
+    filter: blur(16px);
+    mask-image: linear-gradient(to bottom, black 62%, transparent);
+  }
+
+  /* Phone menu: slides in over a blurred backdrop. */
+  .sheet-overlay { background: var(--overlay); backdrop-filter: blur(5px); }
+  .sheet-overlay[data-state="open"] { animation: zentro-fade-in var(--duration-base) var(--ease-out); }
+  .sheet-overlay[data-state="closed"] { animation: zentro-fade-out var(--duration-fast) var(--ease-in-out); }
+  .sheet-panel[data-state="open"] { animation: zentro-slide-in var(--duration-slow) var(--ease-out); }
+  .sheet-panel[data-state="closed"] { animation: zentro-slide-out var(--duration-base) var(--ease-in-out); }
+
+  /* Sidebar: a single indicator slides between items: a tinted wash with a gradient bar on its left edge. */
+  .nav-indicator {
+    position: absolute; left: 0; right: 0; top: 0; border-radius: var(--radius-md);
+    background: linear-gradient(90deg, var(--selected), color-mix(in oklab, var(--selected) 40%, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--brand-via) 22%, transparent);
+    transition: transform var(--duration-base) var(--ease-out), height var(--duration-base) var(--ease-out), opacity var(--duration-fast) linear;
+  }
+  .nav-indicator::before {
+    content: ""; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 0 3px 3px 0; background: var(--gradient-brand);
+  }
+
+  /* Side-by-side theme preview on /design: forces one theme's tokens inside a region. */
+  .theme-preview { background: var(--background); color: var(--foreground); }
+}
+
 @keyframes zentro-fade-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes zentro-fade-out { from { opacity: 1 } to { opacity: 0 } }
 @keyframes zentro-slide-in { from { transform: translateX(-100%) } to { transform: translateX(0) } }
 @keyframes zentro-slide-out { from { transform: translateX(0) } to { transform: translateX(-100%) } }
-.sheet-overlay[data-state="open"] { animation: zentro-fade-in 150ms ease-out; }
-.sheet-overlay[data-state="closed"] { animation: zentro-fade-out 120ms ease-in; }
-.sheet-panel[data-state="open"] { animation: zentro-slide-in 200ms ease-out; }
-.sheet-panel[data-state="closed"] { animation: zentro-slide-out 150ms ease-in; }
+@keyframes zentro-shimmer { from { background-position: 100% 0 } to { background-position: -100% 0 } }
+@keyframes zentro-pulse { 0% { transform: scale(1); opacity: 0.55 } 70%, 100% { transform: scale(2.6); opacity: 0 } }
 
+/* Reduced motion: no movement at all. Things fade or change instantly; nothing loops. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+  .card-lift:hover { transform: none; }
+  .skeleton { animation: none; background-image: none; }
+  .pulse-dot::after { animation: none; opacity: 0; }
+  .theme-icon[data-active="false"], .theme-icon[data-active="true"] { transform: none; }
+  .sheet-panel[data-state="open"], .sheet-panel[data-state="closed"] { animation-name: zentro-fade-in; }
+  .sheet-panel[data-state="closed"] { animation-name: zentro-fade-out; }
 }

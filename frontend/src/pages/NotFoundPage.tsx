@@ -1,4 +1,3 @@
-import { Compass } from "lucide-react";
 import { Link } from "react-router";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 export default function NotFoundPage() {
   return (
     <EmptyState
-      icon={Compass}
+      illustration="compass"
       title="Page not found"
       action={
         <Button asChild>

@@ -1,64 +1,90 @@
 import { Menu } from "lucide-react";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import { Brand } from "@/components/common/Brand";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { StatusPill } from "@/components/common/StatusPill";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { SheetLeft } from "@/components/ui/sheet";
 import { publicConfig } from "@/config/public";
-import { NAV_ITEMS } from "@/routes/navigation";
+import { titleFor } from "@/routes/navigation";
+import { PageTransition } from "@/motion/PageTransition";
 import { SidebarNav } from "./SidebarNav";
+
+// The phone menu (Radix Dialog) is its own small chunk: desktop never downloads it, and narrow screens fetch it
+// while idle, so the first paint stays light.
+// It is NOT React.lazy on purpose: a suspended boundary makes React wait up to 300 ms before revealing it, which
+// would delay the menu after a tap. Instead the component is held in state once its chunk has arrived.
+const loadSheet = () => import("@/components/ui/sheet");
+type SheetComponent = (typeof import("@/components/ui/sheet"))["SheetLeft"];
 
 /** Fixed sidebar from 1024 px up; a slide-in sheet below that. Header, skip link and the main landmark. */
 export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [Sheet, setSheet] = useState<SheetComponent | null>(null);
+  const fetchSheet = useCallback(() => void loadSheet().then((m) => setSheet(() => m.SheetLeft)), []);
   const { pathname } = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const firstRender = useRef(true);
 
   useEffect(() => {
+    if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 1023px)").matches) return;
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500));
+    idle(fetchSheet);
+  }, [fetchSheet]);
+
+  useEffect(() => {
     setMenuOpen(false);
-    const item = NAV_ITEMS.find((i) => pathname === i.path || pathname.startsWith(`${i.path}/`));
-    document.title = `${item ? item.label : "Page not found"} · ${publicConfig.appName}`;
+    document.title = `${titleFor(pathname)} · ${publicConfig.appName}`;
     // After a navigation, move keyboard and screen-reader focus to the new page (not on the first load).
     if (firstRender.current) firstRender.current = false;
     else mainRef.current?.focus();
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen overflow-x-clip text-foreground">
       <a
         href="#main"
-        className="sr-only z-50 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+        className="sr-only z-50 rounded-lg bg-primary px-3 py-2 text-label font-medium text-primary-foreground shadow-md focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
       >
         Skip to content
       </a>
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-sidebar lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] border-r bg-sidebar lg:block">
         <SidebarNav />
       </aside>
 
-      <SheetLeft
-        open={menuOpen}
-        onOpenChange={setMenuOpen}
-        title="Navigation"
-        description="Main navigation for Zentro"
-        onCloseAutoFocus={(e) => {
-          // Closed with Escape or the backdrop: put focus back on the menu button. After choosing a page the new
-          // page already holds focus, so leave it there.
-          e.preventDefault();
-          if (document.activeElement !== mainRef.current) menuButtonRef.current?.focus();
-        }}
-      >
-        <SidebarNav onNavigate={() => setMenuOpen(false)} />
-      </SheetLeft>
+      {Sheet && (
+        <Sheet
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          title="Navigation"
+          description="Main navigation for Zentro"
+          onCloseAutoFocus={(e) => {
+            // Closed with Escape or the backdrop: put focus back on the menu button. After choosing a page the new
+            // page already holds focus, so leave it there.
+            e.preventDefault();
+            if (document.activeElement !== mainRef.current) menuButtonRef.current?.focus();
+          }}
+        >
+          <SidebarNav onNavigate={() => setMenuOpen(false)} />
+        </Sheet>
+      )}
 
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur sm:px-6">
-          <Button ref={menuButtonRef} variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenuOpen(true)} aria-label="Open navigation menu">
+      <div className="lg:pl-[var(--sidebar-width)]">
+        <header className="sticky top-0 z-20 flex h-[var(--header-height)] items-center gap-2 border-b border-border/70 bg-header px-4 backdrop-blur-md backdrop-saturate-150 sm:px-6">
+          <Button
+            ref={menuButtonRef}
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            aria-label="Open navigation menu"
+            onClick={() => {
+              if (!Sheet) fetchSheet(); // tapped before the idle prefetch finished: the menu opens as soon as it arrives
+              setMenuOpen(true);
+            }}
+          >
             <Menu aria-hidden="true" />
           </Button>
           <div className="lg:hidden">
@@ -70,9 +96,11 @@ export function AppShell() {
           </div>
         </header>
 
-        <main id="main" ref={mainRef} tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 py-6 outline-none sm:px-6 lg:px-8">
+        <main id="main" ref={mainRef} tabIndex={-1} className="mx-auto w-full max-w-[var(--page-max-width)] px-4 py-8 outline-none sm:px-6 lg:px-8">
           <Suspense fallback={<PageSkeleton />}>
-            <Outlet />
+            <PageTransition key={pathname.split("/")[1] ?? ""}>
+              <Outlet />
+            </PageTransition>
           </Suspense>
         </main>
       </div>
