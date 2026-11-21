@@ -2,15 +2,15 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 deployed and live-checked by me (owner to click through) · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · live at https://zentro.embarko.app
 
 ---
 
 ## Current status
 
-**Stage 1.1 (deploy spike) is DEPLOYED** as app `zentro` (kind `service`, `claimed: true`): **https://zentro.embarko.app** (app id `cmwq8dc5l047m7p7fwgtufeuu`, now in `embarko.json`; deployed version `5440c31`). Branch `claude/stage-1-1` is pushed; nothing merged to `main` (ask first).
+**Stage 1.1 (deploy spike) is DEPLOYED** as app `zentro` (kind `service`, `claimed: true`): **https://zentro.embarko.app** (app id `cmwq8dc5l047m7p7fwgtufeuu`, now in `embarko.json`; now on version `f3fca7d`). Branch `claude/stage-1-1` is pushed; nothing merged to `main` (ask first).
 
-Remaining for 1.1: the owner clicks through the live checklist below, then 1.1 is ticked. Next: **stage 1.2** (backend foundation) in a new session from `main` (merge `claude/stage-1-1` first, with the owner's approval).
+Stage 1.1 is complete and live-checked. Next: **stage 1.2** (backend foundation) in a new session from `main` (merge `claude/stage-1-1` first, with the owner's approval).
 
 ## Working rules (from the master prompt overrides)
 
@@ -70,7 +70,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[~]` 1.1 Deploy spike (live; owner click-through pending) · `[ ]` 1.2 Backend foundation · `[ ]` 1.3 Frontend foundation
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[ ]` 1.2 Backend foundation · `[ ]` 1.3 Frontend foundation
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -159,4 +159,6 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 - Live checks I ran: `/` 200; `/healthz` `{"ok":true,"version":"5440c31","node":"20.20.2"}`; database path `/data/zentro.db`; `/api/cron/tick` without a secret 401. Ran the schedule once through Embarko's run-schedules API: **outcome ok, HTTP 202, 58 ms**, and the page's tick counter went 0 → 1.
 - Not yet verified: the counter surviving a *redeploy* (the next deploy, which will also ship `appId` in `embarko.json`, is the test: note the counter, redeploy, reload); the automatic 5-minute schedule (only the manual run was exercised); the app being listed in the owner's dashboard (the `claimed:true` reply says it is).
 - Owner dashboard (App setup / env vars): `https://embarko.ai/app/projects/cmwq8dc5l047m7p7fwgtufeuu/environment` (pattern from the runbook; not opened by me, login required).
+- **Redeploy test (owner said "redeploy now, counter was 7")**: before: visits 7, ticks 3, version `5440c31`. Redeployed `f3fca7d` (reply `action: updated`, `claimed:true`); after: **visits 7, ticks 3** (same last tick time), version `f3fca7d`, Node 20.20.2, database `/data/zentro.db`. So **the database survives a redeploy**. Ticks 3 at that time (1 manual + 2 automatic) shows the 5-minute schedule fires by itself; the owner was also to check Embarko's Scheduled jobs page (not seen by me).
+- 1.1 is done. Nothing merged to `main` yet: the owner must approve the merge of `claude/stage-1-1`. Stage 1.2 starts in a new session from `main`.
 
