@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · Stage 1.2 built and tested, **not deployed (waiting for the owner's "yes, deploy")** · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · Stage 1.2 **deployed (version `6fc8aac`), waiting for the owner to type the two secrets** · live at https://zentro.embarko.app
 
 ---
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · St
 
 Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
 
-**Stage 1.2 (backend foundation) is built and tested on Node 20.20.2 on branch `claude/stage-1-2`** (from `main`; nothing merged, nothing deployed). The live app is still stage 1.1 until the owner says "yes, deploy". Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
+**Stage 1.2 (backend foundation) is built, tested on Node 20.20.2, and deployed from branch `claude/stage-1-2`** (version `6fc8aac`; nothing merged to `main`). The live app is in **holding mode until the owner types `SESSION_SECRET` and `ENCRYPTION_KEY` and presses Apply changes**. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -120,6 +120,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.2 deployed | Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `6fc8aac` (60 files): `action: updated`, `claimed:true`, build success, status live. Live probe: holding page, `/healthz` `ready:false` with the two names, `/api/*` 503, tick 401 without a secret; the app log shows `holding mode` on Node 20.20.2. Waiting for the owner to type the secrets. |
 | 2026-11-21 | 1.2 built | Branch `claude/stage-1-2` (from `main`). Backend foundation built; 78 tests pass on Node 20.20.2 from a clean checkout. **Not deployed.** Details in "Stage 1.2" below. |
 
 ---
@@ -169,7 +170,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.2: backend foundation (built and tested, NOT deployed)
+## Stage 1.2: backend foundation (deployed, waiting for the secrets)
 
 **Implemented** (branch `claude/stage-1-2`, commit message starts "Stage 1.2"; design notes in `docs/architecture.md` section 8.1):
 - **Config validation + holding page.** Required: `SESSION_SECRET`, `ENCRYPTION_KEY` (each at least 32 characters, different). Optional and validated if set: `APP_URL`, `LOG_LEVEL`, `TRUST_PROXY`. If anything is missing or invalid the server **still listens** in holding mode: the site address shows a plain notice, every `/api/*` answers `503 server_missing_settings` with `Server is missing: SESSION_SECRET` (names only; a bad value is never echoed), `/healthz` answers `ok:true, ready:false`, the cron route authenticates and does nothing, and **the database is not opened**.
@@ -213,3 +214,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 5. Embarko **Scheduled jobs** still shows `zentro tick` ok. (Optional, for me: the app log line `preMigrationCopy` shows a copy of the 1.1 database was taken before migration 0002.)
 
 **Exact next step.** Show the owner these results; on "yes, deploy": push the branch, run `scripts/embarko-deploy.sh zentro`, run the live checklist (holding page first), then the owner types the secrets; record the result here and tick 1.2. Merge to `main` only with the owner's approval. Then stage 1.3 in a new session.
+
+### Stage 1.2 deploy record (2026-11-21)
+- Owner said "yes, deploy". Uploaded version `6fc8aac` (60 files, 180 KB) to `zentro`: `action: updated`, `claimed:true`, `kind:service`, build success, **status live**. Same app id; the database from 1.1 is untouched (holding mode does not open it).
+- Live checks I ran (no secrets were set yet, so holding mode is the expected result): `/` 200 with "Server is missing: SESSION_SECRET, ENCRYPTION_KEY"; `/healthz` `{"ok":true,"ready":false,"version":"6fc8aac","node":"20.20.2","migrations":null,"missing":[...]}`; `/api/anything` 503 `server_missing_settings`; `/api/cron/tick` 401 without a secret. Embarko log: `holding mode` warning, Node 20.20.2, no restarts.
+- **Not yet verified (needs the owner's secrets):** normal mode live, `migrations 2/2`, the pre-migration copy of the 1.1 database (log field `preMigrationCopy` at the first normal start), `lastTick`, and the heartbeat counter. The 5-minute ticks do nothing while in holding mode.
+- 1.2 is ticked only after the owner types the secrets, presses Apply changes, and these checks pass.
