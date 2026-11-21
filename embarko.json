@@ -1,0 +1,12 @@
+{
+  "$schema": "https://embarko.ai/schema/embarko.json",
+  "appId": "cmwq8dc5l047m7p7fwgtufeuu",
+  "schedules": [
+    {
+      "cron": "*/5 * * * *",
+      "path": "/api/cron/tick",
+      "timezone": "Asia/Kolkata",
+      "name": "zentro tick"
+    }
+  ]
+}

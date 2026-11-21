@@ -2,15 +2,15 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved by the owner · Open questions answered · Not deployed
+Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · live at https://zentro.embarko.app
 
 ---
 
 ## Current status
 
-**Milestone 0 (blueprint) is approved and merged to `main`.** All ten open questions are answered (below). No application code exists. No app packages are installed. Nothing is deployed.
+**Stage 1.1 (deploy spike) is DEPLOYED** as app `zentro` (kind `service`, `claimed: true`): **https://zentro.embarko.app** (app id `cmwq8dc5l047m7p7fwgtufeuu`, now in `embarko.json`; now on version `f3fca7d`). Branch `claude/stage-1-1` is pushed; nothing merged to `main` (ask first).
 
-Next action, in a **new session**: **Stage 1.1, the deploy spike** (proves a TypeScript backend compiled at build time runs on Embarko's Node 20). See `docs/milestones.md`. Branch for stage work: create `claude/stage-1-1` (or the branch the owner names) from `main`; do not push to `main` or deploy without asking.
+Stage 1.1 is complete and live-checked. Next: **stage 1.2** (backend foundation) in a new session from `main` (merge `claude/stage-1-1` first, with the owner's approval).
 
 ## Working rules (from the master prompt overrides)
 
@@ -39,7 +39,7 @@ Not readable: anything behind a viaSocket or Embarko login (dashboard "Install C
 ## Key findings that shaped the plan
 
 1. **Embarko's docs state no Node version.** `engines.node: ">=20"` produced Node 20.20.2 in HireDrive/Curevia. Pin to that.
-2. **`better-sqlite3@13` and `vitest@5` need Node 22+.** Use `better-sqlite3 ^12.11` and `vitest ^3.2`. Vite 8 needs `^20.19`.
+2. **`better-sqlite3@13` and `vitest@5` need Node 22+.** Use `better-sqlite3 ^12.11` and `vitest ^4.1.12` (changed from 3.2 in stage 1.1). Vite 8 needs `^20.19`.
 3. **Curevia and HireDrive are plain JavaScript.** A compiled TypeScript backend is unproven on Embarko (stage 1.1 proves it; fallbacks `tsx`, then plain JS).
 4. **Curevia uses DB sessions and bcryptjs, not JWT and scrypt.** The override asks for JWT + scrypt; the plan keeps JWT but backs it with a revocable session row.
 5. **Embarko file storage is public by link.** Not usable for confidential evidence; evidence files go in capped SQLite BLOBs behind an authenticated route.
@@ -70,7 +70,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[ ]` 1.1 Deploy spike · `[ ]` 1.2 Backend foundation · `[ ]` 1.3 Frontend foundation
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[ ]` 1.2 Backend foundation · `[ ]` 1.3 Frontend foundation
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -92,7 +92,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 | When | Need |
 | --- | --- |
-| Before 1.1 | The Embarko deploy token available as `DEPLOY_TOKEN` in the session's environment settings (never in chat); app name `zentro` (fallback `zentro-ankita`) |
+| Before 1.1 deploy | `DEPLOY_TOKEN` is set in the environment (see the token note in the Stage 1.1 section); the owner's "yes, deploy"; after deploy: **claim the app** in the Embarko dashboard (schedules need a kept app) |
 | 1.2 | `SESSION_SECRET`, `ENCRYPTION_KEY` typed on Embarko's App setup page, then **Apply changes** |
 | 2.1 | `REGISTRATION_CODE` typed on Embarko's App setup page (mode is `code`) |
 | 2.2 | viaSocket keys (`VIASOCKET_*`) typed on Embarko, and one viaSocket "send email" flow built; its run URL typed as `VIASOCKET_EMAIL_FLOW_URL` |
@@ -116,3 +116,49 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | --- | --- | --- |
 | 2026-11-21 | M0 blueprint | Research done; 11 docs plus this file written; branch `claude/blueprint` pushed |
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
+| 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
+
+---
+
+## Stage 1.1: deploy spike (built, not yet deployed)
+
+**Implemented.** Express 5 + TypeScript compiled by `tsc -p backend/tsconfig.json` into `build/` (server starts with `node build/backend/src/server.js`); Vite 8 + React 19 page built into `dist/` and served by Express with a single-page-app fallback; `better-sqlite3@^12.11.1` database at `$DATA_DIR/zentro.db` (WAL, foreign keys on); migration runner (`schema_migrations` with checksums, one table: `spike_counters`); `GET /healthz`; `GET /api/spike`, `POST /api/spike/visit` (visit counter); `GET /api/cron/tick` (constant-time `Bearer $CRON_SECRET`, 401 when unset or wrong, answers 202 at once and counts the tick); `embarko.json` with one `*/5 * * * *` schedule (`/api/cron/tick`, Asia/Kolkata); `scripts/embarko-deploy.sh` (from Curevia, tests excluded from the upload); `scripts/check-node20.mjs` (fails the build if any locked package's `engines.node` rejects 20.20.2; runs first in `npm run build`); `.gitignore` (added before anything was installed).
+
+**Files.** `package.json`, `package-lock.json`, `tsconfig.base.json`, `backend/tsconfig.json`, `backend/src/{server,app}.ts`, `backend/src/db/{open,migrate,counters}.ts`, `backend/src/jobs/tick.ts`, `backend/src/lib/paths.ts`, `database/migrations/0001_spike_counters.sql`, `frontend/{index.html,vite.config.ts,tsconfig.json,src/{main,App}.tsx,src/styles.css}`, `vitest.config.ts`, `tests/spike.test.ts`, `scripts/{embarko-deploy.sh,check-node20.mjs}`, `embarko.json`, `.env.example`, `.gitignore`.
+
+**Decisions / changes to the blueprint.**
+- **vitest pin changed from `^3.2` to `^4.1.12`**: 3.x pulls `tinypool`/`@vitest/mocker` versions with npm-audit advisories (2 critical, 1 moderate); 4.1.12 fixes them and its `engines.node` is `^20 || ^22 || >=24`. Vitest 5 is still excluded (Node 22+). `npm audit` now reports 0 vulnerabilities. (`docs/architecture.md` section 6 updated.)
+- `@types/node` is `^20` (matches the runtime); `@types/better-sqlite3` is `^7.6.13` (9.x is not a match for the 12.x runtime API line we use).
+- The migration runner locates `database/migrations/` by walking up to `package.json`, so it works both from `backend/src` (tsx) and `build/backend/src` (compiled).
+- Build tools and `typescript` are in `dependencies` (runbook 5.D); proven with `npm ci --omit=dev && npm run build`.
+- `check-node20.mjs` had two parser bugs while being written (spaces in `>= 18`, wildcard `20.x`); fixed, and checked with a negative case that a Node-22-only package fails the script.
+
+**Tests run (all under Node 20.20.2 from `npm i node@20.20.2`, not the sandbox's 22).**
+- Clean checkout from `git archive HEAD`: `npm ci` → `npm run build` → `npm test`: build ok, **8 of 8 tests pass** (migration idempotent + checksum-mismatch refusal, `/healthz`, counter survives reopening the database, JSON 404, cron 401 without or with a wrong secret and when `CRON_SECRET` is unset, cron 202 records the tick, strict bearer matching).
+- Production-style install: `npm ci --omit=dev` then `npm run build` ok; `vite` and `tsc` present.
+- Ran the compiled server with `npm start`: log line `listening on 0.0.0.0:PORT | node 20.20.2 | db <DATA_DIR>/zentro.db | migrations applied 1/1`; `/healthz` ok; visits 1 then 2; tick 401/401/202; `/` 200, a deep link 200 (SPA fallback), unknown `/api/x` JSON 404; **stopped and restarted the process: the counter stayed at 2 and the migration reported 0/1 applied**.
+- Real Chromium (Playwright) loaded the page: shows `20.20.2 OK (20.x)`, version, database path, visit counter; reload raised the counter 1 → 2; no console or page errors.
+- `DRY_RUN=1 scripts/embarko-deploy.sh zentro`: archive is 25 files / 56 KB; no `.env`, `node_modules`, `dist`, `data` or `.git`; `package.json` and `package-lock.json` at the root.
+
+**DEPLOY_TOKEN check (honest result).** `DEPLOY_TOKEN` is set in this environment (68 characters; never printed). It could **not** be proven valid or invalid by a read-only call: `ship.embarko.ai` is a proxy-authenticated host in this session, and the API answered the **same** `404 app_not_found` ("No app named zentro that this Embarko key can reach") for the real token, a deliberately bogus token and no token at all. So the session proxy supplies its own credential, which the API accepts (it was not a 401). The real proof is the upload reply: it must show `"claimed":true` and `"kind":"service"`. If it shows `claimed:false` or 401, request a new deploy token for the owner's email and wait for the owner to add it in the environment settings (never in chat).
+
+**Not done / incomplete.** Not deployed; not claimed; `appId` not yet in `embarko.json`; live checks (Embarko "Scheduled jobs" shows the tick with outcome ok; the counter after a redeploy) cannot be verified until the deploy. No backups exist on Embarko, so the spike's counter is disposable.
+
+**Live checklist for the owner (after deploy).**
+1. Open the live link: the page shows app `zentro`, a Node version starting `20.`, a database path under the data folder, and a visit counter.
+2. Reload twice: the counter goes up by 1 each time.
+3. Open `/healthz`: `{"ok":true,...,"node":"20.x.x"}`.
+4. Claim the app in the Embarko dashboard (schedules need a kept app), wait up to 5 minutes, then open **Scheduled jobs**: the `zentro tick` shows outcome ok; reload the page: "Scheduled ticks" is at least 1.
+5. Redeploy (I do this when you say so) and reload: the counter continues from where it was.
+
+**Exact next step.** After "yes, deploy": deploy, record `appId` and the live URL here, run the checklist, tick 1.1. Then stage 1.2 in a new session.
+
+### Stage 1.1 deploy record (2026-11-21)
+- Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded version `5440c31` (37 files, 160 KB): reply `claimed:true`, `kind:service`, action `created`, name `zentro` was free (no need for `zentro-ankita`). Build succeeded on Embarko; **live reported Node 20.20.2** (`/healthz` and the page).
+- The deploy token worked, so no new token was requested. (Earlier read-only probing could not tell, as the proxy supplies its own credential; the upload reply is the real proof.)
+- Live checks I ran: `/` 200; `/healthz` `{"ok":true,"version":"5440c31","node":"20.20.2"}`; database path `/data/zentro.db`; `/api/cron/tick` without a secret 401. Ran the schedule once through Embarko's run-schedules API: **outcome ok, HTTP 202, 58 ms**, and the page's tick counter went 0 → 1.
+- Not yet verified: the counter surviving a *redeploy* (the next deploy, which will also ship `appId` in `embarko.json`, is the test: note the counter, redeploy, reload); the automatic 5-minute schedule (only the manual run was exercised); the app being listed in the owner's dashboard (the `claimed:true` reply says it is).
+- Owner dashboard (App setup / env vars): `https://embarko.ai/app/projects/cmwq8dc5l047m7p7fwgtufeuu/environment` (pattern from the runbook; not opened by me, login required).
+- **Redeploy test (owner said "redeploy now, counter was 7")**: before: visits 7, ticks 3, version `5440c31`. Redeployed `f3fca7d` (reply `action: updated`, `claimed:true`); after: **visits 7, ticks 3** (same last tick time), version `f3fca7d`, Node 20.20.2, database `/data/zentro.db`. So **the database survives a redeploy**. Ticks 3 at that time (1 manual + 2 automatic) shows the 5-minute schedule fires by itself; the owner was also to check Embarko's Scheduled jobs page (not seen by me).
+- 1.1 is done. Nothing merged to `main` yet: the owner must approve the merge of `claude/stage-1-1`. Stage 1.2 starts in a new session from `main`.
+
