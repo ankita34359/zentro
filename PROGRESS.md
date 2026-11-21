@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete and merged · Stage 1.4 (visual design and motion, added at the owner's request) deployed as `81f6d5c`; a **colour and depth refresh ("Aurora indigo")** is now built and tested on the same branch `claude/stage-1-4` (commit `7fe4eb1`) and is **not deployed (waiting for the owner's "yes, deploy")**; not merged · live at https://zentro.embarko.app (still `81f6d5c`)
+Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete and merged · Stage 1.4 (visual design and motion, added at the owner's request) deployed as `81f6d5c`; a **colour and depth refresh ("Aurora indigo")** on the same branch `claude/stage-1-4` is **deployed (live version `fce10f1`), waiting for the owner's live check**; 1.4 not ticked, not merged · live at https://zentro.embarko.app
 
 ---
 
@@ -120,6 +120,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.4 colour refresh deployed | Owner said "yes, deploy". Uploaded `fce10f1` (99 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Colour refresh deploy record"). Not ticked; not merged. |
 | 2026-11-21 | 1.4 colour refresh built | The owner found the colours still dull and asked me to choose a direction: "Aurora indigo". Frontend only, same branch `claude/stage-1-4`. 163 tests pass on Node 20.20.2 from a clean checkout; contrast measured from real pixels. **Not deployed, not merged.** Details in "Stage 1.4 colour and depth refresh" below. |
 | 2026-11-21 | 1.4 deployed | Owner said "yes, deploy". Uploaded `81f6d5c` (98 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.4 deploy record"). Not ticked until the owner confirms; not merged. |
 | 2026-11-21 | 1.4 added and built | The owner asked for a new stage 1.4 "Visual design and motion" (the UI felt dull). Recorded in `docs/milestones.md` and here. Branch `claude/stage-1-4` from `main` (`4641378`). Frontend only. 156 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium. **Not deployed.** Details in "Stage 1.4" below. |
@@ -352,7 +353,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.4 colour and depth refresh, "Aurora indigo" (built and tested, NOT deployed)
+## Stage 1.4 colour and depth refresh, "Aurora indigo" (deployed, awaiting the owner's check)
 
 **Why.** The owner still found the colours dull and wanted a more vibrant, premium, professional look, and asked me to choose. Direction chosen with the owner's brief: **Aurora indigo**, confident and vivid but not neon. Frontend only (`git diff origin/main..HEAD -- backend database scripts embarko.json` is empty). Branch `claude/stage-1-4`, commit `7fe4eb1`, on top of the deployed `81f6d5c`. Rules and tokens: `docs/frontend-structure.md` section 11.
 
@@ -392,3 +393,14 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 5. Phone: the menu slides in over a blurred backdrop. With the system's reduce-motion setting on, nothing slides, lifts, counts or pulses.
 
 **Exact next step.** Show the owner these results; on "yes, deploy": push the branch, run `scripts/embarko-deploy.sh zentro`, run the checklist, record the result here. Tick 1.4 only after the owner confirms; merge to `main` only with a separate approval. Then stage 2.1 (auth core) in a new session.
+
+### Colour refresh deploy record (2026-11-21)
+- Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `fce10f1` (99 files, 248 KB): `action: updated`, `claimed:true`, `kind:service`, build success, status live.
+- Live checks I ran: `/healthz` `{"ok":true,"ready":true,"version":"fce10f1","migrations":{"applied":2,"total":2},"lastTick":{...,"status":"ok"}}` (secrets and database kept; ticks running); `/overview`, `/design`, `/okrs`, an unknown address and `/favicon.svg` answer 200.
+- The same real-Chromium scripts as before the deploy, pointed at the live URL: **contrast from real pixels** 2,564 text nodes, **lowest 4.92** (the hovered gradient button label), gradient text lowest 5.73, no failures in the app's own text (one exception below); **bundle** entry chunk 109.1 KB gzipped, 144.8 KB total first-load JavaScript, CSS 9.5 KB (identical to the local build); **motion**: reduced motion off, page rise 8 px, card lift 2 px, pulse and shimmer running; on: 0 px movement in every frame, no loops; **layout shift 0** in both; desktop and phone, light and dark: no horizontal overflow, no console or page errors; skip link, focus after navigation, Escape returning focus to the menu button, theme following the OS, offline and setup-incomplete states, deep link all as before.
+- **Findings on the live site (none fixed; all outside "frontend only" or caused by the platform):**
+  1. **Embarko overlays its own "Embarko" badge at the bottom-left of every page** (a pill about 100 x 32 px). On a phone it covers the "Version" footer text of the open menu, which is why the pixel measurement of that one text node reads about 1.0:1 on the live link (the badge's pixels are behind it). It is injected by the platform, not by our code, so it was not counted as an app contrast failure; excluding that node the lowest live ratio is 4.92. Worth asking Embarko whether the badge can be moved or removed on this plan; otherwise move the sidebar version footer up or accept it.
+  2. **The live server sends assets uncompressed and with `cache-control: public, max-age=0`.** The entry script is 350,701 bytes on the wire (no `content-encoding`, even when the client asks for gzip or brotli) and the browser revalidates every file on each load. All the gzip sizes quoted in this file and in the PROGRESS stage sections are what a compressed transfer would be; the real transfer today is about three times larger (roughly 480 KB of JavaScript on first load). Measured from this sandbox (about 0.85 s per request, about 300 KB/s) the entry script took about 1.9 s and the phone-menu chunk about 1.1 s. **Recommended backend follow-up (needs the owner's approval because stage 1.4 was frontend only):** add the `compression` middleware (or serve pre-compressed files) and send `cache-control: public, max-age=31536000, immutable` for the hashed files in `/assets` (keep `no-cache` for `index.html`).
+  3. Because of 2, the phone menu can take 0.3 to 0.6 s to open if it is tapped within a second of loading the page (its chunk is prefetched while idle but may not have arrived). After the chunk is cached it opens in about 30 ms. Compression and caching (finding 2) are the fix; the earlier local measurement (22 to 32 ms) assumed an instant network.
+  4. Still open from before: prefetch the lazy page chunks while idle; log requests that match no route at `debug`.
+- Not yet verified by the owner: the live checklist in the colour refresh section above. 1.4 is ticked only after that, and merged to `main` only with a separate approval.
