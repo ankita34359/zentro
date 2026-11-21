@@ -33,10 +33,8 @@ if (!loaded.ok) {
 
   const { app } = createApp({
     db,
-    dbFile: file,
     config,
     version,
-    appName: process.env.APP_NAME || "zentro",
     cronSecret,
     migrationsTotal: result.total,
     log,

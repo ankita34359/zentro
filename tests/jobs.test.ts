@@ -110,11 +110,11 @@ describe("tick", () => {
     });
   });
 
-  it("the default jobs: heartbeat every tick, housekeeping prunes runs older than 30 days", async () => {
+  it("the default job: housekeeping prunes runs older than 30 days", async () => {
     t = makeTestApp();
     t.db.prepare("INSERT INTO scheduled_job_runs (id, job_name, started_at, finished_at, status) VALUES ('ancient','tick','2026-01-01T00:00:00.000Z','2026-01-01T00:00:01.000Z','ok')").run();
     await t.tick.run();
     expect(t.db.prepare("SELECT 1 AS x FROM scheduled_job_runs WHERE id = 'ancient'").get()).toBeUndefined();
-    expect(recentRuns(t.db).map((r) => r.jobName).sort()).toEqual(["platform.heartbeat", "platform.housekeeping", "tick"]);
+    expect(recentRuns(t.db).map((r) => r.jobName).sort()).toEqual(["platform.housekeeping", "tick"]);
   });
 });

@@ -137,10 +137,10 @@ All versions were checked against the npm registry on 2026-11-21 for Node 20 com
 | DB | `better-sqlite3` | **`^12.11.1`** (13.x needs Node ≥ 22) | [used] |
 | Validation | Zod | `^4.6.7`, schemas in `shared/` used by server and client | no engine limit |
 | Auth | Node `crypto.scrypt` (passwords), `jsonwebtoken` `^9.0.3` (session cookie + embed token), `cookie-parser`, `helmet`, `express-rate-limit` | pure JS | all `>=12..18` |
-| Frontend | React `19.3`, React Router `7`, TanStack Query `5`, React Hook Form + `@hookform/resolvers`, Recharts `3`, `lucide-react` | | React Router needs `>=20`; ok |
+| Frontend | React `19.3`, **React Router `^7.18`** (not 8: `react-router@8` needs Node >= 22.22; changed in 1.3), TanStack Query `5`, `@radix-ui/react-dialog` + `react-slot`, `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`, `@fontsource-variable/inter`; React Hook Form + `@hookform/resolvers` and Recharts `3` arrive with their first use | `react-router@7` needs `>=20`; ok |
 | Build | Vite `^8.3`, `@vitejs/plugin-react ^6`, Tailwind `^4.3` + `@tailwindcss/vite` | Vite 8 needs `^20.19 || >=22.12`; 20.20.2 satisfies it. If Embarko ever picks 20.18 or older the build fails, so stage 1.1 checks `node -v` in the build log. | [used] in HireDrive |
 | UI kit | shadcn/ui (components copied into `frontend/src/components/ui`) | The `shadcn` CLI (`>=20.18.1`) is a dev-time tool run in the build session; it is not a runtime dependency. | n/a |
-| Tests | `vitest ^4.1.12` (changed from `^3.2` in stage 1.1: 3.x had npm-audit advisories in `tinypool`/`@vitest/mocker`), `supertest`, `jsdom`, Testing Library | Vitest 5 would break on Node 20; 4.1.12 allows `^20`. | proven on 20.20.2 in stage 1.1 |
+| Tests | `vitest ^4.1.12` (changed from `^3.2` in stage 1.1: 3.x had npm-audit advisories in `tinypool`/`@vitest/mocker`), `supertest`, **`jsdom ^28.1`** (jsdom 29+ needs Node >= 22), `@testing-library/react` + `user-event` (no `jest-dom`: its 6.x/8.x need Node >= 22, tests use plain DOM assertions) | Vitest 5 would break on Node 20; 4.1.12 allows `^20`. | proven on 20.20.2 in stages 1.1 to 1.3 |
 | AI | `viasocket-apps` (current, pinned exact) behind our own `AiProvider` interface | `>=20` | |
 
 Rule from the runbook: every dependency's own `engines.node` must accept 20.20.2. A script (`scripts/check-node20.mjs`, stage 1.1) scans `package-lock.json` for any package whose `engines.node` excludes 20 and fails the build. All tests run under a real Node 20.20.2 binary, not the sandbox's Node 22.
@@ -242,6 +242,7 @@ Rules (each has a test or a lint check):
 | Tenant data layer | `backend/src/db/{tenant,sqlLint}.ts` | `createTenantDb(db, ctx)` binds `@organization_id` from the session context; **strict mode** (tests, or `ZENTRO_STRICT_TENANT=1`) lints each statement and checks every returned row. SQL is allowed only in `db/` and `modules/*/repositories/` (a test enforces it). |
 | Migrations | `backend/src/db/migrate.ts` | Checksums, pre-migration copy, unknown-applied report. |
 | Jobs | `backend/src/jobs/*`, `db/jobRuns.ts`, migration `0002` | `JobRegistry` + `createTick` (one at a time, 200 s budget, 10 min stale limit, per-job `minIntervalSeconds`, `scheduled_job_runs` rows for every tick and job). Jobs now: `platform.heartbeat` (spike tick counter), `platform.housekeeping` (daily prune). |
+| Frontend shell (1.3) | `frontend/src/*` | Tailwind 4 tokens (light and dark), `AppShell` (fixed sidebar from 1024 px, slide-in sheet below), eleven-item navigation (`routes/navigation.ts`, with the permission key each item will need), routes lazy-loaded per page, theme provider, API client that reads the envelope, `useHealth` over `/healthz`. Details in [frontend-structure](frontend-structure.md) section 10. The 1.1 spike page, its two routes and the heartbeat job are gone; the `spike_counters` table stays one release (dropped later) so a rollback still works. |
 | Field encryption | `backend/src/lib/crypto.ts` | AES-256-GCM, key derived from `ENCRYPTION_KEY`. Not used for stored data until stage 8. |
 
 ---

@@ -17,6 +17,8 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 | SQLite | Single writer; one file under `DATA_DIR`; no replicas. |
 | Platform | A temporary Embarko app is deleted after 24 hours unless claimed (schedules need a claimed app); region not guaranteed; Embarko controls the CSP. |
 
+| Unknown web addresses answer HTTP 200 | The server returns the app shell for any non-`/api` GET (so deep links work) and the app shows its own "Page not found" page. The browser sees a 404 page; crawlers and monitors see status 200. Unknown `/api/*` paths do return a real 404. |
+
 ## 2. Data protection and operations
 
 | Limitation | Detail |

@@ -321,7 +321,7 @@ POST /api/ai/chat   { "message": "Which objectives are at risk?" }
 
 ## 14a. Stage 1.2 notes
 
-- Registered today: `GET /healthz` (public), `GET /api/cron/tick` (cron), and the two stage 1.1 spike routes `GET /api/spike`, `POST /api/spike/visit` (public, removed in stage 1.3). The spike routes now answer in the standard envelope.
+- Registered today: `GET /healthz` (public) and `GET /api/cron/tick` (cron). The two stage 1.1 spike routes (`/api/spike`, `/api/spike/visit`) were **removed in stage 1.3**.
 - Every other `/api/*` path answers `404 not_found`. On the holding page every `/api/*` answers `503 server_missing_settings` (message `Server is missing: NAMES`).
 - Added error codes: `payload_too_large` (413, bodies over 100 KB), `invalid_json` (400), `server_missing_settings` (503).
 - Each response carries `X-Request-Id`; a caller-supplied `X-Request-Id` is echoed only if it is 8 to 64 characters of letters, digits, `_` or `-`.
