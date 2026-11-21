@@ -78,7 +78,7 @@ These are not silent changes. Each is a decision recorded here, and the unresolv
 | Hosting "frontend and backend as separate apps if needed" (§17) | Override §5 says one app. | One app (D2). |
 | Postgres, Prisma, RLS (§15–17) | Overridden | SQLite + SQL migrations + a tenant-scoped data-access layer + isolation tests (D1). Recorded in [risks](risks.md). |
 | Express | Curevia uses 4.22, HireDrive 5.3, both worked on Embarko | Express 5 (native async error handling) (D4). |
-| Vitest | **Vitest 5 requires Node ≥ 22.12; `better-sqlite3@13` requires Node ≥ 22.** Both would break on Embarko's Node 20. | Pin `vitest@^3.2` and `better-sqlite3@^12.11` (both [used]). A CI-style script scans the lockfile for packages needing Node > 20. |
+| Vitest | **Vitest 5 requires Node ≥ 22.12; `better-sqlite3@13` requires Node ≥ 22.** Both would break on Embarko's Node 20. | Pin `vitest@^4.1.12` (3.x was the first plan; changed in stage 1.1 for audit advisories) and `better-sqlite3@^12.11` (both [used]). A CI-style script scans the lockfile for packages needing Node > 20. |
 | Model names | Curevia's list (`gpt-5-mini`, `claude-sonnet-4-6`) is older than viaSocket's current `ai.md` (`gpt-6-luna`, `claude-sonnet-5-5`, …) | Model ids are environment variables, re-checked against `ai.md` at stage 7.1. |
 
 ---
