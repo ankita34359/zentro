@@ -140,7 +140,7 @@ All versions were checked against the npm registry on 2026-11-21 for Node 20 com
 | Frontend | React `19.3`, React Router `7`, TanStack Query `5`, React Hook Form + `@hookform/resolvers`, Recharts `3`, `lucide-react` | | React Router needs `>=20`; ok |
 | Build | Vite `^8.3`, `@vitejs/plugin-react ^6`, Tailwind `^4.3` + `@tailwindcss/vite` | Vite 8 needs `^20.19 || >=22.12`; 20.20.2 satisfies it. If Embarko ever picks 20.18 or older the build fails, so stage 1.1 checks `node -v` in the build log. | [used] in HireDrive |
 | UI kit | shadcn/ui (components copied into `frontend/src/components/ui`) | The `shadcn` CLI (`>=20.18.1`) is a dev-time tool run in the build session; it is not a runtime dependency. | n/a |
-| Tests | `vitest ^3.2.x`, `supertest`, `jsdom`, Testing Library | Vitest 5 would break on Node 20. | [used] (Curevia) |
+| Tests | `vitest ^4.1.12` (changed from `^3.2` in stage 1.1: 3.x had npm-audit advisories in `tinypool`/`@vitest/mocker`), `supertest`, `jsdom`, Testing Library | Vitest 5 would break on Node 20; 4.1.12 allows `^20`. | proven on 20.20.2 in stage 1.1 |
 | AI | `viasocket-apps` (current, pinned exact) behind our own `AiProvider` interface | `>=20` | |
 
 Rule from the runbook: every dependency's own `engines.node` must accept 20.20.2. A script (`scripts/check-node20.mjs`, stage 1.1) scans `package-lock.json` for any package whose `engines.node` excludes 20 and fails the build. All tests run under a real Node 20.20.2 binary, not the sandbox's Node 22.
