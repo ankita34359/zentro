@@ -232,6 +232,20 @@ Rules (each has a test or a lint check):
 
 ---
 
+### 8.1 What stage 1.2 built (backend foundation)
+
+| Piece | Where | Behaviour |
+| --- | --- | --- |
+| Config + holding mode | `backend/src/config/{env,holding}.ts` | Required: `SESSION_SECRET`, `ENCRYPTION_KEY`; optional `APP_URL`, `LOG_LEVEL`, `TRUST_PROXY`. Names only in every message. |
+| Request id, logger, error envelope | `backend/src/http/*`, `lib/logger.ts` | `X-Request-Id` on every answer; JSON log lines with the route pattern (never the real path, body, query or headers); sensitive field names redacted; every error uses `{error:{code,message,details?},meta:{requestId}}`. |
+| Route registry | `backend/src/http/registry.ts` | Every route is added with an access marker: `public` (with a reason), `cron`, `baseline`, or `permission(key)`; Zod validation of params/query/body; boot check that no route bypasses the registry. Until sessions exist (2.1) `baseline` and `permission` routes fail closed with 401. |
+| Tenant data layer | `backend/src/db/{tenant,sqlLint}.ts` | `createTenantDb(db, ctx)` binds `@organization_id` from the session context; **strict mode** (tests, or `ZENTRO_STRICT_TENANT=1`) lints each statement and checks every returned row. SQL is allowed only in `db/` and `modules/*/repositories/` (a test enforces it). |
+| Migrations | `backend/src/db/migrate.ts` | Checksums, pre-migration copy, unknown-applied report. |
+| Jobs | `backend/src/jobs/*`, `db/jobRuns.ts`, migration `0002` | `JobRegistry` + `createTick` (one at a time, 200 s budget, 10 min stale limit, per-job `minIntervalSeconds`, `scheduled_job_runs` rows for every tick and job). Jobs now: `platform.heartbeat` (spike tick counter), `platform.housekeeping` (daily prune). |
+| Field encryption | `backend/src/lib/crypto.ts` | AES-256-GCM, key derived from `ENCRYPTION_KEY`. Not used for stored data until stage 8. |
+
+---
+
 ## 9. Asynchronous work (no workers, no WebSockets)
 
 Embarko offers one process and a scheduler. The proven pattern from Curevia is copied and generalized.
@@ -264,7 +278,7 @@ Embarko offers one process and a scheduler. The proven pattern from Curevia is c
 ## 10. Data persistence and migrations
 
 - DB file: `path.join(DATA_DIR, 'zentro.db')`; WAL mode, `foreign_keys=ON`, `busy_timeout=5000`.
-- Migrations: `database/migrations/NNNN_name.sql`, applied at startup in order inside one transaction each, tracked in `schema_migrations(id, name, checksum, applied_at)`. A released migration is never edited (checksum mismatch fails startup loudly). Embarko's two `_litestream_*` tables are never touched.
+- Migrations: `database/migrations/NNNN_name.sql`, applied at startup in order inside one transaction each, tracked in `schema_migrations(id, name, checksum, applied_at)`. A released migration is never edited (checksum mismatch fails startup loudly, **before** any pending migration runs). **Before applying a pending migration to a database that already has data, the runner writes a consistent copy (`VACUUM INTO`) to `$DATA_DIR/backups/pre-NNNN-<time>.db` and keeps the newest three** (built in 1.2). Embarko's two `_litestream_*` tables are never touched.
 - SQLite cannot alter CHECK constraints or drop most constraints; Curevia had to rebuild a table for that. So **no CHECK constraints on enumerations that may grow**; allowed values live in `shared/` Zod enums and are validated on write. CHECKs are used only for stable invariants (`value IN (0,1)`, `weight >= 0`). Where a rebuild is unavoidable, the runner copies the DB file before applying (as Curevia does).
 - Portability to Postgres: text UUID keys, ISO-8601 UTC text timestamps, 0/1 integers for booleans, `_json` text columns validated by Zod, no `AUTOINCREMENT`, no SQLite-specific functions in repository SQL except isolated helpers.
 - **Backups do not exist on Embarko.** M9 adds an admin "Export all data" (JSON per table) and a nightly consistent snapshot copy inside `DATA_DIR` (last 3). The snapshot protects against a bad migration or deletion, **not** against loss of the volume, and the UI says so ([risks](risks.md) R-09).
@@ -279,9 +293,9 @@ Secrets go **only** on Embarko's App setup page (never in the repo or chat); the
 | --- | --- | --- | --- |
 | `PORT`, `DATA_DIR`, `APP_NAME`, `APP_VERSION`, `CRON_SECRET` | Embarko | auto | see section 3 |
 | `NODE_ENV=production` | you | yes (prod) | cookie `Secure`, refuse demo seed scripts locally in prod |
-| `APP_URL` | you | yes (prod) | public origin, no trailing slash; used for cookie flags, same-origin check, links in emails |
+| `APP_URL` | you | yes from 2.1 (optional in 1.2) | public origin, no trailing slash; used for cookie flags, same-origin check, links in emails. Validated now if set; becomes required when sessions arrive (2.1) so that stage 1.2 needs only the two secrets. |
 | `SESSION_SECRET` | you | yes | ≥ 32 chars; signs session JWTs |
-| `ENCRYPTION_KEY` | you | yes | 32 random bytes (base64); AES-256-GCM for stored viaSocket secrets (flow URLs, `auth_id`s) |
+| `ENCRYPTION_KEY` | you | yes | A long random string (at least 32 characters, different from `SESSION_SECRET`; a password-manager value works). The AES-256 key is derived from it with HKDF-SHA256, so it does not have to be raw base64 bytes. Used for AES-256-GCM on stored viaSocket secrets (flow URLs, `auth_id`s). *Changed in 1.2 from "32 random bytes (base64)": easier to type, same strength.* |
 | `REGISTRATION_MODE` | you | no | `open` (default) / `invite_only` / `code` with `REGISTRATION_CODE`; protects a public showcase link |
 | `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` | you | for integrations | falls back to `INTEGRATIONS_*` if Embarko's capability is used |
 | `VIASOCKET_EMAIL_FLOW_URL` | you | optional | platform email flow for password reset / invitation emails; without it those are admin-copied links |
@@ -291,7 +305,7 @@ Secrets go **only** on Embarko's App setup page (never in the repo or chat); the
 | `TRUST_PROXY` | you | optional | default `1` |
 | `LOG_LEVEL` | you | optional | default `info` |
 
-**Holding page.** If required variables are missing the server still starts and listens: public health route answers, `/api/*` answers `503 {"error":"Server is missing: NAMES"}` (names only), the cron route still answers fast. This is the Curevia/HireDrive behavior that made "secrets not applied yet" obvious from outside.
+**Holding page (built in 1.2).** If a required variable is missing or invalid the server still starts and listens: `/healthz` answers `ok:true, ready:false` with the names, `/api/*` answers `503 server_missing_settings` with the message `Server is missing: NAMES` (and `details.missing`), the site address shows a plain HTML notice (HTTP 200 so the platform sees a live process), the cron route authenticates and does nothing, and **the database is not opened**. Values are never echoed, only names and a fixed reason (for example "must be at least 32 characters"). The same process becomes the real app after **Apply changes** restarts it. This is the Curevia/HireDrive behaviour that made "secrets not applied yet" obvious from outside.
 
 Frontend config: a committed `frontend/src/config/public.ts` for non-secret values only.
 
