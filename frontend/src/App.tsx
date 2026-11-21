@@ -1,86 +1,57 @@
-import { useEffect, useRef, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, type ReactNode } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { AppShell } from "@/layouts/AppShell";
+import { ApiError } from "@/services/api";
+import { DEFAULT_PATH, NAV_ITEMS } from "@/routes/navigation";
 
-interface Spike {
-  app: string;
-  version: string;
-  node: string;
-  dbPath: string;
-  visits: number;
-  ticks: number;
-  lastTickAt: string | null;
-  serverTime: string;
+// Pages load on demand (one small chunk each), so the first paint only pays for the shell.
+const OverviewPage = lazy(() => import("@/pages/OverviewPage"));
+const SectionPage = lazy(() => import("@/pages/SectionPage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
+
+export function createQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        // A 4xx will not get better by asking again; network and server errors are retried once.
+        retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 1,
+      },
+    },
+  });
 }
 
-/** Reads the API envelope: { data } on success, { error: { message } } on failure. */
-async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  const body = (await res.json().catch(() => null)) as { data?: T; error?: { message?: string } } | null;
-  if (!res.ok || !body || body.data === undefined) {
-    throw new Error(body?.error?.message ?? `${url} answered ${res.status}`);
-  }
-  return body.data;
+export function AppProviders({ children, client }: { children: ReactNode; client?: QueryClient }) {
+  return (
+    <QueryClientProvider client={client ?? createQueryClient()}>
+      <ThemeProvider>{children}</ThemeProvider>
+    </QueryClientProvider>
+  );
+}
+
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route index element={<Navigate to={DEFAULT_PATH} replace />} />
+        <Route path="/overview" element={<OverviewPage />} />
+        {NAV_ITEMS.filter((n) => n.key !== "overview").map((n) => (
+          <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
+        ))}
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
 }
 
 export function App() {
-  const [data, setData] = useState<Spike | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const counted = useRef(false);
-
-  async function load() {
-    try {
-      setData(await getJson<Spike>("/api/spike"));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  useEffect(() => {
-    // Count this page view once, then read the numbers (so the counter includes this visit).
-    if (counted.current) return;
-    counted.current = true;
-    getJson("/api/spike/visit", { method: "POST" })
-      .catch(() => undefined)
-      .then(load);
-  }, []);
-
-  const isNode20 = data?.node.startsWith("20.") ?? false;
-
   return (
-    <main>
-      <h1>Zentro</h1>
-      <p className="sub">Stage 1.2: backend foundation (deploy spike page). Nothing here is real data yet; it only proves the platform works.</p>
-      {error && <p className="bad">Could not load: {error}</p>}
-      {!data && !error && <p>Loading…</p>}
-      {data && (
-        <>
-          <table>
-            <tbody>
-              <tr><th>App</th><td data-testid="app">{data.app}</td></tr>
-              <tr><th>App version</th><td data-testid="version">{data.version}</td></tr>
-              <tr>
-                <th>Node version</th>
-                <td data-testid="node">
-                  {data.node} <span className={isNode20 ? "ok" : "bad"}>{isNode20 ? "OK (20.x)" : "expected 20.x"}</span>
-                </td>
-              </tr>
-              <tr><th>Database path</th><td data-testid="dbpath"><code>{data.dbPath}</code></td></tr>
-              <tr><th>Visit counter</th><td data-testid="visits"><strong>{data.visits}</strong></td></tr>
-              <tr>
-                <th>Scheduled ticks</th>
-                <td data-testid="ticks">
-                  {data.ticks}
-                  {data.lastTickAt ? ` (last: ${new Date(data.lastTickAt).toLocaleString()})` : " (none yet)"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p className="sub">
-            Reload the page: the visit counter goes up by one. Redeploy and reload: it keeps counting from where it was.
-          </p>
-          <p><a href="/healthz">/healthz</a></p>
-        </>
-      )}
-    </main>
+    <AppProviders>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AppProviders>
   );
 }

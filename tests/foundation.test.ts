@@ -39,18 +39,6 @@ describe("/healthz", () => {
   });
 });
 
-describe("spike routes (until 1.3)", () => {
-  it("counts visits inside the envelope and keeps the count when the database is reopened", async () => {
-    t = makeTestApp();
-    await request(t.app).post("/api/spike/visit");
-    const res = await request(t.app).post("/api/spike/visit");
-    expect(res.body.data.visits).toBe(2);
-    expect(res.body.meta.requestId).toMatch(/^req_/);
-    const info = await request(t.app).get("/api/spike");
-    expect(info.body.data).toMatchObject({ visits: 2, ticks: 0 });
-  });
-});
-
 describe("cron tick route", () => {
   it("rejects a missing or wrong bearer with the 401 envelope", async () => {
     t = makeTestApp();
@@ -72,11 +60,8 @@ describe("cron tick route", () => {
     expect(res.status).toBe(202);
     expect(res.body).toEqual({ accepted: true, started: true });
     await new Promise((r) => setTimeout(r, 80));
-    const info = await request(t.app).get("/api/spike");
-    expect(info.body.data.ticks).toBe(1);
     const rows = t.db.prepare("SELECT job_name, status FROM scheduled_job_runs ORDER BY job_name").all();
     expect(rows).toEqual([
-      { job_name: "platform.heartbeat", status: "ok" },
       { job_name: "platform.housekeeping", status: "ok" },
       { job_name: "tick", status: "ok" },
     ]);

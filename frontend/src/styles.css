@@ -1,11 +1,101 @@
-:root { color-scheme: light dark; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-body { margin: 0; }
-main { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1rem; }
-h1 { margin: 0 0 .25rem; }
-.sub { opacity: .7; font-size: .9rem; }
-table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); vertical-align: top; }
-th { width: 10rem; font-weight: 600; }
-code { word-break: break-all; }
-.ok { color: #15803d; font-weight: 600; }
-.bad { color: #b91c1c; font-weight: 600; }
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+/* Dark mode is a class on <html> (set by the theme provider), not only the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens. Light first, dark under .dark. Colors always pair with text or an icon (never color alone). */
+:root {
+  --background: oklch(0.99 0.002 270);
+  --foreground: oklch(0.2 0.02 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 270);
+  --muted: oklch(0.96 0.006 270);
+  --muted-foreground: oklch(0.45 0.02 270);
+  --border: oklch(0.9 0.008 270);
+  --input: oklch(0.9 0.008 270);
+  --ring: oklch(0.5 0.2 275);
+  --primary: oklch(0.46 0.2 275);
+  --primary-foreground: oklch(0.99 0 0);
+  --accent: oklch(0.95 0.02 275);
+  --accent-foreground: oklch(0.3 0.12 275);
+  --success: oklch(0.45 0.13 150);
+  --success-soft: oklch(0.95 0.04 150);
+  --warning: oklch(0.45 0.11 70);
+  --warning-soft: oklch(0.96 0.05 85);
+  --destructive: oklch(0.5 0.2 27);
+  --destructive-soft: oklch(0.96 0.03 25);
+  --sidebar: oklch(0.975 0.005 270);
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: oklch(0.17 0.015 270);
+  --foreground: oklch(0.96 0.005 270);
+  --card: oklch(0.21 0.017 270);
+  --card-foreground: oklch(0.96 0.005 270);
+  --muted: oklch(0.25 0.017 270);
+  --muted-foreground: oklch(0.72 0.02 270);
+  --border: oklch(0.31 0.02 270);
+  --input: oklch(0.34 0.02 270);
+  --ring: oklch(0.7 0.16 275);
+  --primary: oklch(0.72 0.15 275);
+  --primary-foreground: oklch(0.18 0.03 275);
+  --accent: oklch(0.3 0.05 275);
+  --accent-foreground: oklch(0.93 0.03 275);
+  --success: oklch(0.78 0.15 150);
+  --success-soft: oklch(0.28 0.05 150);
+  --warning: oklch(0.82 0.13 85);
+  --warning-soft: oklch(0.3 0.05 80);
+  --destructive: oklch(0.75 0.15 27);
+  --destructive-soft: oklch(0.3 0.06 25);
+  --sidebar: oklch(0.19 0.016 270);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-sidebar: var(--sidebar);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  * { border-color: var(--border); }
+  html { -webkit-text-size-adjust: 100%; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+/* Slide-in panel for the phone navigation (Radix Dialog sets data-state). */
+@keyframes zentro-fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes zentro-fade-out { from { opacity: 1 } to { opacity: 0 } }
+@keyframes zentro-slide-in { from { transform: translateX(-100%) } to { transform: translateX(0) } }
+@keyframes zentro-slide-out { from { transform: translateX(0) } to { transform: translateX(-100%) } }
+.sheet-overlay[data-state="open"] { animation: zentro-fade-in 150ms ease-out; }
+.sheet-overlay[data-state="closed"] { animation: zentro-fade-out 120ms ease-in; }
+.sheet-panel[data-state="open"] { animation: zentro-slide-in 200ms ease-out; }
+.sheet-panel[data-state="closed"] { animation: zentro-slide-out 150ms ease-in; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}

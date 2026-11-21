@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stages 1.1 and 1.2 complete, live (1.2 on version `6fc8aac`) · stage 1.3 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2 and 1.3 complete (Milestone 1 done) · 1.3 live on version `d128fc5` and merged to `main` · stage 1.4 not started · live at https://zentro.embarko.app
 
 ---
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-21 · Blueprint approved · Stages 1.1 and 1.2 complete, l
 
 Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
 
-**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). Next: **stage 1.3** (frontend foundation) in a new session from `main`; not started. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
+**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). **Stage 1.3 (frontend foundation) is complete and live** (version `d128fc5`, checked by the owner) and merged into `main` by pull request (owner-approved). **Milestone 1 (Foundation) is done.** Next: **stage 2.1** (auth core) in a new session from `main`; not started (it needs the owner to type `REGISTRATION_CODE`). First small backend follow-up to fold in: log requests that match no route (static files, app shell) at `debug` (see the 1.3 deploy record). Details in "Stage 1.3" below. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -72,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[ ]` 1.3 Frontend foundation
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner)
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -120,6 +120,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.3 complete | The owner confirmed the live checks passed. Ticked. Pull request `claude/stage-1-3` → `main` opened and merged with the owner's explicit approval. Milestone 1 done. Nothing further started. |
+| 2026-11-21 | 1.3 deployed | Owner said "yes, deploy". Uploaded `d128fc5` (85 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.3 deploy record"). Not ticked until the owner confirms; not merged. |
+| 2026-11-21 | 1.3 built | Branch `claude/stage-1-3` (from `main` after the 1.2 merge). Frontend shell built, spike page removed; 125 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium at desktop and phone width, light and dark. **Not deployed.** Details in "Stage 1.3" below. |
 | 2026-11-21 | 1.2 complete | Secrets set through the env-vars API; the owner confirmed `/healthz` ready, migrations 2 of 2 and `lastTick`. Ticked. Pull request `claude/stage-1-2` → `main` opened and merged with the owner's explicit approval. Stage 1.3 deliberately not started. |
 | 2026-11-21 | 1.2 deployed | Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `6fc8aac` (60 files): `action: updated`, `claimed:true`, build success, status live. Live probe: holding page, `/healthz` `ready:false` with the two names, `/api/*` 503, tick 401 without a secret; the app log shows `holding mode` on Node 20.20.2. Waiting for the owner to type the secrets. |
 | 2026-11-21 | 1.2 built | Branch `claude/stage-1-2` (from `main`). Backend foundation built; 78 tests pass on Node 20.20.2 from a clean checkout. **Not deployed.** Details in "Stage 1.2" below. |
@@ -232,3 +235,58 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 ### Stage 1.2 closed (2026-11-21)
 - Owner reported all live checks passed: `/healthz` ready, 2 of 2 migrations, `lastTick` shown. Stage 1.2 ticked.
 - Owner approved this one merge: `claude/stage-1-2` → `main` by pull request. Nothing else merged. Exact next step: stage 1.3 (frontend foundation) in a new session from `main`: Tailwind 4 + shadcn/ui shell, router, AppShell with the eleven sidebar items, light/dark theme, API client that reads the error envelope, error/loading/empty primitives, `public.ts` config; it also replaces the 1.1 spike page and removes the two spike routes and the `platform.heartbeat` job.
+
+---
+
+## Stage 1.3: frontend foundation (complete, live)
+
+**Implemented** (branch `claude/stage-1-3`; design notes in `docs/frontend-structure.md` section 10):
+- **Tailwind 4 + shadcn-style shell.** Design tokens for light and dark (CSS variables, `.dark` class), self-hosted Inter, hand-copied primitives (`Button`, `Card`, `Badge`, `Skeleton`, slide-in `SheetLeft` on Radix Dialog).
+- **AppShell.** Fixed sidebar from 1024 px, slide-in sheet below it; header with the server status pill and the theme toggle; skip link; focus moves to the page after navigation; document title per page; focus returns to the menu button after Escape.
+- **Sidebar with all eleven items** in master section 18 order (`frontend/src/routes/navigation.ts`), each with the permission key it will need later (all shown until sessions exist).
+- **Router.** React Router 7: `/` → `/overview`; one lazy page per section; `/<section>/*` stays inside its section; unknown address → "Page not found" inside the shell.
+- **Placeholders, honest and real-data-only.** Overview = "Getting started" steps (each shows the stage that builds it) + a live "Server status" card from `/healthz` (status, version, migrations x of y, last tick). Other sections show the empty-state wording from the docs and a "Planned for stage N" badge. No numbers, no sample data. AI says "AI is not configured".
+- **Theme.** Light/dark toggle; follows the OS until a choice is made; stored in `localStorage` inside try/catch; applied before first render.
+- **API client.** Reads the envelope into a typed `ApiError` (api, bad_response, network), survives non-JSON proxy pages, `notConfigured()` helper, 401 hook for stage 2.1. `useHealth` (TanStack Query) over `/healthz`.
+- **Primitives:** `EmptyState`, `ErrorState` (message + request id + retry; never prints an unexpected error's text), `PageSkeleton`, `PageHeader`, `StatusPill`.
+- `frontend/src/config/public.ts` (non-secret constants only).
+- **Spike removed**, as PROGRESS.md said: the 1.1 page, `GET /api/spike`, `POST /api/spike/visit`, the `platform.heartbeat` job and `db/counters.ts`. The `spike_counters` table stays one more release (a rollback to 1.2 still reads it) and is dropped by a later migration. The tick now runs only `platform.housekeeping`.
+
+**Files.** New: `frontend/src/{config/public.ts, lib/{cn,safeStorage}.ts, contexts/ThemeContext.tsx, services/{api,system}.ts, hooks/useHealth.ts, components/ui/*.tsx (5), components/common/*.tsx (7), layouts/{AppShell,SidebarNav}.tsx, routes/navigation.ts, pages/{OverviewPage,SectionPage,NotFoundPage}.tsx, pages/sections.ts, vite-env.d.ts}`, `frontend/public/favicon.svg`, `tests/frontend/{setup.ts,helpers.tsx,navigation,theme,api,components,safety}.test.*`. Changed: `frontend/{index.html,vite.config.ts,tsconfig.json,src/{App,main}.tsx,src/styles.css}`, `backend/src/{app,server}.ts`, `backend/src/jobs/index.ts`, `backend/src/db/sqlLint.ts` (comment), `vitest.config.ts`, `tests/{foundation,jobs,registry}.test.ts`, `tests/helpers/app.ts`, `tests/tsconfig.json`, `package.json` (version 0.1.3, `typecheck` now covers the frontend), `package-lock.json`, docs (`architecture`, `api-documentation`, `database-design`, `frontend-structure`, `known-limitations`). Removed: `backend/src/{routes/spike,jobs/jobs/heartbeat,db/counters}.ts`.
+
+**Decisions / changes to the blueprint.**
+- **React Router pinned to `^7.18`**: `react-router@8` needs Node >= 22.22 (it would have broken the build on Embarko's Node 20). Docs said 7 already.
+- **Test tooling for Node 20:** `jsdom ^28.1` (29+ needs Node 22); **no `@testing-library/jest-dom`** (its 6.x and 8.x need Node >= 22), tests use plain DOM assertions. `npm run check:node20` passes (372 packages).
+- **shadcn components are hand-copied**, not generated by the CLI (no network-dependent dev tool); only the five primitives this stage needs.
+- **Theme toggle has two states** (light and dark), not three; it follows the OS until the first click.
+- **Unknown web addresses return HTTP 200** (the app shell) and show the 404 page client-side; unknown `/api/*` still returns a real 404 (listed in `docs/known-limitations.md`).
+- Nothing in this stage needs a secret or a setting from the owner.
+
+**Tests run (real Node 20.20.2 from `npm i node@20.20.2`, not the sandbox's 22).**
+- Clean checkout from `git archive HEAD` (committed state): `npm ci` → `npm run build` (check-node20 ok; tsc; Vite; main bundle 382 KB, **122 KB gzipped**, pages are separate small chunks) → `npm run typecheck` (backend, frontend, tests) → `npm test`: **16 files, 125 of 125 tests pass** (77 backend; 48 frontend: navigation, focus, routes, 404, theme, API client, components, safety rules). `npm ci --omit=dev` + build ok; `npm audit`: 0 vulnerabilities.
+- Real Chromium against the compiled server (also against the clean build): Overview, OKRs and the 404 page at **desktop 1280x800 and phone 390x844, in light and dark**; no horizontal overflow; correct titles; no console or page errors; phone menu opens, closes on choosing a page and on Escape (focus returns to the button); keyboard: first Tab is "Skip to content", focus lands on `main` after navigation; theme toggles and survives a reload; OS dark-mode change is followed until a choice is made; deep link `/kpis` loads; `/healthz` blocked shows the Offline pill and the error state with retry; holding-mode health shows "Setup incomplete".
+- **Contrast measured in the browser** (every visible text element, light and dark, three pages): all pass AA; smallest ratio 6.12 (light) and 7.12 (dark) against a 4.5 requirement.
+- `DRY_RUN=1 scripts/embarko-deploy.sh zentro`: 85 files, 212 KB; no `.env`, `node_modules`, `dist`, `data` or `.git`.
+
+**Not done / incomplete.** Not deployed, so the live checks below have not run on the live link. Not built (later stages): auth context and route guards, organization switcher, date-range filter, notifications bell, toasts, data table and confirm dialog primitives, charts, an automated axe accessibility pass (planned M9; this stage used the contrast measurement and a keyboard pass).
+
+**Live checklist for the owner (after "yes, deploy").** On https://zentro.embarko.app:
+1. Open the site: the Zentro shell with the eleven sidebar items, the green **Online** pill, and the Overview with "Getting started" and a **Server status** card (Ready, version, migrations 2 of 2 applied, last tick).
+2. Click the moon icon (top right): dark mode; reload: it stays dark. Click again: light.
+3. Click through the sidebar items: each shows a page with a "Planned for stage N" note.
+4. Type a wrong address such as `/nothing-here`: "Page not found" with a button back to Overview.
+5. Make the browser window narrow (or open on your phone): the sidebar becomes a menu button at the top left; it opens a panel and closes after you pick a page.
+6. `/healthz` still shows `"ready":true` and 2 of 2 migrations. The old visit-counter page is gone (intended).
+
+**Exact next step.** Show the owner these results; on "yes, deploy": push the branch, run `scripts/embarko-deploy.sh zentro`, run the live checklist, record the result here and tick 1.3. Merge to `main` only with the owner's separate approval. Then stage 2.1 (auth core; needs `REGISTRATION_CODE` typed by the owner) in a new session.
+
+### Stage 1.3 deploy record (2026-11-21)
+- Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `d128fc5` (85 files, 212 KB): `action: updated`, `claimed:true`, `kind:service`, build success, status live; no restarts in the Embarko task events.
+- Live checks I ran: `/healthz` `{"ok":true,"ready":true,"version":"d128fc5","node":"20.20.2","migrations":{"applied":2,"total":2},"lastTick":{...,"status":"ok"}}` (the app kept its secrets and database across the deploy; the automatic tick was running); `/`, `/overview`, `/okrs` and an unknown address `/nothing-here` answer HTTP 200 with the app shell (expected, see known-limitations); `/favicon.svg` 200; `/api/spike` is now a real JSON 404 (spike removed); `/api/cron/tick` 401 without a secret. The same real-Chromium scripts used before the deploy, pointed at the live URL: desktop and phone, light and dark: no horizontal overflow, correct titles, phone menu closes on choosing a page, theme toggle survives a reload, no console or page errors, text contrast minimum 6.12 (light) / 7.12 (dark).
+- **Follow-up noticed on the live log (not fixed, to avoid a redeploy without approval):** every static file request (JS, CSS, fonts) is logged at `info` with route `unmatched`, which will crowd Embarko's ~8 KB recent-log window once there is real traffic. Fix in the next stage that touches the backend: log requests that match no route (static files, the app shell) at `debug`, and keep `info` for API routes and errors.
+- Not yet verified by the owner: the live checklist in the stage section above. 1.3 is ticked only after that, and merged to `main` only with a separate approval.
+
+### Stage 1.3 closed (2026-11-21)
+- Owner reported all live checks passed. Stage 1.3 ticked; Milestone 1 (1.1 to 1.3) is complete.
+- Owner approved this one merge: `claude/stage-1-3` → `main` by pull request. Nothing else merged or deployed.
+- Exact next step: stage 2.1 (auth core: `users`, `sessions`, register/login/logout/me, scrypt, JWT cookie + session row, rate limits, same-origin check, create organization, onboarding page, `REGISTRATION_MODE=code` with `REGISTRATION_CODE` typed by the owner). Start in a new session from `main`. Also in that stage: demote no-route request logging to `debug`, make `APP_URL` required, drop the unused `spike_counters` table in a later migration (not in the same deploy as the code change that stops using it, which was 1.3), and replace the placeholder sidebar visibility with the real capability check.

@@ -44,15 +44,10 @@ describe("route registry: every route declares its protection", () => {
     );
   });
 
-  it("lists the stage 1.2 routes with their markers (basis for the generated matrices in 2.3)", () => {
+  it("lists the registered routes with their markers (basis for the generated matrices in 2.3)", () => {
     t = makeTestApp();
     const rows = t.registry.list().map((r) => `${r.method.toUpperCase()} ${r.path} ${r.access.kind}`).sort();
-    expect(rows).toEqual([
-      "GET /api/cron/tick cron",
-      "GET /api/spike public",
-      "GET /healthz public",
-      "POST /api/spike/visit public",
-    ]);
+    expect(rows).toEqual(["GET /api/cron/tick cron", "GET /healthz public"]);
   });
 });
 

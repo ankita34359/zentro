@@ -176,7 +176,7 @@ Every chart has: loading skeleton, empty state, accessible table alternative, no
 
 ---
 
-## 9. Frontend tests (Vitest 3 + jsdom + Testing Library)
+## 9. Frontend tests (Vitest 4 + jsdom + Testing Library)
 
 | Test | Proves |
 | --- | --- |
@@ -189,3 +189,23 @@ Every chart has: loading skeleton, empty state, accessible table alternative, no
 | ChatPanel | Polls until terminal; shows Proposals block from system data; shows the unverified-numbers badge |
 | ConfirmDialog | Destructive actions do nothing until confirmed |
 | Token handling | Embed token refresh timer; token not written to storage |
+
+---
+
+## 10. What stage 1.3 built (frontend foundation)
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Design tokens | `src/styles.css` | Tailwind 4 with CSS variables for light and dark (`.dark` class on `<html>`), semantic `success` / `warning` / `destructive` tokens that are always paired with an icon and words. Measured in a real browser: smallest text contrast ratio 6.1 (light) and 7.1 (dark), above the 4.5 AA minimum. Inter Variable is self-hosted through `@fontsource-variable/inter`. |
+| UI primitives | `src/components/ui/` | shadcn-style, hand-copied (no CLI): `Button`, `Card`, `Badge`, `Skeleton`, `SheetLeft` (Radix Dialog). Add more only when a stage needs them. |
+| Shared components | `src/components/common/` | `EmptyState`, `ErrorState` (message, request id, retry; never prints an unexpected error's text), `PageSkeleton`, `PageHeader`, `StatusPill`, `ThemeToggle`, `Brand`. |
+| Shell | `src/layouts/` | `AppShell` (skip link, sidebar, header, main landmark, focus moved to the page after navigation, document title per page), `SidebarNav` (shared by the fixed sidebar and the phone sheet). |
+| Navigation | `src/routes/navigation.ts` | The eleven items in master section 18 order. Each item can carry the permission key it will need (`requires`); until sessions exist (2.1, 2.3) every item is shown. |
+| Routes | `src/App.tsx` | `/` redirects to `/overview`; each section is one lazy page; `/<section>/*` stays inside its section; anything else shows the 404 page inside the shell. |
+| Theme | `src/contexts/ThemeContext.tsx` | Follows the operating system until the person chooses; the choice is stored in `localStorage` (wrapped in try/catch) and applied before the first render. A single toggle: light and dark. |
+| API client | `src/services/api.ts` | Reads the envelope into a typed `ApiError` (`api`, `bad_response`, `network`), survives non-JSON proxy pages, exposes `notConfigured()` for 503 "not configured" answers and a 401 hook that stage 2.1 will use. `src/services/system.ts` + `src/hooks/useHealth.ts` read `/healthz`. |
+| Config | `src/config/public.ts` | Non-secret constants only (a test checks the file for secret-looking words). |
+| Placeholders | `src/pages/` | `OverviewPage` (getting-started steps with the stage that builds each, and a live "Server status" card from `/healthz`), `SectionPage` + `sections.ts` (the empty-state wording from section 3 and a "Planned for stage N" badge), `NotFoundPage`. No numbers or sample data. |
+| Tests | `tests/frontend/` | Navigation (eleven items, order, hrefs, `aria-current`, phone menu, focus), routes and 404, theme (system, saved choice, storage failure), API client, components, and source-level safety rules (no `dangerouslySetInnerHTML`, browser storage only through `lib/safeStorage.ts`, no `VITE_*`). |
+
+Not built yet (by design, later stages): auth context and route guards (2.1, 2.3), organization switcher, date-range filter, notifications bell, toasts, the data-table and confirm-dialog primitives, charts.

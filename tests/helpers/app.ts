@@ -35,15 +35,13 @@ export interface TestApp {
 
 export function makeTestApp(over: Partial<AppOptions> = {}): TestApp {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zentro-test-"));
-  const { db, file } = openDatabase(dir);
+  const { db } = openDatabase(dir);
   const result = migrate(db, migrationsDir);
   const lines: string[] = [];
   const built = createApp({
     db,
-    dbFile: file,
     config: testConfig(),
     version: "test",
-    appName: "zentro-test",
     cronSecret: CRON,
     migrationsTotal: result.total,
     log: createLogger("debug", (l) => lines.push(l)),

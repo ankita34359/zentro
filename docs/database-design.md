@@ -343,6 +343,7 @@ Notation: `col` = column; `FK→t` = foreign key; **UQ** = unique; `?` = nullabl
 | `scheduled_job_runs` **(added, built in 1.2, migration 0002)** | `job_name`, `organization_id?` (plain text, **no foreign key**: operational log, NULL for platform jobs, and SQLite cannot add a foreign key later without rebuilding the table), `started_at`, `finished_at?`, `status` (running, ok, failed, partial), `summary_json?`, `error?` (message only, max 500 characters) | One row per tick (`job_name = tick`) and one per job run. Feeds `/healthz` last-tick time, the per-job minimum interval and the System panel. Pruned after 30 days. |
 | `demo_data_batches` **(added)** | `created_by_membership_id` FK, `status` (loaded, removed), `counts_json`, `removed_at?` | Backs the admin "Load demo data" / "Remove demo data" buttons. |
 | `schema_migrations` | `id`, `name`, `checksum`, `applied_at` | Global. |
+| `spike_counters` (stage 1.1, **not part of the 70**) | `name`, `value`, `updated_at` | Unused since stage 1.3 (the spike page and its counters were removed). Kept for one release so a rollback to the 1.2 code still works; a later migration drops it. |
 
 **Count:** 70 tables including `schema_migrations` (50 from master section 16, 20 added; checked by script against the master prompt's list).
 

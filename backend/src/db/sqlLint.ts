@@ -11,7 +11,7 @@
 /** Tables that are NOT owned by one organization. Anything else is treated as organization-owned. */
 export const GLOBAL_TABLES: ReadonlySet<string> = new Set([
   "schema_migrations",
-  "spike_counters",
+  "spike_counters", // stage 1.1 table, unused since 1.3; dropped by a later migration (kept one release so a rollback still works)
   "scheduled_job_runs", // organization_id is optional (NULL for platform jobs); operational log, not tenant data
   "permissions",
   "users",

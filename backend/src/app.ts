@@ -10,15 +10,12 @@ import { defaultJobs } from "./jobs/index.js";
 import type { JobRegistry } from "./jobs/registry.js";
 import { createTick } from "./jobs/tick.js";
 import type { Logger } from "./lib/logger.js";
-import { registerSpikeRoutes } from "./routes/spike.js";
 import { registerSystemRoutes } from "./routes/system.js";
 
 export interface AppOptions {
   db: Database.Database;
-  dbFile: string;
   config: Config;
   version: string;
-  appName: string;
   cronSecret: string | undefined;
   migrationsTotal: number;
   log: Logger;
@@ -42,7 +39,6 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const registry = new RouteRegistry();
 
   registerSystemRoutes(registry, { db: opts.db, version: opts.version, migrationsTotal: opts.migrationsTotal, tick });
-  registerSpikeRoutes(registry, { db: opts.db, dbFile: opts.dbFile, version: opts.version, appName: opts.appName });
   opts.extraRoutes?.(registry);
 
   app.use(requestId);
