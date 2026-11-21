@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stages 1.1 and 1.2 complete and merged · Stage 1.3 built and tested on branch `claude/stage-1-3`, **not deployed (waiting for the owner's "yes, deploy")** · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stages 1.1 and 1.2 complete and merged · Stage 1.3 **deployed (version `d128fc5`) from branch `claude/stage-1-3`, waiting for the owner's live check and a separate merge approval** · live at https://zentro.embarko.app
 
 ---
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-21 · Blueprint approved · Stages 1.1 and 1.2 complete an
 
 Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
 
-**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). **Stage 1.3 (frontend foundation) is built and tested on branch `claude/stage-1-3`** (from `main` at `6382e30`); not deployed, not merged. The live app is still the stage 1.2 build (`6fc8aac`) with the 1.1 spike page until the owner says "yes, deploy". Details in "Stage 1.3" below. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
+**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). **Stage 1.3 (frontend foundation) is built, tested and deployed from branch `claude/stage-1-3`** (from `main` at `6382e30`; live version `d128fc5`); not merged to `main`. Details in "Stage 1.3" below. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -120,6 +120,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.3 deployed | Owner said "yes, deploy". Uploaded `d128fc5` (85 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.3 deploy record"). Not ticked until the owner confirms; not merged. |
 | 2026-11-21 | 1.3 built | Branch `claude/stage-1-3` (from `main` after the 1.2 merge). Frontend shell built, spike page removed; 125 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium at desktop and phone width, light and dark. **Not deployed.** Details in "Stage 1.3" below. |
 | 2026-11-21 | 1.2 complete | Secrets set through the env-vars API; the owner confirmed `/healthz` ready, migrations 2 of 2 and `lastTick`. Ticked. Pull request `claude/stage-1-2` → `main` opened and merged with the owner's explicit approval. Stage 1.3 deliberately not started. |
 | 2026-11-21 | 1.2 deployed | Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `6fc8aac` (60 files): `action: updated`, `claimed:true`, build success, status live. Live probe: holding page, `/healthz` `ready:false` with the two names, `/api/*` 503, tick 401 without a secret; the app log shows `holding mode` on Node 20.20.2. Waiting for the owner to type the secrets. |
@@ -236,7 +237,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.3: frontend foundation (built and tested, NOT deployed)
+## Stage 1.3: frontend foundation (deployed, awaiting the owner's check)
 
 **Implemented** (branch `claude/stage-1-3`; design notes in `docs/frontend-structure.md` section 10):
 - **Tailwind 4 + shadcn-style shell.** Design tokens for light and dark (CSS variables, `.dark` class), self-hosted Inter, hand-copied primitives (`Button`, `Card`, `Badge`, `Skeleton`, slide-in `SheetLeft` on Radix Dialog).
@@ -277,3 +278,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 6. `/healthz` still shows `"ready":true` and 2 of 2 migrations. The old visit-counter page is gone (intended).
 
 **Exact next step.** Show the owner these results; on "yes, deploy": push the branch, run `scripts/embarko-deploy.sh zentro`, run the live checklist, record the result here and tick 1.3. Merge to `main` only with the owner's separate approval. Then stage 2.1 (auth core; needs `REGISTRATION_CODE` typed by the owner) in a new session.
+
+### Stage 1.3 deploy record (2026-11-21)
+- Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `d128fc5` (85 files, 212 KB): `action: updated`, `claimed:true`, `kind:service`, build success, status live; no restarts in the Embarko task events.
+- Live checks I ran: `/healthz` `{"ok":true,"ready":true,"version":"d128fc5","node":"20.20.2","migrations":{"applied":2,"total":2},"lastTick":{...,"status":"ok"}}` (the app kept its secrets and database across the deploy; the automatic tick was running); `/`, `/overview`, `/okrs` and an unknown address `/nothing-here` answer HTTP 200 with the app shell (expected, see known-limitations); `/favicon.svg` 200; `/api/spike` is now a real JSON 404 (spike removed); `/api/cron/tick` 401 without a secret. The same real-Chromium scripts used before the deploy, pointed at the live URL: desktop and phone, light and dark: no horizontal overflow, correct titles, phone menu closes on choosing a page, theme toggle survives a reload, no console or page errors, text contrast minimum 6.12 (light) / 7.12 (dark).
+- **Follow-up noticed on the live log (not fixed, to avoid a redeploy without approval):** every static file request (JS, CSS, fonts) is logged at `info` with route `unmatched`, which will crowd Embarko's ~8 KB recent-log window once there is real traffic. Fix in the next stage that touches the backend: log requests that match no route (static files, the app shell) at `debug`, and keep `info` for API routes and errors.
+- Not yet verified by the owner: the live checklist in the stage section above. 1.3 is ticked only after that, and merged to `main` only with a separate approval.
