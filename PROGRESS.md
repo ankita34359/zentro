@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · Stage 1.2 **deployed (version `6fc8aac`), secrets set, live ready** · live at https://zentro.embarko.app
+Last updated: 2026-11-21 · Blueprint approved · Stages 1.1 and 1.2 complete, live (1.2 on version `6fc8aac`) · stage 1.3 not started · live at https://zentro.embarko.app
 
 ---
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-21 · Blueprint approved · Stage 1.1 complete, live · St
 
 Stage 1.1 is complete and live-checked and is merged into `main` (pull request #2).
 
-**Stage 1.2 (backend foundation) is built, tested on Node 20.20.2, and deployed from branch `claude/stage-1-2`** (version `6fc8aac`; nothing merged to `main`). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko and the live app is **ready** (see "Secrets set" below). Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
+**Stage 1.2 (backend foundation) is complete and live** (version `6fc8aac`, checked by the owner: `/healthz` ready, migrations 2 of 2, `lastTick` shows). It is merged into `main` by pull request (owner-approved). `SESSION_SECRET` and `ENCRYPTION_KEY` are set on Embarko (see "Secrets set" below). Next: **stage 1.3** (frontend foundation) in a new session from `main`; not started. Details in "Stage 1.2" below. Stage 1.3 (frontend foundation) has not been started.
 
 ## Working rules (from the master prompt overrides)
 
@@ -72,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[~]` 1.2 Backend foundation (built and tested, awaiting deploy approval) · `[ ]` 1.3 Frontend foundation
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[ ]` 1.3 Frontend foundation
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -120,6 +120,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | M0 approved | Owner approved the blueprint and answered all ten questions (recorded above); pull request `claude/blueprint` → `main` merged with the owner's explicit approval (docs and `PROGRESS.md` only). Stage 1.1 deliberately **not** started; it begins in a new session. |
 | 2026-11-21 | 1.1 built | Branch `claude/stage-1-1` (from `origin/main`). Spike built and tested on Node 20.20.2; **not deployed**. Details in "Stage 1.1" below. |
 | 2026-11-21 | 1.1 live | Deployed (owner's yes), redeploy test passed (counter survived), merged to `main` by pull request #2. |
+| 2026-11-21 | 1.2 complete | Secrets set through the env-vars API; the owner confirmed `/healthz` ready, migrations 2 of 2 and `lastTick`. Ticked. Pull request `claude/stage-1-2` → `main` opened and merged with the owner's explicit approval. Stage 1.3 deliberately not started. |
 | 2026-11-21 | 1.2 deployed | Owner said "yes, deploy". `scripts/embarko-deploy.sh zentro` uploaded `6fc8aac` (60 files): `action: updated`, `claimed:true`, build success, status live. Live probe: holding page, `/healthz` `ready:false` with the two names, `/api/*` 503, tick 401 without a secret; the app log shows `holding mode` on Node 20.20.2. Waiting for the owner to type the secrets. |
 | 2026-11-21 | 1.2 built | Branch `claude/stage-1-2` (from `main`). Backend foundation built; 78 tests pass on Node 20.20.2 from a clean checkout. **Not deployed.** Details in "Stage 1.2" below. |
 
@@ -170,7 +171,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 ---
 
-## Stage 1.2: backend foundation (deployed, live)
+## Stage 1.2: backend foundation (complete, live)
 
 **Implemented** (branch `claude/stage-1-2`, commit message starts "Stage 1.2"; design notes in `docs/architecture.md` section 8.1):
 - **Config validation + holding page.** Required: `SESSION_SECRET`, `ENCRYPTION_KEY` (each at least 32 characters, different). Optional and validated if set: `APP_URL`, `LOG_LEVEL`, `TRUST_PROXY`. If anything is missing or invalid the server **still listens** in holding mode: the site address shows a plain notice, every `/api/*` answers `503 server_missing_settings` with `Server is missing: SESSION_SECRET` (names only; a bad value is never echoed), `/healthz` answers `ok:true, ready:false`, the cron route authenticates and does nothing, and **the database is not opened**.
@@ -227,3 +228,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 - Names set on the app now: `CRON_SECRET`, `ENCRYPTION_KEY`, `SESSION_SECRET`, `STORAGE_TOKEN`.
 - Live after Apply: `/healthz` `ready:true`, `migrations {applied:2,total:2}`, version `6fc8aac`; the site no longer shows the holding page. For a few seconds while Embarko swapped instances, one probe still hit the old (holding) instance; repeated probes afterwards were all ready.
 - Still to confirm: a `lastTick` after the next 5-minute tick, the tick counter on the page, and Embarko's "Scheduled jobs" showing ok. Then tick 1.2.
+
+### Stage 1.2 closed (2026-11-21)
+- Owner reported all live checks passed: `/healthz` ready, 2 of 2 migrations, `lastTick` shown. Stage 1.2 ticked.
+- Owner approved this one merge: `claude/stage-1-2` → `main` by pull request. Nothing else merged. Exact next step: stage 1.3 (frontend foundation) in a new session from `main`: Tailwind 4 + shadcn/ui shell, router, AppShell with the eleven sidebar items, light/dark theme, API client that reads the error envelope, error/loading/empty primitives, `public.ts` config; it also replaces the 1.1 spike page and removes the two spike routes and the `platform.heartbeat` job.
