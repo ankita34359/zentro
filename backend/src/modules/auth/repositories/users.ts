@@ -41,6 +41,11 @@ export class UsersRepository {
       .run({ userId, organizationId, now });
   }
 
+  /** The user's default organization is forgotten (they were removed from it). */
+  clearDefaultOrganization(userId: string, organizationId: string, now: string): void {
+    this.db.prepare("UPDATE users SET default_organization_id = NULL, updated_at = @now WHERE id = @userId AND default_organization_id = @organizationId").run({ userId, organizationId, now });
+  }
+
   /** Replaces the password hash (reset or change). */
   setPassword(userId: string, passwordHash: string, now: string): void {
     this.db.prepare("UPDATE users SET password_hash = @passwordHash, updated_at = @now WHERE id = @userId").run({ userId, passwordHash, now });

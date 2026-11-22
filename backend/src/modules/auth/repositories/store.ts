@@ -3,6 +3,7 @@ import { createTenantDb, type TenantCtx, type TenantDb } from "../../../db/tenan
 import { MembershipsRepository, OrganizationsRepository, RolesRepository } from "./organizations.js";
 import { PermissionsCatalogRepository, RoleGrantsRepository } from "../../permissions/repositories/permissions.js";
 import { AuthTokensRepository } from "./authTokens.js";
+import { AuditRepository } from "../../audit/repositories/audit.js";
 import { ErasureRepository } from "./erasure.js";
 import { InvitationsRepository } from "./invitations.js";
 import { SessionsRepository } from "./sessions.js";
@@ -21,6 +22,7 @@ export interface AuthStore {
   roles(tdb: TenantDb): RolesRepository;
   invitations(tdb: TenantDb): InvitationsRepository;
   grants(tdb: TenantDb): RoleGrantsRepository;
+  audit(tdb: TenantDb): AuditRepository;
   transaction<T>(fn: () => T): T;
 }
 
@@ -37,6 +39,7 @@ export function createAuthStore(db: Database.Database): AuthStore {
     roles: (tdb) => new RolesRepository(tdb),
     invitations: (tdb) => new InvitationsRepository(tdb),
     grants: (tdb) => new RoleGrantsRepository(tdb),
+    audit: (tdb) => new AuditRepository(tdb),
     transaction: (fn) => db.transaction(fn)(),
   };
 }

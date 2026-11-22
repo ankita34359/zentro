@@ -9,6 +9,7 @@ import type { InvitationListRow, InvitationRow } from "./repositories/invitation
 import type { AuthStore } from "./repositories/store.js";
 import type { AuthContext, AuthService, MeData } from "./service.js";
 import type { Capabilities, PermissionService } from "../permissions/service.js";
+import type { AuditService } from "../audit/service.js";
 import { permissionDenied } from "../../lib/errors.js";
 import { hashesEqual, hashSecret, makeInvitationCode, parseInvitationCode } from "./secrets.js";
 
@@ -34,6 +35,7 @@ export interface InvitationServiceOptions {
   store: AuthStore;
   auth: AuthService;
   permissions: PermissionService;
+  audit: AuditService;
   log: Logger;
   delivery: LinkDelivery;
 }
@@ -125,6 +127,7 @@ export class InvitationService {
       const membershipId = newId();
       memberships.insertInvited({ id: membershipId, displayName: (input.name ?? "").trim() || email.split("@")[0]!, workEmail: email, now });
       invitations.insert({ id, membershipId, email, codeHash: hashSecret(code), invitedByMembershipId: ctx.membershipId, initialRoleId, expiresAt: this.auth.iso(nowMs + INVITATION_TTL_MS), now });
+      this.o.audit.record(tdb, ctx, { action: "invitation.create", entityType: "invitation", entityId: id, summary: `Invited ${email}${initialRoleId ? " into a role" : ""}`, after: { email, roleId: initialRoleId } });
     });
     const row = invitations.list().find((i) => i.id === id)!;
     this.o.delivery.invitationIssued({ organizationId: ctx.organizationId, invitationId: id, email, code, expiresAt: row.expires_at });
@@ -143,6 +146,7 @@ export class InvitationService {
     this.store.transaction(() => {
       if (!invitations.markRevoked(id, now)) throw new HttpError(409, "conflict", "This invitation is no longer open");
       this.store.memberships(tdb).retireInvited(inv.membership_id, now);
+      this.o.audit.record(tdb, this.auth.tenantCtx(auth, requestId), { action: "invitation.revoke", entityType: "invitation", entityId: id, summary: `Revoked the invitation for ${inv.email}` });
     });
     this.o.log.info("invitation revoked", { requestId });
     return this.view(invitations.list().find((i) => i.id === id)!, this.auth.now());
@@ -177,6 +181,7 @@ export class InvitationService {
         expiresAt: this.auth.iso(nowMs + INVITATION_TTL_MS),
         now,
       });
+      this.o.audit.record(tdb, ctx, { action: "invitation.regenerate", entityType: "invitation", entityId: newInvitationId, summary: `Created a new link for the invitation to ${old.email}` });
     });
     const row = invitations.list().find((i) => i.id === newInvitationId)!;
     this.o.delivery.invitationIssued({ organizationId: ctx.organizationId, invitationId: newInvitationId, email: old.email, code, expiresAt: row.expires_at });
@@ -257,6 +262,7 @@ export class InvitationService {
         this.store.users.setDefaultOrganization(user.id, organizationId, now);
         this.store.sessions.setOrganization(signedIn.sessionId, organizationId);
         this.assignInitialRole(tdb, inv, now);
+        this.o.audit.record(tdb, { userId: user.id, membershipId: inv.membership_id, organizationId, sessionId: signedIn.sessionId, requestId: "" }, { action: "invitation.accept", entityType: "invitation", entityId: inv.id, summary: `${user.email} accepted the invitation` });
       });
       this.o.log.info("invitation accepted");
       const refreshed = this.auth.authenticateRow(signedIn.sessionId, user.id);
@@ -284,6 +290,7 @@ export class InvitationService {
       if (!memberships.bindUser(inv.membership_id, userId, name, now)) throw new HttpError(409, "conflict", "This invitation can no longer be used");
       this.store.users.setDefaultOrganization(userId, organizationId, now);
       this.assignInitialRole(tdb, inv, now);
+      this.o.audit.record(tdb, { userId, membershipId: inv.membership_id, organizationId, sessionId: "", requestId: "" }, { action: "invitation.accept", entityType: "invitation", entityId: inv.id, summary: `${inv.email} accepted the invitation and created an account` });
     });
     const opened = this.auth.openSession(userId, organizationId);
     this.o.log.info("invitation accepted");

@@ -12,11 +12,11 @@ import { addPerson, roleIds } from "./helpers/roles.js";
 let t: TestApp;
 afterEach(() => t?.cleanup());
 
-const call = (route: RouteDef, cookie: string | undefined, params: Record<string, string>) => {
+const call = (route: RouteDef, cookie: string | undefined, params: Record<string, string>, body: Record<string, unknown> = {}) => {
   const url = route.path.replace(/:(\w+)/g, (_m, name: string) => params[name] ?? randomUUID());
   const r = request(t.app)[route.method](url).set("Origin", ORIGIN);
   if (cookie) r.set("Cookie", cookie);
-  return route.method === "get" ? r : r.send({});
+  return route.method === "get" ? r : r.send(body);
 };
 
 /** The grants a template gives, as the resolver sees them for an organization-wide assignment. */
@@ -33,7 +33,7 @@ describe("permission matrix: every role template × every route that needs a per
     const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
     const ids = await roleIds(t.app, owner);
     const people: Record<string, string> = { owner };
-    for (const tpl of ROLE_TEMPLATES.filter((x) => x.key !== "owner")) people[tpl.key] = (await addPerson(t.app, owner, `${tpl.key}@example.com`, ids[tpl.key], tpl.name)).cookie;
+    for (const tpl of ROLE_TEMPLATES.filter((x) => x.key !== "owner")) people[tpl.key] = (await addPerson(t.app, owner, `${tpl.key}@example.com`, (ids as Record<string, string>)[tpl.key]!, tpl.name)).cookie;
 
     const routes = t.registry.list().filter((r) => r.access.kind === "permission");
     expect(routes.length).toBeGreaterThanOrEqual(8);
@@ -75,7 +75,7 @@ describe("permission matrix: every role template × every route that needs a per
     const baseline = t.registry.list().filter((r) => r.access.kind === "baseline" && r.path !== "/api/organizations");
     expect(baseline.length).toBeGreaterThanOrEqual(4);
     for (const tpl of ROLE_TEMPLATES) {
-      const cookie = tpl.key === "owner" ? owner : (await addPerson(t.app, owner, `${tpl.key}@example.com`, ids[tpl.key]!, tpl.name)).cookie;
+      const cookie = tpl.key === "owner" ? owner : (await addPerson(t.app, owner, `${tpl.key}@example.com`, (ids as Record<string, string>)[tpl.key]!, tpl.name)).cookie;
       for (const route of baseline) {
         const res = await call(route, cookie, {});
         expect([401, 403], `${tpl.key} ${route.method} ${route.path}`).not.toContain(res.status);
@@ -104,11 +104,17 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const idsA = await roleIds(t.app, ownerA);
     const invA = await invite(t.app, ownerA, "pending-a@example.com", "Pending Alpha");
     const personA = await addPerson(t.app, ownerA, "member-a@example.com", idsA.employee, "Member Alpha");
-    const fixtures: Record<string, Record<string, string>> = {
-      "/api/invitations/:id/revoke": { id: invA.invitation.id },
-      "/api/invitations/:id/regenerate": { id: invA.invitation.id },
-      "/api/roles/:id": { id: idsA.employee! },
-      "/api/people/:membershipId/reset-link": { membershipId: personA.membershipId },
+    const assignmentA = (t.db.prepare("SELECT id FROM user_role_assignments WHERE membership_id = ?").get(personA.membershipId) as { id: string }).id;
+    // Each id route: the ids of A's records to try as B, and a body that PASSES validation (so the answer comes from the lookup, not from validation).
+    const fixtures: Record<string, { params: Record<string, string>; body?: Record<string, unknown> }> = {
+      "/api/invitations/:id/revoke": { params: { id: invA.invitation.id } },
+      "/api/invitations/:id/regenerate": { params: { id: invA.invitation.id } },
+      "/api/roles/:id": { params: { id: idsA.employee! }, body: { name: "Hacked by B" } },
+      "/api/roles/:id/permissions": { params: { id: idsA.employee! }, body: { grants: [] } },
+      "/api/roles/:id/archive": { params: { id: idsA.employee! } },
+      "/api/role-assignments/:id/revoke": { params: { id: assignmentA } },
+      "/api/people/:membershipId/reset-link": { params: { membershipId: personA.membershipId } },
+      "/api/people/:membershipId/remove": { params: { membershipId: personA.membershipId } },
     };
     const snapshot = () => JSON.stringify([
       t.db.prepare("SELECT id, revoked_at, accepted_at, code_hash FROM invitations ORDER BY id").all(),
@@ -116,21 +122,23 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, role_id, revoked_at FROM user_role_assignments ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM auth_tokens").get(),
       t.db.prepare("SELECT COUNT(*) n FROM role_permissions").get(),
+      t.db.prepare("SELECT id, name, archived_at FROM roles ORDER BY id").all(),
+      t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
     ]);
     const before = snapshot();
 
     const idRoutes = t.registry.list().filter((r) => r.takesEntityId);
-    expect(idRoutes.length).toBeGreaterThanOrEqual(4);
+    expect(idRoutes.length).toBeGreaterThanOrEqual(8);
     for (const route of idRoutes) {
-      const params = fixtures[route.path];
-      expect(params, `add a tenancy fixture for ${route.path}`).toBeTruthy(); // a new id route cannot slip through
-      const res = await call(route, ownerB, params!);
+      const fx = fixtures[route.path];
+      expect(fx, `add a tenancy fixture for ${route.path}`).toBeTruthy(); // a new id route cannot slip through
+      const res = await call(route, ownerB, fx!.params, fx!.body);
       expect(res.status, `${route.method} ${route.path} with A's id as B`).toBe(404);
       expect(JSON.stringify(res.body)).not.toMatch(/Alpha|pending-a|member-a/i);
     }
     // lists: nothing of A's appears
     const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && (r.access.kind === "permission" || r.path === "/api/organization" || r.path === "/api/auth/me"));
-    expect(lists.length).toBeGreaterThanOrEqual(5);
+    expect(lists.length).toBeGreaterThanOrEqual(7);
     for (const route of lists) {
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);

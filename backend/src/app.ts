@@ -17,6 +17,9 @@ import { AccountService } from "./modules/auth/accounts.js";
 import { registerAccountRoutes } from "./modules/auth/accountRoutes.js";
 import { noDelivery, type LinkDelivery } from "./modules/auth/delivery.js";
 import { InvitationService } from "./modules/auth/invitations.js";
+import { AdminService } from "./modules/permissions/admin.js";
+import { AuditService } from "./modules/audit/service.js";
+import { registerAuditRoutes } from "./modules/audit/routes.js";
 import { PermissionService } from "./modules/permissions/service.js";
 import { noHierarchy, type HierarchyProvider } from "./modules/permissions/resolver.js";
 import { registerRoleRoutes } from "./modules/permissions/routes.js";
@@ -58,14 +61,17 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
 
   const store = createAuthStore(opts.db);
   const permissions = new PermissionService(store, opts.hierarchy ?? noHierarchy);
-  const auth = new AuthService({ store, permissions, config: opts.config, log: opts.log });
+  const audit = new AuditService(store);
+  const auth = new AuthService({ store, permissions, audit, config: opts.config, log: opts.log });
+  const admin = new AdminService({ store, auth, permissions, audit });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
   const delivery = opts.delivery ?? noDelivery;
-  const accounts = new AccountService({ store, auth, permissions, log: opts.log, delivery });
-  const invitations = new InvitationService({ store, auth, permissions, log: opts.log, delivery });
+  const accounts = new AccountService({ store, auth, permissions, audit, log: opts.log, delivery });
+  const invitations = new InvitationService({ store, auth, permissions, audit, log: opts.log, delivery });
   registerSystemRoutes(registry, { db: opts.db, version: opts.version, migrationsTotal: opts.migrationsTotal, tick, registration: opts.config.registration.mode });
   registerAuthRoutes(registry, auth, { sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
-  registerRoleRoutes(registry, { auth, permissions });
+  registerRoleRoutes(registry, { auth, permissions, admin });
+  registerAuditRoutes(registry, { auth, audit });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
 

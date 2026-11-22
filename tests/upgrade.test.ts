@@ -67,7 +67,7 @@ async function seed22(db: Database.Database): Promise<void> {
 }
 
 const logger = createLogger("error", () => undefined);
-const appOn = (db: Database.Database) => createApp({ db, config: testConfig({ REGISTRATION_MODE: "code", REGISTRATION_CODE: "test-only-registration-code-0001" }), version: "t", cronSecret: undefined, migrationsTotal: 5, log: logger });
+const appOn = (db: Database.Database) => createApp({ db, config: testConfig({ REGISTRATION_MODE: "code", REGISTRATION_CODE: "test-only-registration-code-0001" }), version: "t", cronSecret: undefined, migrationsTotal: 6, log: logger });
 const cookieOf = (res: { headers: Record<string, unknown> }) => ([] as string[]).concat((res.headers["set-cookie"] as string[]) ?? []).find((c) => c.startsWith("zentro_session="))!.split(";")[0]!;
 const count = (db: Database.Database, sql: string) => (db.prepare(sql).get() as { n: number }).n;
 
@@ -80,7 +80,7 @@ describe("upgrading a stage 2.2 database to 2.3", () => {
     expect(count(db, "SELECT COUNT(*) n FROM schema_migrations")).toBe(4);
 
     const result = migrate(db, migrationsDir);
-    expect(result.applied).toEqual(["0005_permissions_and_role_grants.sql"]);
+    expect(result.applied).toEqual(["0005_permissions_and_role_grants.sql", "0006_audit_log_and_protected_roles.sql"]);
     expect(result.backupFile).toMatch(/pre-0005-.*\.db$/);
     expect(fs.existsSync(result.backupFile!)).toBe(true);
 
@@ -145,7 +145,7 @@ describe("upgrading a stage 2.2 database to 2.3", () => {
 
     // The restored 2.2 data upgrades again exactly as the first time, and everything works.
     const again = migrate(reopened, migrationsDir);
-    expect(again.applied).toEqual(["0005_permissions_and_role_grants.sql"]);
+    expect(again.applied).toEqual(["0005_permissions_and_role_grants.sql", "0006_audit_log_and_protected_roles.sql"]);
     const app = appOn(reopened);
     app.permissions.syncCatalog();
     expect(app.permissions.ensureRoleTemplates().rolesCreated).toBe(8);
@@ -163,7 +163,7 @@ describe("upgrading a stage 2.2 database to 2.3", () => {
     migrate(db, migrationsDir);
     const older = migrate(db, oldMigrations()); // what the 2.2 build does when it starts on this database
     expect(older.applied).toEqual([]);
-    expect(older.unknownApplied).toEqual(["0005"]);
+    expect(older.unknownApplied).toEqual(["0005", "0006"]);
     // the 2.2 code only touches the tables it knew: they are unchanged in shape and content
     expect(count(db, "SELECT COUNT(*) n FROM organization_memberships")).toBe(3);
     expect(db.prepare("SELECT key, name FROM roles WHERE organization_id = ?").all(ORG)).toEqual([{ key: "owner", name: "Owner" }]);
