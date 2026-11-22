@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { describeProblem, loadConfig } from "./config/env.js";
 import { createHoldingApp } from "./config/holding.js";
 import { migrate } from "./db/migrate.js";
+import { applyRestoreRequest } from "./db/restore.js";
 import { openDatabase } from "./db/open.js";
 import { findProjectRoot } from "./lib/paths.js";
 import { createLogger } from "./lib/logger.js";
@@ -26,6 +27,8 @@ if (!loaded.ok) {
   const { config } = loaded;
   const log = createLogger(config.logLevel);
   const dataDir = process.env.DATA_DIR || path.join(root, "data"); // ./data only for local dev
+  // One-time recovery: restores a named automatic backup BEFORE the database is opened (see db/restore.ts). Does nothing unless RESTORE_BACKUP is set.
+  applyRestoreRequest({ dataDir, request: process.env.RESTORE_BACKUP, log });
   const { db, file } = openDatabase(dataDir);
   const migrationsDir = path.join(root, "database", "migrations");
   const result = migrate(db, migrationsDir);
