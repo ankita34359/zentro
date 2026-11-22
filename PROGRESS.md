@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-22 · Stage 2.1 complete and merged · Stage 2.2 (reset and invitations) built, tested and deployed from branch `claude/stage-2-2`, not merged (live now on `fe85552`) · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-22 · Stage 2.1 complete and merged · Stage 2.2 (reset and invitations) complete (owner-verified live on `fe85552`; merge to `main` pending the owner's approval) · next stage 2.3 not started · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
 
 ---
 
@@ -74,7 +74,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 **M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[x]` 1.5 Performance hygiene (added at the owner's request; live on `dfc4401`, checked by the owner)
 
-**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[~]` 2.2 Reset and invitations (deployed, live on `fe85552`, waiting for the owner's check) · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
+**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
 **M3 OKR and KPI** · `[ ]` 3.1 Objectives and key results · `[ ]` 3.2 Alignment and health · `[ ]` 3.3 KPI definitions · `[ ]` 3.4 KPI measurements and trends · `[ ]` 3.5 OKR/KPI polish
 
@@ -526,3 +526,8 @@ Covers the follow-ups listed under "Stage 1.4 closed" (items 1 to 3). Nothing fr
 
 **Deployed (2026-11-22, owner said "yes, deploy").** `scripts/embarko-deploy.sh zentro` uploaded `fe85552`: build success, live. No environment variables were changed and nothing was asked of the owner. `/healthz`: version `fe85552`, migrations **4 of 4**, `registration: "code"`, tick ok. Live probes (no account, invitation or reset link created): forgot password 202 for an unknown address; invitation preview and reset with made-up secrets 404 `invitation_not_found` / `reset_link_invalid`; change password and `GET /api/invitations` signed out 401; a foreign Origin 403; the new pages `/forgot-password`, `/reset-password`, `/accept-invite`, `/settings/users` answer 200.
 **Not yet verified (needs the owner):** the click list on the live site. Tick 2.2 only after the owner confirms; merge to `main` only with a separate approval.
+
+### Stage 2.2 closed (2026-11-22)
+- Owner reported all 11 live click-test steps passed. Stage 2.2 ticked.
+- Pull request `claude/stage-2-2` → `main` is opened; it is merged only after the owner says yes. Live already runs the code (`fe85552`). Pull requests #6 (stage 1.5) and #7 (stage 2.1) are already merged into `main`, so this one targets `main` directly and no base change is needed.
+- **Exact next step: stage 2.3 (RBAC engine)** in a new session from `main`, after the owner approves the plan. It deletes `backend/src/modules/auth/ownerGate.ts`.
