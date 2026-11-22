@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, ApiError } from "./api";
 
 export interface Me {
   user: { id: string; email: string; name: string };
@@ -45,6 +45,8 @@ export interface MemberView {
   status: string;
   hasLogin: boolean;
   roles: { key: string; name: string }[];
+  /** Active role assignments (to revoke one, or to show an end date). */
+  assignments: { id: string; roleId: string; roleName: string; validTo: string | null }[];
   isYou: boolean;
 }
 export interface InvitationPreview {
@@ -84,6 +86,8 @@ export interface RoleView {
   name: string;
   description: string;
   kind: string;
+  /** Protected roles (the Owner role) are view only. */
+  isProtected: boolean;
   permissionCount: number;
   holderCount: number;
 }
@@ -111,3 +115,68 @@ export interface DeletionPreview {
 export const deletionPreview = () => api<DeletionPreview>("/api/auth/delete-account/preview");
 export const deleteAccountRequest = (body: { password: string; confirmEmail: string; confirmOrganizationName?: string }) =>
   api<{ deleted: true; organizationDeleted: boolean }>("/api/auth/delete-account", { method: "POST", body });
+
+// ---------- stage 2.4: editing roles, assigning them, removing people, the audit log ----------
+
+export interface CatalogPermission {
+  key: string;
+  module: string;
+  description: string;
+  modes: string[];
+  sensitive: boolean;
+}
+export const listPermissions = () => api<CatalogPermission[]>("/api/permissions");
+export const createRole = (body: { name: string; description?: string; copyFromRoleId?: string }) => api<RoleDetail>("/api/roles", { method: "POST", body });
+export const updateRole = (id: string, body: { name?: string; description?: string }) => api<RoleDetail>(`/api/roles/${id}`, { method: "PATCH", body });
+export const setRolePermissions = (id: string, body: { grants: { permission: string; mode: string }[]; confirmSensitive?: boolean }) =>
+  api<RoleDetail>(`/api/roles/${id}/permissions`, { method: "PUT", body });
+export const archiveRole = (id: string) => api<{ archived: true }>(`/api/roles/${id}/archive`, { method: "POST" });
+
+export interface AssignmentView {
+  id: string;
+  membershipId: string;
+  roleId: string;
+  roleName: string;
+  scopeType: string;
+  validFrom: string;
+  validTo: string | null;
+  revokedAt: string | null;
+  grantedBy: string | null;
+  state: "active" | "revoked" | "ended" | "scheduled";
+}
+export const assignRole = (body: { membershipId: string; roleId: string; scopeType?: string; validFrom?: string; validTo?: string | null }) =>
+  api<AssignmentView>("/api/role-assignments", { method: "POST", body });
+export const revokeAssignment = (id: string) => api<AssignmentView>(`/api/role-assignments/${id}/revoke`, { method: "POST" });
+export const removePerson = (membershipId: string) => api<{ removed: true }>(`/api/people/${membershipId}/remove`, { method: "POST" });
+
+export interface AuditEntry {
+  id: string;
+  createdAt: string;
+  actor: { membershipId: string | null; name: string | null; type: string };
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  summary: string;
+  before: unknown;
+  after: unknown;
+}
+export interface AuditPage {
+  entries: AuditEntry[];
+  nextCursor: string | null;
+}
+/** The audit log, newest first. `api()` returns `data` only, so the cursor is read from the response meta here. */
+export async function listAudit(params: { action?: string; from?: string; to?: string; cursor?: string; limit?: number }): Promise<AuditPage> {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") q.set(k, String(v));
+  const res = await fetch(`/api/audit-logs${q.size ? `?${q}` : ""}`, { credentials: "same-origin", headers: { Accept: "application/json" } });
+  const json = (await res.json().catch(() => null)) as { data?: AuditEntry[]; meta?: { page?: { nextCursor?: string | null } }; error?: { code?: string; message?: string } } | null;
+  if (!res.ok || !json?.data) throw new ApiError("api", res.status, json?.error?.code ?? "bad_response", json?.error?.message ?? "The audit log could not be read");
+  return { entries: json.data, nextCursor: json.meta?.page?.nextCursor ?? null };
+}
+
+/** Can the signed-in person GIVE this permission in this mode? (A convenience for the editor; the server enforces it.) */
+export function canGrantMode(capabilities: Record<string, string[]>, permission: string, mode: string): boolean {
+  const held = capabilities[permission];
+  if (!held) return false;
+  return held.includes("all_in_scope") || held.includes(mode) || (mode === "own" && (held.includes("reports") || held.includes("my_teams")));
+}
