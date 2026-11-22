@@ -2,7 +2,7 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 const ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
 /** Field names whose values are never written to the log, whatever they contain. */
-const SENSITIVE = /secret|token|password|passwd|authorization|cookie|key|email|url|webhook|credential/i;
+const SENSITIVE = /secret|token|password|passwd|authorization|cookie|key|email|url|webhook|credential|registration/i;
 
 export interface Logger {
   debug(msg: string, fields?: Record<string, unknown>): void;

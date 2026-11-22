@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { MotionProvider } from "@/motion/MotionProvider";
@@ -7,7 +7,10 @@ import { AppShell } from "@/layouts/AppShell";
 import { ApiError } from "@/services/api";
 import { DEFAULT_PATH, NAV_ITEMS } from "@/routes/navigation";
 
-import { DesignPage, NotFoundPage, OverviewPage, SectionPage } from "@/routes/pages";
+import { PageSkeleton } from "@/components/common/PageSkeleton";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { RequireAuth } from "@/routes/RequireAuth";
+import { DesignPage, LoginPage, NotFoundPage, OnboardingPage, OverviewPage, RegisterPage, SectionPage } from "@/routes/pages";
 
 export function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -25,7 +28,9 @@ export function AppProviders({ children, client }: { children: ReactNode; client
   return (
     <QueryClientProvider client={client ?? createQueryClient()}>
       <ThemeProvider>
-        <MotionProvider>{children}</MotionProvider>
+        <MotionProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </MotionProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
@@ -34,14 +39,20 @@ export function AppProviders({ children, client }: { children: ReactNode; client
 export function AppRoutes() {
   return (
     <Routes>
+      {/* Public pages: reachable when signed out. */}
+      <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><LoginPage /></Suspense>} />
+      <Route path="/register" element={<Suspense fallback={<PageSkeleton />}><RegisterPage /></Suspense>} />
+      <Route path="/onboarding" element={<Suspense fallback={<PageSkeleton />}><OnboardingPage /></Suspense>} />
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to={DEFAULT_PATH} replace />} />
-        <Route path="/overview" element={<OverviewPage />} />
-        {/* Unlisted style guide: deliberately not in the sidebar. */}
+        {/* Unlisted style guide: deliberately not in the sidebar, and open to everyone. */}
         <Route path="/design" element={<DesignPage />} />
-        {NAV_ITEMS.filter((n) => n.key !== "overview").map((n) => (
-          <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
-        ))}
+        <Route element={<RequireAuth />}>
+          <Route index element={<Navigate to={DEFAULT_PATH} replace />} />
+          <Route path="/overview" element={<OverviewPage />} />
+          {NAV_ITEMS.filter((n) => n.key !== "overview").map((n) => (
+            <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
+          ))}
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

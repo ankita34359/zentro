@@ -16,7 +16,8 @@ describe("/healthz", () => {
       ready: true,
       version: "test",
       node: process.versions.node,
-      migrations: { applied: 2, total: 2 },
+      migrations: { applied: 3, total: 3 },
+      registration: "closed",
       lastTick: null,
     });
     expect(typeof res.body.memoryMb).toBe("number");

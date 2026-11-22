@@ -5,6 +5,7 @@ import { Brand } from "@/components/common/Brand";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { StatusPill } from "@/components/common/StatusPill";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
+import { UserMenu } from "@/components/common/UserMenu";
 import { Button } from "@/components/ui/button";
 import { publicConfig } from "@/config/public";
 import { prefetchWhenIdle } from "@/lib/preload";
@@ -105,6 +106,7 @@ export function AppShell() {
           <div className="ml-auto flex items-center gap-2">
             <StatusPill />
             <ThemeToggle />
+            <UserMenu />
           </div>
         </header>
 

@@ -10,6 +10,8 @@ export interface SystemDeps {
   version: string;
   migrationsTotal: number;
   tick: ReturnType<typeof createTick>;
+  /** How registration is set up (never the code itself): shown on /healthz so a deploy can be checked. */
+  registration: "code" | "open" | "closed";
 }
 
 /** GET /healthz: no sign-in, no secrets, no paths. Used by the post-deploy smoke test and the owner's live check. */
@@ -34,6 +36,7 @@ export function registerSystemRoutes(registry: RouteRegistry, deps: SystemDeps):
         version: deps.version,
         node: process.versions.node,
         migrations: { applied, total: deps.migrationsTotal },
+        registration: deps.registration,
         lastTick: tick ? { startedAt: tick.startedAt, finishedAt: tick.finishedAt, status: tick.status } : null,
         memoryMb: Math.round(process.memoryUsage().rss / 1_048_576),
       });

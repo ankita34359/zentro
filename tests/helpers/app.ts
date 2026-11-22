@@ -15,7 +15,10 @@ export const CRON = "cron-secret-for-tests";
 export const FAKE_ENV = {
   SESSION_SECRET: "test-session-secret-0123456789-abcdefghij",
   ENCRYPTION_KEY: "test-encryption-key-9876543210-zyxwvutsrq",
+  APP_URL: "https://zentro.test",
 } as const;
+/** The browser's Origin header for a request from the test site (state-changing /api calls must send it). */
+export const ORIGIN = "https://zentro.test";
 
 export function testConfig(extra: NodeJS.ProcessEnv = {}): Config {
   const r = loadConfig({ ...FAKE_ENV, ...extra });

@@ -208,7 +208,9 @@ Every chart has: loading skeleton, empty state, accessible table alternative, no
 | Placeholders | `src/pages/` | `OverviewPage` (getting-started steps with the stage that builds each, and a live "Server status" card from `/healthz`), `SectionPage` + `sections.ts` (the empty-state wording from section 3 and a "Planned for stage N" badge), `NotFoundPage`. No numbers or sample data. |
 | Tests | `tests/frontend/` | Navigation (eleven items, order, hrefs, `aria-current`, phone menu, focus), routes and 404, theme (system, saved choice, storage failure), API client, components, and source-level safety rules (no `dangerouslySetInnerHTML`, browser storage only through `lib/safeStorage.ts`, no `VITE_*`). |
 
-Not built yet (by design, later stages): auth context and route guards (2.1, 2.3), organization switcher, date-range filter, notifications bell, toasts, the data-table and confirm-dialog primitives, charts.
+**Built in 2.1:** `contexts/AuthContext.tsx` (who is signed in, from `GET /api/auth/me`; a 401 from any API call signs the browser out), `routes/RequireAuth.tsx` (signed out → `/login` and back; signed in without an organization → `/onboarding`), pages `/login`, `/register`, `/onboarding` (`pages/auth/`, `layouts/AuthLayout.tsx`), `components/common/UserMenu.tsx` (name, organization and Log out in the header; an initial on phones; a Sign in link on public pages when signed out), `FormField`/`FormAlert`/`FormNotice`, plain controlled forms (no form library yet: three small forms; React Hook Form arrives with the first large form). Public pages when signed out: `/login`, `/register`, `/onboarding` (redirects), `/design` and the 404 page. The browser never decides access; the guards only choose the screen.
+
+Not built yet (by design, later stages): permission-based route guards (2.3), organization switcher, date-range filter, notifications bell, toasts, the data-table and confirm-dialog primitives, charts.
 
 ---
 

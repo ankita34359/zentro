@@ -236,6 +236,8 @@ Notation: `col` = column; `FK→t` = foreign key; **UQ** = unique; `?` = nullabl
 | `organization_settings` **(added)** | `key`, `value_json`, `updated_by_membership_id?` | UQ(`organization_id`,`key`). AI settings, review cadence, notification defaults, data-sufficiency defaults, registration policy. |
 | `user_preferences` | `user_id` FK, `organization_id?`, `key`, `value_json` | UQ(`user_id`,`organization_id`,`key`). Notification preferences (`notify.<event>.<channel>`), theme, last date range. |
 
+**Built in migration `0003_auth_core.sql` (stage 2.1).** Tables `users`, `organizations`, `organization_memberships`, `roles`, `user_role_assignments` and `sessions`, with only the columns 2.1 needs (later stages ALTER them). Added columns not in the table above: `users.default_organization_id` (the organization a new session opens in, so login needs no cross-organization query). `sessions.id` is the SHA-256 of the random session id inside the cookie's JWT. `permissions`, `role_permissions`, `invitations`, `auth_tokens`, `organization_settings` and `user_preferences` arrive in 2.2 to 2.4. Organization-owned tables are reached only through the tenant-scoped handle (the lint requires `organization_id = @organization_id`); the global tables are read by the ids the session carries.
+
 ### 3.2 Organization hierarchy
 
 | Table | Columns | Notes |

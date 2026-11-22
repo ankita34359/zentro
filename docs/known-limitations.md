@@ -98,3 +98,12 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - The demo company is **fictional**; its numbers are real database rows, so dashboards behave exactly as with real data, but they describe no real people.
 - Loading demo data is blocked while it is already loaded; removal refuses if real rows reference demo rows and lists the blockers.
 - "View as demo persona" is read-only and limited to demo people.
+
+## Added in stage 2.1 (auth core)
+
+- **Rate limits are kept in memory** in the single server process. A restart (a deploy, or Embarko restarting the app) forgets the counts, so an attacker who can trigger restarts gets a fresh allowance. Acceptable for a showcase; a database-backed limiter is a small change if needed.
+- **One organization per person for now.** Onboarding refuses a second organization (`409`); switching organizations arrives later. The schema already allows several memberships per login.
+- **Registering with an email that already exists is silent by design** (the same answer as a new one, so nobody can learn which emails exist). The person simply cannot sign in with the new password; password reset arrives in stage 2.2.
+- **No password reset, invitations or email verification yet** (stage 2.2). The Owner role exists but holds no permission rows until the RBAC engine (2.3); until then there are no permission-gated screens, so nothing depends on it.
+- **No audit log yet** (stage 2.4): sign-ins and organization creation are not audited.
+- **Forms are plain controlled React forms**, not React Hook Form, because there are only three small ones.
