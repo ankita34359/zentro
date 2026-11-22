@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-23 · Blueprint approved · Milestone 1 (stages 1.1 to 1.5) complete · Stages 2.1 (auth core), 2.2 (reset and invitations) and 2.3 (RBAC engine, Delete my account, restore-at-start-up) complete and live-checked by the owner; 2.3 merged to `main` · live on `5422c57` · stage 2.4 (role editor, assignments, audit) built and tested on branch `claude/stage-2-4`, not deployed, not merged · live at https://zentro.embarko.app
+Last updated: 2026-11-23 · Blueprint approved · Milestone 1 (stages 1.1 to 1.5) complete · Stages 2.1 (auth core), 2.2 (reset and invitations), 2.3 (RBAC engine, Delete my account, restore-at-start-up) and 2.4 (role editor, assignments, audit) complete and live-checked by the owner; 2.4 merged to `main` · live on `31fb6ff` · live at https://zentro.embarko.app
 
 ---
 
@@ -74,7 +74,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 **M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[x]` 1.5 Performance hygiene (added at the owner's request; live on `dfc4401`, checked by the owner)
 
-**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[x]` 2.3 RBAC engine (live on `5422c57`, checked by the owner; includes Delete my account and the restore-at-start-up setting) · `[~]` 2.4 Roles UI (built and tested on `claude/stage-2-4`, not deployed) · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
+**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[x]` 2.3 RBAC engine (live on `5422c57`, checked by the owner; includes Delete my account and the restore-at-start-up setting) · `[x]` 2.4 Roles UI (live on `31fb6ff`, checked by the owner; the last-administrator refusal was not clicked on live, to avoid risking the Owner account, and is covered by the automated tests and the browser test) · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
 **M3 OKR and KPI** · `[ ]` 3.1 Objectives and key results · `[ ]` 3.2 Alignment and health · `[ ]` 3.3 KPI definitions · `[ ]` 3.4 KPI measurements and trends · `[ ]` 3.5 OKR/KPI polish
 
@@ -123,7 +123,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | 1.4 complete | The owner confirmed the live checks passed for the design/motion stage and the Aurora indigo colour refresh. Ticked. Pull request `claude/stage-1-4` → `main` opened and merged with the owner's explicit approval. No further stage started. |
 | 2026-11-21 | 1.4 colour refresh deployed | Owner said "yes, deploy". Uploaded `fce10f1` (99 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Colour refresh deploy record"). Not ticked; not merged. |
 | 2026-11-21 | 1.4 colour refresh built | The owner found the colours still dull and asked me to choose a direction: "Aurora indigo". Frontend only, same branch `claude/stage-1-4`. 163 tests pass on Node 20.20.2 from a clean checkout; contrast measured from real pixels. **Not deployed, not merged.** Details in "Stage 1.4 colour and depth refresh" below. |
-| 2026-11-23 | 2.4 built | Branch `claude/stage-2-4` from `main` (`c386a34`, contains stage 2.3 / PR #10). Built with the five owner decisions; migration 0006 rehearsed locally with the automatic backup, a rollback and a restore. **Not deployed, not merged.** Waiting for the owner's "yes, deploy". Details in "Stage 2.4" below. |
+| 2026-11-23 | 2.4 built | Branch `claude/stage-2-4` from `main` (`c386a34`, contains stage 2.3 / PR #10). Built with the five owner decisions; migration 0006 rehearsed locally with the automatic backup, a rollback and a restore. Details in "Stage 2.4" below. |
+| 2026-11-23 | 2.4 deployed, checked, merged | Deployed as `31fb6ff` (migrations 6 of 6, backup `pre-0006-2026-11-22T16-33-42-429Z.db` taken at start-up). Owner's click test passed (steps 1 to 5, 7, 9; step 6 skipped on live on purpose). 2.4 ticked and merged into `main` with the owner's approval. |
 | 2026-11-23 | 2.3 built | Branch `claude/stage-2-3` from `main` (`8ebb100`, contains stage 2.2 / PR #8). Plan approved by the owner after the backup answer. Built and tested on Node 20.20.2; real upgrade and backup-restore rehearsal done locally. **Not deployed, not merged.** Waiting for the owner's "yes, deploy". Details in "Stage 2.3" below. |
 | 2026-11-22 | 2.2 built | Branch `claude/stage-2-2` from `main` (`f3b361d`, contains stage 2.1 / PR #7). Reset and invitations built and tested on Node 20.20.2. **Not deployed, not merged.** Waiting for "yes, deploy". Needs nothing from the owner. Details in "Stage 2.2" below. |
 | 2026-11-22 | 2.1 built | Branch `claude/stage-2-1` from `main` (`bf1b2bf`, contains stage 1.5 / PR #6). Auth core built and tested on Node 20.20.2. **Not deployed, not merged.** Waiting for "yes, deploy"; then I ask once for the registration code. Details in "Stage 2.1" below. |
@@ -595,7 +596,7 @@ Also in 2.4 as planned: assign a role to someone who joined with no role (an "As
 - Owner approved this one merge: `claude/stage-2-3` → `main` by pull request, if all checks pass. Live runs `5422c57`.
 - **Next: stage 2.4** (role editor, assignments, audit) on a new branch from the updated `main`, using the five decisions recorded above.
 
-### Stage 2.4 Role editor, assignments, audit (2026-11-23, built, not deployed)
+### Stage 2.4 Role editor, assignments, audit (2026-11-23, DEPLOYED, checked, merged)
 
 **Pull request #10 (stage 2.3) was merged into `main` as `c386a34`** after the owner's click test passed; **live (`5422c57`) matches `main` for all running code** (only PROGRESS.md and two test files differ), so nothing needed a redeploy.
 
