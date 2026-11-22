@@ -2,6 +2,8 @@ import express, { type Express } from "express";
 import type Database from "better-sqlite3";
 import type { Config } from "./config/env.js";
 import { apiNotFound, errorHandler } from "./http/errorHandler.js";
+import { revalidateHealthz } from "./http/cacheHeaders.js";
+import { compressText } from "./http/compress.js";
 import { requestId } from "./http/requestId.js";
 import { requestLog } from "./http/requestLog.js";
 import { assertAllRegistered, denyAllGuards, RouteRegistry, type Guards } from "./http/registry.js";
@@ -43,6 +45,8 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
 
   app.use(requestId);
   app.use(requestLog(opts.log));
+  app.use(compressText());
+  app.use(revalidateHealthz);
   app.use(express.json({ limit: "100kb" }));
   registry.mount(app, opts.guards ?? denyAllGuards(opts.cronSecret));
   assertAllRegistered(app, registry);

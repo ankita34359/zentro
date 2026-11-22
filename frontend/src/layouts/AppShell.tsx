@@ -7,7 +7,9 @@ import { StatusPill } from "@/components/common/StatusPill";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { publicConfig } from "@/config/public";
+import { prefetchWhenIdle } from "@/lib/preload";
 import { titleFor } from "@/routes/navigation";
+import { PREFETCH_PAGES } from "@/routes/pages";
 import { PageTransition } from "@/motion/PageTransition";
 import { SidebarNav } from "./SidebarNav";
 
@@ -28,11 +30,13 @@ export function AppShell() {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const firstRender = useRef(true);
 
+  // After the first load, while the browser is idle: fetch the phone menu first (narrow screens only, it is the
+  // first thing a phone user taps), then every page chunk, one at a time. Nothing here blocks the first paint.
   useEffect(() => {
-    if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 1023px)").matches) return;
-    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500));
-    idle(fetchSheet);
-  }, [fetchSheet]);
+    const narrow = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1023px)").matches;
+    const loaders = [...(narrow ? [() => loadSheet().then((m) => setSheet(() => m.SheetLeft))] : []), ...PREFETCH_PAGES.map((page) => () => page.preload())];
+    return prefetchWhenIdle(loaders);
+  }, []);
 
   useEffect(() => {
     setMenuOpen(false);
