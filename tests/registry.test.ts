@@ -50,12 +50,23 @@ describe("route registry: every route declares its protection", () => {
     expect(rows).toEqual([
       "GET /api/auth/me baseline",
       "GET /api/cron/tick cron",
+      "GET /api/invitations permission",
       "GET /api/organization baseline",
+      "GET /api/organization/members permission",
       "GET /healthz public",
+      "POST /api/auth/accept-invitation public",
+      "POST /api/auth/change-password baseline",
+      "POST /api/auth/forgot-password public",
+      "POST /api/auth/invitation-preview public",
       "POST /api/auth/login public",
       "POST /api/auth/logout public",
       "POST /api/auth/register public",
+      "POST /api/auth/reset-password public",
+      "POST /api/invitations permission",
+      "POST /api/invitations/:id/regenerate permission",
+      "POST /api/invitations/:id/revoke permission",
       "POST /api/organizations baseline",
+      "POST /api/people/:membershipId/reset-link permission",
     ]);
   });
 });

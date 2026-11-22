@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import type { Guards } from "../../http/registry.js";
 import { clearSessionCookie, cookieShouldBeSecure, readCookie } from "../../lib/cookies.js";
-import { permissionDenied, unauthenticated } from "../../lib/errors.js";
+import { unauthenticated } from "../../lib/errors.js";
+import { temporaryOwnerGate } from "./ownerGate.js";
 import type { AuthService, AuthContext } from "./service.js";
 import { COOKIE_NAME, verifySessionJwt } from "./tokens.js";
 
@@ -22,6 +23,7 @@ export function sessionFromRequest(service: AuthService, sessionSecret: string, 
  * until the RBAC engine (stage 2.3), so a route that needs a permission key is refused for everyone until then.
  */
 export function createAuthGuards(service: AuthService, sessionSecret: string, nodeEnv: string, cronSecret: string | undefined): Guards {
+  const ownerGate = temporaryOwnerGate(service);
   return {
     authenticate: (req, res) => {
       const auth = sessionFromRequest(service, sessionSecret, req);
@@ -31,9 +33,8 @@ export function createAuthGuards(service: AuthService, sessionSecret: string, no
       }
       res.locals.auth = auth;
     },
-    authorize: () => {
-      throw permissionDenied();
-    },
+    // TEMPORARY (2.2): the two administration keys are allowed for Owners only; every other key stays refused.
+    authorize: (req, res, key) => ownerGate(req, res, key),
     cronSecret,
   };
 }

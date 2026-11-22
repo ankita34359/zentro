@@ -44,6 +44,11 @@ export class SessionsRepository {
     this.db.prepare("UPDATE sessions SET revoked_at = @now WHERE user_id = @userId AND revoked_at IS NULL").run({ userId, now });
   }
 
+  /** Every session of the user except the one they are using now (after a password change). */
+  revokeOthersForUser(userId: string, keepId: string, now: string): void {
+    this.db.prepare("UPDATE sessions SET revoked_at = @now WHERE user_id = @userId AND id <> @keepId AND revoked_at IS NULL").run({ userId, keepId, now });
+  }
+
   /** Housekeeping: rows past their absolute expiry (and long-revoked ones) are of no use. */
   purgeExpired(before: string): number {
     return this.db.prepare("DELETE FROM sessions WHERE absolute_expires_at < @before").run({ before }).changes;

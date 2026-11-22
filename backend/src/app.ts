@@ -13,6 +13,10 @@ import { defaultJobs } from "./jobs/index.js";
 import type { JobRegistry } from "./jobs/registry.js";
 import { createTick } from "./jobs/tick.js";
 import type { Logger } from "./lib/logger.js";
+import { AccountService } from "./modules/auth/accounts.js";
+import { registerAccountRoutes } from "./modules/auth/accountRoutes.js";
+import { noDelivery, type LinkDelivery } from "./modules/auth/delivery.js";
+import { InvitationService } from "./modules/auth/invitations.js";
 import { createAuthGuards } from "./modules/auth/guards.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { createAuthStore } from "./modules/auth/repositories/store.js";
@@ -34,6 +38,8 @@ export interface AppOptions {
   extraRoutes?: (registry: RouteRegistry) => void;
   /** Replace the sign-in guards (stage 2.1 supplies real ones; the default refuses everyone). */
   guards?: Guards;
+  /** Where invitation and reset links go besides the administrator's screen. Stage 2.2 default: nowhere (administrators copy links). Stage 8 supplies email. */
+  delivery?: LinkDelivery;
 }
 
 export function createApp(opts: AppOptions): { app: Express; registry: RouteRegistry; tick: ReturnType<typeof createTick>; auth: AuthService } {
@@ -45,9 +51,15 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const tick = createTick(opts.db, jobs, opts.log);
   const registry = new RouteRegistry();
 
-  const auth = new AuthService({ store: createAuthStore(opts.db), config: opts.config, log: opts.log });
+  const store = createAuthStore(opts.db);
+  const auth = new AuthService({ store, config: opts.config, log: opts.log });
+  // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
+  const delivery = opts.delivery ?? noDelivery;
+  const accounts = new AccountService({ store, auth, log: opts.log, delivery });
+  const invitations = new InvitationService({ store, auth, log: opts.log, delivery });
   registerSystemRoutes(registry, { db: opts.db, version: opts.version, migrationsTotal: opts.migrationsTotal, tick, registration: opts.config.registration.mode });
   registerAuthRoutes(registry, auth, { sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
+  registerAccountRoutes(registry, { auth, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
 
   app.use(requestId);

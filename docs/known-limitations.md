@@ -107,3 +107,12 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **No password reset, invitations or email verification yet** (stage 2.2). The Owner role exists but holds no permission rows until the RBAC engine (2.3); until then there are no permission-gated screens, so nothing depends on it.
 - **No audit log yet** (stage 2.4): sign-ins and organization creation are not audited.
 - **Forms are plain controlled React forms**, not React Hook Form, because there are only three small ones.
+
+## Added in stage 2.2 (reset and invitations)
+
+- **No email is sent.** Invitation and password-reset links are shown once to the administrator, who copies and sends them. "Forgot password" cannot send anything: it tells the person to ask their administrator. Email arrives with the outbox in stage 8 through one marked hook (`modules/auth/delivery.ts`).
+- **Only Owners can invite people and generate reset links**, until the permission engine (stage 2.3). The check is marked temporary in `ownerGate.ts` and in the route registry keys are already the real ones.
+- **A link shown once cannot be shown again.** If an administrator loses it they use "New link" (invitations) or generate another reset link; the old one then stops working.
+- **Nobody can join two organizations yet.** A person who already belongs to an organization cannot accept another invitation (`409`); organization switching comes later. A reset link can only be created for a login that belongs to the administrator's own organization.
+- **An invitee's email address is not verified** beyond possession of the link (no email flow yet): whoever holds the link and types the invited address can join. Treat an invitation link like a password and send it privately.
+- Rate limits are in memory (see stage 2.1). The administrator's list of people (`/api/organization/members`) is a temporary view that the people API (2.6) replaces.

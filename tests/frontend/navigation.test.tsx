@@ -82,12 +82,20 @@ describe("routes", () => {
     expect(document.title).toBe("Overview · Zentro");
   });
 
-  it.each(NAV_ITEMS.filter((n) => n.key !== "overview"))("renders $label with an empty state that says what to do", async (n) => {
+  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings"))("renders $label with an empty state that says what to do", async (n) => {
     renderApp(n.path);
     await screen.findByRole("heading", { level: 1, name: n.label });
     expect(screen.getByRole("heading", { level: 2 })).toBeTruthy(); // the empty-state headline
     expect(document.title).toBe(`${n.label} · Zentro`);
     expect(screen.getByText(/Planned for stage \d\.\d/)).toBeTruthy(); // honest about what is not built yet
+  });
+
+  it("renders Settings as a real index (stage 2.2): users and invitations, and profile", async () => {
+    renderApp("/settings");
+    await screen.findByRole("heading", { level: 1, name: "Settings" });
+    expect(document.title).toBe("Settings · Zentro");
+    expect(screen.getByRole("link", { name: /Users and invitations/ }).getAttribute("href")).toBe("/settings/users");
+    expect(screen.getByRole("link", { name: /Profile/ }).getAttribute("href")).toBe("/settings/profile");
   });
 
   it("keeps sub-paths inside their section (deep links work)", async () => {

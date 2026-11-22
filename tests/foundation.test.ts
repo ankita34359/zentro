@@ -16,7 +16,7 @@ describe("/healthz", () => {
       ready: true,
       version: "test",
       node: process.versions.node,
-      migrations: { applied: 3, total: 3 },
+      migrations: { applied: 4, total: 4 },
       registration: "closed",
       lastTick: null,
     });

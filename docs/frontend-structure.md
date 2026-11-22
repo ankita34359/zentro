@@ -81,7 +81,9 @@ Left sidebar exactly as in master section 18, items hidden when the user has no 
 | Settings | `/settings/*` | any of `org.settings`, `roles.view`, `performance.configure`, `audit.view`, `ai.configure`, … (Profile and Notifications always) |
 | (header) Notifications | bell → `/notifications` | always |
 
-Public routes: `/login`, `/register`, `/forgot-password`, `/reset-password/:token`, `/accept-invite`, `/onboarding` (create organization, shown to a signed-in user with no membership).
+Public routes: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/accept-invite`, `/onboarding` (create organization, shown to a signed-in user with no membership). **Changed in 2.2:** the reset token and the invitation code travel in the URL **fragment** (`/reset-password#token=…`, `/accept-invite#code=…`), never in the path or query, so no server, proxy log or Referer header ever sees them.
+
+**Settings (2.2).** `/settings` is a real index (Users and invitations, Profile); `/settings/users` (invitations: invite, copy the one-time link, new link, revoke with a confirmation; people: generate a reset link) and `/settings/profile` (account details and Change password). Until stage 2.3 only Owners can use Users (a plain "only owners can manage users for now" message for everyone else; the server enforces it). `OneTimeLink` shows a link the server will not show again, with a Copy button; it exists only in component state.
 
 Route guards: `RequireAuth` (redirects to `/login?next=`), `RequireCapability(permission)` (renders a 403 page; the API also returns 403/404). Pages are lazy-loaded per route; Recharts and the viaSocket embed are separate chunks.
 

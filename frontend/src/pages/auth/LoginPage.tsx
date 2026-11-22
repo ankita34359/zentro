@@ -10,7 +10,7 @@ export default function LoginPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as { from?: string; registered?: boolean } | null;
+  const state = location.state as { from?: string; registered?: boolean; passwordReset?: boolean } | null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
@@ -49,9 +49,15 @@ export default function LoginPage() {
     >
       <form onSubmit={submit} noValidate className="space-y-4">
         {state?.registered && <FormNotice>Account created. Sign in with your email and password.</FormNotice>}
+        {state?.passwordReset && <FormNotice>Password changed. Sign in with your new password.</FormNotice>}
         {problem && <FormAlert>{problem}</FormAlert>}
         <FormField label="Email" type="email" autoComplete="username" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} />
         <FormField label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} error={errors.password} />
+        <p className="text-right text-label">
+          <Link to="/forgot-password" className="font-medium text-primary-ink underline-offset-4 hover:underline">
+            Forgot your password?
+          </Link>
+        </p>
         <Button type="submit" className="w-full" disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </Button>

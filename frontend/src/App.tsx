@@ -10,7 +10,21 @@ import { DEFAULT_PATH, NAV_ITEMS } from "@/routes/navigation";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RequireAuth } from "@/routes/RequireAuth";
-import { DesignPage, LoginPage, NotFoundPage, OnboardingPage, OverviewPage, RegisterPage, SectionPage } from "@/routes/pages";
+import {
+  AcceptInvitePage,
+  DesignPage,
+  ForgotPasswordPage,
+  LoginPage,
+  NotFoundPage,
+  OnboardingPage,
+  OverviewPage,
+  ProfilePage,
+  RegisterPage,
+  ResetPasswordPage,
+  SectionPage,
+  SettingsPage,
+  UsersPage,
+} from "@/routes/pages";
 
 export function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -43,13 +57,19 @@ export function AppRoutes() {
       <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><LoginPage /></Suspense>} />
       <Route path="/register" element={<Suspense fallback={<PageSkeleton />}><RegisterPage /></Suspense>} />
       <Route path="/onboarding" element={<Suspense fallback={<PageSkeleton />}><OnboardingPage /></Suspense>} />
+      <Route path="/forgot-password" element={<Suspense fallback={<PageSkeleton />}><ForgotPasswordPage /></Suspense>} />
+      <Route path="/reset-password" element={<Suspense fallback={<PageSkeleton />}><ResetPasswordPage /></Suspense>} />
+      <Route path="/accept-invite" element={<Suspense fallback={<PageSkeleton />}><AcceptInvitePage /></Suspense>} />
       <Route element={<AppShell />}>
         {/* Unlisted style guide: deliberately not in the sidebar, and open to everyone. */}
         <Route path="/design" element={<DesignPage />} />
         <Route element={<RequireAuth />}>
           <Route index element={<Navigate to={DEFAULT_PATH} replace />} />
           <Route path="/overview" element={<OverviewPage />} />
-          {NAV_ITEMS.filter((n) => n.key !== "overview").map((n) => (
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/users" element={<UsersPage />} />
+          <Route path="/settings/profile" element={<ProfilePage />} />
+          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings").map((n) => (
             <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
           ))}
         </Route>

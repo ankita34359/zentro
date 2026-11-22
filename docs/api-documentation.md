@@ -31,7 +31,8 @@ Related: [permission-model](permission-model.md) (permission keys and scope), [d
 | 403 | `permission_denied` | Authenticated, permission missing (or action not allowed for this role even if the record is visible) |
 | 404 | `not_found` | Missing, **in another organization, or out of scope** (indistinguishable by design) |
 | 409 | `conflict`, `cycle_detected`, `already_exists`, `immutable`, `last_admin` | State conflict |
-| 410 | `invitation_expired` | |
+| 404 | `invitation_not_found`, `reset_link_invalid` | A link whose code or token is unknown or malformed (nothing else is revealed) |
+| 410 | `invitation_expired`, `invitation_used`, `invitation_revoked`, `reset_link_expired`, `reset_link_used`, `reset_link_revoked` | A link that was real but can no longer be used. The message says which (**2.2**) |
 | 413 | `file_too_large` | Evidence file over cap |
 | 422 | `cohort_mismatch`, `weights_invalid`, `insufficient_data` | Valid request, business rule refuses |
 | 429 | `rate_limited` | Retry later (`Retry-After`) |
@@ -55,11 +56,24 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 | POST | `/api/organizations` **2.1** | session | `{name, timezone?}` onboarding: creates the organization, the caller's membership, the Owner role and the Owner @ organization assignment. Unknown fields (an organization id) are rejected |
 | GET | `/api/organization` **2.1** | session with an organization | The caller's current organization (from the session, never from the request) and its member count |
 | POST | `/api/auth/switch-organization` | session | `{membershipId}` (must belong to the caller) |
-| POST | `/api/auth/forgot-password` | public | Always `202` (no account enumeration) |
-| POST | `/api/auth/reset-password` | token | `{token, password}`; revokes all sessions |
+| POST | `/api/auth/forgot-password` **2.2** | public | `{email}`. Always `202` with the same body (no account enumeration). Nothing is emailed yet: the answer tells the person to ask their administrator |
+| POST | `/api/auth/reset-password` **2.2** | public (the token is the credential) | `{token, password}`; revokes **all** of that person's sessions; single use; does not sign anyone in |
 | POST | `/api/auth/verify-email` | token | When the platform email flow exists |
-| POST | `/api/auth/accept-invitation` | session or register | `{code}` binds the invited membership to the caller |
-| POST | `/api/auth/change-password` | session | `{currentPassword, newPassword}` |
+| POST | `/api/auth/invitation-preview` **2.2** | public (the code is the credential) | `{code}` → `{organizationName, email, displayName, expiresAt}` or 404/410 |
+| POST | `/api/auth/accept-invitation` **2.2** | public, soft session | `{code}` when signed in (the caller's email must be the invited one); `{code, name, email, password}` when not (creates the login, invited email only, **no registration code needed**, signs in) |
+| POST | `/api/auth/change-password` **2.2** | session | `{currentPassword, newPassword}`; signs out the caller's other sessions |
+
+### 2.2 Stage 2.2 details
+
+**Links.** An invitation code is `<organization id>.<256-bit secret>` and a reset token is a 256-bit secret; the database stores only the SHA-256 of each, compared in constant time. The links the administrator copies keep the secret in the URL **fragment**: `/accept-invite#code=…` and `/reset-password#token=…` (the docs' earlier `/reset-password/:token` shape is replaced so the secret is never sent to a server, a proxy log or a Referer header). The server returns the secret once, in the `201`/`200` body, with `Cache-Control: no-store`; the browser composes the link from `window.location.origin`.
+
+**Who may do what (TEMPORARY until stage 2.3).** The administration routes carry their real keys (`invitations.manage`, `people.manage`) in the route registry, but until the permission engine exists the guard allows them only for people holding the **Owner** role (`modules/auth/ownerGate.ts`, marked temporary). Everyone else gets `403 permission_denied`; signed out gets `401`.
+
+**Tenancy.** Administration routes resolve ids inside the caller's organization (from the session): another organization's invitation or person looks like `404 not_found`. No request field can name an organization. The public link routes find the invitation by the hash inside the organization named by the code, and bind only the membership that invitation was issued for.
+
+**Rules.** An invitation is valid 7 days and works once; one open invitation per address per organization (an expired one is replaced); an invited person without a login can accept without the registration code but only with the invited address; a person who already belongs to an organization cannot accept another (`409 already_in_organization`; switching organizations arrives later). A reset link is valid 1 hour, works once, and a newer link replaces older unused ones; resetting revokes every session of that login and clears its sign-in lockout; changing your own password signs out your other sessions and cancels unused reset links. Administrators cannot reset their own password (use change password) or the password of a login that belongs to another organization.
+
+**Rate limits** (in memory). Forgot password: 10 an hour per address and 5 an hour per email; reset: 10 wrong tokens per 15 minutes per address (and 30 calls); invitation preview and accept: 10 wrong codes per 15 minutes and 60 calls per address; change password: 5 wrong current passwords per 15 minutes per person. `429 rate_limited` with `details.retryAfterSeconds`.
 
 ### 2.1 Stage 2.1 details
 
@@ -82,8 +96,10 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 | GET | `/api/organizations/:id` | membership | Must be the active organization |
 | PATCH | `/api/organizations/:id` | `org.settings` | name, timezone, fiscal start |
 | GET / PUT | `/api/organizations/:id/settings/:key` | `org.settings` | Keys: `review_cadence`, `quiet_hours`, `reporting_scope`, `data_sufficiency`, `ai`, `registration`… |
-| GET / POST | `/api/invitations` | `invitations.manage` | POST `{membershipId, email, initialRoleId?}`; the **code/link is returned once** |
-| POST | `/api/invitations/:id/revoke` / `/regenerate` | `invitations.manage` | |
+| GET / POST | `/api/invitations` **2.2** | `invitations.manage` | POST `{email, name?}` creates the (invited) membership and the invitation; the **code is returned once** and only its hash is stored. (`initialRoleId` arrives with role templates in 2.3.) GET lists state: pending, accepted, revoked, expired; never a code |
+| POST | `/api/invitations/:id/revoke` / `/regenerate` **2.2** | `invitations.manage` | Revoke ends the link; regenerate returns a new code once and kills the old link (works for pending, expired and revoked; not accepted) |
+| GET | `/api/organization/members` **2.2** | `people.manage` | The people list for the Users screen (replaced by the people API in 2.6) |
+| POST | `/api/people/:membershipId/reset-link` **2.2** | `people.manage` | Administrator-generated reset link: `{token, expiresAt, displayName}` returned once; valid 1 hour; replaces older unused links; only for a person in the caller's own organization who has a login |
 
 ## 4. People, hierarchy, roles
 
