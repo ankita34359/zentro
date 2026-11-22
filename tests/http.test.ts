@@ -2,7 +2,7 @@ import request from "supertest";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { newId } from "../backend/src/lib/ids.js";
-import { makeTestApp, type TestApp } from "./helpers/app.js";
+import { makeTestApp, ORIGIN, type TestApp } from "./helpers/app.js";
 import { createLogger } from "../backend/src/lib/logger.js";
 import { notFound } from "../backend/src/lib/errors.js";
 import { sendData } from "../backend/src/http/envelope.js";
@@ -45,7 +45,7 @@ const withRoutes = () =>
 describe("envelope, request ids, errors", () => {
   it("wraps success in { data, meta.requestId } and echoes X-Request-Id", async () => {
     t = withRoutes();
-    const res = await request(t.app).post("/api/_t/echo").send({ name: "Ada" });
+    const res = await request(t.app).post("/api/_t/echo").set("Origin", ORIGIN).send({ name: "Ada" });
     expect(res.status).toBe(201);
     expect(res.body).toEqual({ data: { name: "Ada" }, meta: { requestId: res.headers["x-request-id"] } });
   });
@@ -66,7 +66,7 @@ describe("envelope, request ids, errors", () => {
 
   it("rejects unknown fields and bad values with validation_failed, naming paths and never echoing values", async () => {
     t = withRoutes();
-    const res = await request(t.app).post("/api/_t/echo").send({ name: "A", extra: "SENSITIVE-VALUE" });
+    const res = await request(t.app).post("/api/_t/echo").set("Origin", ORIGIN).send({ name: "A", extra: "SENSITIVE-VALUE" });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("validation_failed");
     const paths = res.body.error.details.map((d: { path: string }) => d.path);
@@ -76,10 +76,10 @@ describe("envelope, request ids, errors", () => {
 
   it("answers malformed JSON with invalid_json and oversized bodies with 413", async () => {
     t = withRoutes();
-    const bad = await request(t.app).post("/api/_t/echo").set("Content-Type", "application/json").send("{not json");
+    const bad = await request(t.app).post("/api/_t/echo").set("Origin", ORIGIN).set("Content-Type", "application/json").send("{not json");
     expect(bad.status).toBe(400);
     expect(bad.body.error.code).toBe("invalid_json");
-    const big = await request(t.app).post("/api/_t/echo").send({ name: "x".repeat(200_000) });
+    const big = await request(t.app).post("/api/_t/echo").set("Origin", ORIGIN).send({ name: "x".repeat(200_000) });
     expect(big.status).toBe(413);
     expect(big.body.error.code).toBe("payload_too_large");
   });

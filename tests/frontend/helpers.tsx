@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
 import { AppProviders, AppRoutes } from "@/App";
 
 export const HEALTH_OK = {
@@ -35,8 +35,37 @@ export function stubMatchMedia(initialDark: boolean, reducedMotion = false) {
   };
 }
 
-export function stubFetch(handler: (url: string) => Response | Promise<Response>) {
-  const fn = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(handler(String(input))));
+export const ME_READY = {
+  user: { id: "u1", email: "ada@example.com", name: "Ada Lovelace" },
+  organization: { id: "o1", name: "Acme Robotics", slug: "acme-robotics", timezone: "UTC" },
+  membership: { id: "m1", displayName: "Ada Lovelace" },
+  roles: ["owner"],
+  capabilities: [],
+  needsOnboarding: false,
+};
+export const ME_ONBOARDING = { ...ME_READY, organization: null, membership: null, roles: [], needsOnboarding: true };
+
+/** Who the stubbed server says is signed in (null = nobody). Reset to "signed in with an organization" before every test. */
+let signedInAs: unknown = ME_READY;
+export const setMe = (me: unknown) => {
+  signedInAs = me;
+};
+afterEach(() => {
+  signedInAs = ME_READY;
+});
+export const envelope = (data: unknown, status = 200) => json({ data, meta: { requestId: "req_test" } }, status);
+export const apiError = (status: number, code: string, message: string, details?: unknown) =>
+  json({ error: { code, message, ...(details ? { details } : {}) }, meta: { requestId: "req_test" } }, status);
+
+export function stubFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+  const fn = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    // Pages that are not about signing in get a signed-in person unless the test says otherwise.
+    if (url === "/api/auth/me" && (init?.method ?? "GET") === "GET") {
+      return Promise.resolve(signedInAs ? envelope(signedInAs) : apiError(401, "unauthenticated", "Sign in required"));
+    }
+    return Promise.resolve(handler(url, init));
+  });
   vi.stubGlobal("fetch", fn);
   return fn;
 }

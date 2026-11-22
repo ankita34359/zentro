@@ -7,5 +7,9 @@ export const SectionPage = lazyWithPreload(() => import("@/pages/SectionPage"));
 export const NotFoundPage = lazyWithPreload(() => import("@/pages/NotFoundPage"));
 export const DesignPage = lazyWithPreload(() => import("@/pages/DesignPage"));
 
+export const LoginPage = lazyWithPreload(() => import("@/pages/auth/LoginPage"));
+export const RegisterPage = lazyWithPreload(() => import("@/pages/auth/RegisterPage"));
+export const OnboardingPage = lazyWithPreload(() => import("@/pages/auth/OnboardingPage"));
+
 /** Every page a visitor can reach from the sidebar. The unlisted /design style guide is left out on purpose. */
 export const PREFETCH_PAGES = [OverviewPage, SectionPage, NotFoundPage];

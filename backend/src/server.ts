@@ -40,6 +40,9 @@ if (!loaded.ok) {
     log,
     staticDir: path.join(root, "dist"),
   });
+  if (config.registration.mode === "closed") {
+    log.warn("registration is closed", { hint: "set REGISTRATION_MODE=code and REGISTRATION_CODE (at least 8 characters) to allow sign-ups" });
+  }
   app.listen(port, "0.0.0.0", () => {
     log.info("listening", {
       port,
@@ -49,6 +52,7 @@ if (!loaded.ok) {
       preMigrationCopy: result.backupFile ? path.basename(result.backupFile) : null,
       cronConfigured: Boolean(cronSecret),
       appAddressSet: Boolean(config.appUrl),
+      registration: config.registration.mode,
       staticBuild: fs.existsSync(path.join(root, "dist", "index.html")),
     });
   });

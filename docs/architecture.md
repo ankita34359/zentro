@@ -294,10 +294,10 @@ Secrets go **only** on Embarko's App setup page (never in the repo or chat); the
 | --- | --- | --- | --- |
 | `PORT`, `DATA_DIR`, `APP_NAME`, `APP_VERSION`, `CRON_SECRET` | Embarko | auto | see section 3 |
 | `NODE_ENV=production` | you | yes (prod) | cookie `Secure`, refuse demo seed scripts locally in prod |
-| `APP_URL` | you | yes from 2.1 (optional in 1.2) | public origin, no trailing slash; used for cookie flags, same-origin check, links in emails. Validated now if set; becomes required when sessions arrive (2.1) so that stage 1.2 needs only the two secrets. |
+| `APP_URL` | you | **still optional after 2.1** (was planned as required) | public origin, no trailing slash; used for the same-origin check and links in emails. Validated if set. Kept optional in 2.1: without it the same-origin check compares with the request's own `Host` / `X-Forwarded-Host`, so a missing variable can never put the live site into holding mode. It becomes required when emailed links arrive (2.2). |
 | `SESSION_SECRET` | you | yes | ≥ 32 chars; signs session JWTs |
 | `ENCRYPTION_KEY` | you | yes | A long random string (at least 32 characters, different from `SESSION_SECRET`; a password-manager value works). The AES-256 key is derived from it with HKDF-SHA256, so it does not have to be raw base64 bytes. Used for AES-256-GCM on stored viaSocket secrets (flow URLs, `auth_id`s). *Changed in 1.2 from "32 random bytes (base64)": easier to type, same strength.* |
-| `REGISTRATION_MODE` | you | no | `open` (default) / `invite_only` / `code` with `REGISTRATION_CODE`; protects a public showcase link |
+| `REGISTRATION_MODE` | you | no | `code` with `REGISTRATION_CODE` (at least 8 characters) is the live setting (owner decision 3). `open` only when set explicitly. **Unset, wrong or incomplete means closed** (fail closed): registration is refused with a generic message, the rest of the site is unaffected and the server never goes into holding mode because of it. `invite_only` arrives with 2.2. Changed in 2.1 from "default open". |
 | `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` | you | for integrations | falls back to `INTEGRATIONS_*` if Embarko's capability is used |
 | `VIASOCKET_EMAIL_FLOW_URL` | you | optional | platform email flow for password reset / invitation emails; without it those are admin-copied links |
 | `AI_PROVIDER` | you | optional | `viasocket` (default when viaSocket is configured) / `anthropic` / `none` |

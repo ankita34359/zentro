@@ -4,9 +4,9 @@ import { FAKE_ENV } from "./helpers/app.js";
 
 describe("config validation", () => {
   it("accepts the two required settings and applies defaults", () => {
-    const r = loadConfig({ ...FAKE_ENV });
+    const r = loadConfig({ SESSION_SECRET: FAKE_ENV.SESSION_SECRET, ENCRYPTION_KEY: FAKE_ENV.ENCRYPTION_KEY });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.config).toMatchObject({ logLevel: "info", trustProxy: 1, appUrl: undefined });
+    if (r.ok) expect(r.config).toMatchObject({ logLevel: "info", trustProxy: 1, appUrl: undefined, registration: { mode: "closed" } });
   });
 
   it("names every missing setting, and only names", () => {

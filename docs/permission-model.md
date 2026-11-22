@@ -278,8 +278,8 @@ SQLite has no Row Level Security. The replacement is layered and tested rather t
 
 | Flow | Behavior |
 | --- | --- |
-| Register | Email + password (≥10 chars). Subject to `REGISTRATION_MODE` (`open`, `invite_only`, `code`). Creates a `users` row only. |
-| Create organization | Creates `organizations`, the creator's membership, seeded roles from templates, default designations and scoring models, and assigns the creator **Owner @ organization**. All in one transaction. |
+| Register | Email + password (≥10 chars, ≤128). Subject to `REGISTRATION_MODE` (`code` is the live setting; `open` only when set explicitly; `invite_only` arrives with invitations in 2.2 and is closed until then). Anything missing or wrong is **closed** (fail closed, never holding mode). Creates a `users` row only; nobody is signed in. *Built in 2.1.* |
+| Create organization | Creates `organizations`, the creator's membership, seeded roles from templates, default designations and scoring models, and assigns the creator **Owner @ organization**. All in one transaction. *2.1 seeds only the Owner role and its assignment (a role row with no permission rows yet: the permission catalogue, the other eight templates and the Owner's full permission set arrive in 2.3, which also back-fills organizations created in 2.1).* A person who already has an organization cannot create a second one until switching exists. |
 | Login | Verify scrypt hash (constant-time), rate-limited per IP and per account. Creates a `sessions` row. If the user has several memberships, the session's `active_organization_id` is the last used, or the user picks one. |
 | Switch organization | `POST /api/auth/switch-organization` with a membership the user actually holds; updates the session row. |
 | Logout | Revokes the session row; cookie cleared. |
@@ -287,8 +287,8 @@ SQLite has no Row Level Security. The replacement is layered and tested rather t
 | Password reset | Token (hash stored, 1 hour, single use). Emailed if the platform email flow exists; otherwise an administrator generates a reset link for a member and copies it (the Curevia fallback). Reset revokes all the user's sessions. |
 | Email verification | Optional (master: "where supported"). On when the platform email flow exists; unverified users can log in but cannot accept an invitation until verified when `REQUIRE_VERIFIED_EMAIL=true`. |
 | Session expiry | Sliding 7 days, absolute 30 days (configurable). Expired session rows purged by the housekeeping job. |
-| Cookie | `zentro_session`: JWT HS256 `{sub, sid, iat, exp}`, `httpOnly`, `SameSite=Lax`, `Secure` in production, path `/`. |
-| CSRF | Non-GET requests must carry a matching `Origin`/`Referer` and JSON content type. |
+| Cookie | `zentro_session`: JWT HS256 `{sub, sid, iat, exp}`, `httpOnly`, `SameSite=Lax`, `Secure` (always, except plain http on the developer's own machine), path `/`. `sid` is random; the database keeps only its SHA-256, so a database copy holds nothing replayable. *Built in 2.1.* |
+| CSRF | Non-GET requests under `/api` must carry a matching `Origin` (or `Referer`); JSON-only bodies; `SameSite=Lax`. *Built in 2.1.* Until 2.3, a route that needs a permission key is refused for everyone (`authorize` fails closed). |
 
 ---
 

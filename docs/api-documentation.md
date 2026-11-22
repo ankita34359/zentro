@@ -44,18 +44,34 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 
 ## 2. Authentication
 
+**Built in stage 2.1** (marked **2.1**): register, login, logout, me, create organization and `GET /api/organization`. Everything else in this table arrives in 2.2 or later. Details of the built routes are in section 2.1 below.
+
 | Method | Path | Access | Notes |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | public, subject to `REGISTRATION_MODE` | `{email, password, name, registrationCode?}` creates a user only |
-| POST | `/api/auth/login` | public | `{email, password}` → sets cookie, returns `me` |
-| POST | `/api/auth/logout` | session | Revokes the session row |
-| GET | `/api/auth/me` | session | User, memberships, active organization, **capabilities** (permission keys with scope modes), flags (`aiConfigured`, `viasocketConfigured`, `demoLoaded`) |
+| POST | `/api/auth/register` **2.1** | public, subject to `REGISTRATION_MODE` | `{email, password, name, registrationCode}` creates a user only (nobody is signed in by it) |
+| POST | `/api/auth/login` **2.1** | public | `{email, password}` → sets cookie, returns `me` |
+| POST | `/api/auth/logout` **2.1** | public (always clears the cookie; only revokes the caller's own session) | Revokes the session row |
+| GET | `/api/auth/me` **2.1** | session | User, organization (or `null` before onboarding), membership, role keys, `capabilities` (empty until 2.3), `needsOnboarding`. Later: flags (`aiConfigured`, `viasocketConfigured`, `demoLoaded`) |
+| POST | `/api/organizations` **2.1** | session | `{name, timezone?}` onboarding: creates the organization, the caller's membership, the Owner role and the Owner @ organization assignment. Unknown fields (an organization id) are rejected |
+| GET | `/api/organization` **2.1** | session with an organization | The caller's current organization (from the session, never from the request) and its member count |
 | POST | `/api/auth/switch-organization` | session | `{membershipId}` (must belong to the caller) |
 | POST | `/api/auth/forgot-password` | public | Always `202` (no account enumeration) |
 | POST | `/api/auth/reset-password` | token | `{token, password}`; revokes all sessions |
 | POST | `/api/auth/verify-email` | token | When the platform email flow exists |
 | POST | `/api/auth/accept-invitation` | session or register | `{code}` binds the invited membership to the caller |
 | POST | `/api/auth/change-password` | session | `{currentPassword, newPassword}` |
+
+### 2.1 Stage 2.1 details
+
+**Registration.** `REGISTRATION_MODE=code` plus `REGISTRATION_CODE` (at least 8 characters) on Embarko. Anything else (unset, too-short code, unknown mode) means **closed**: `POST /api/auth/register` answers `403 registration_unavailable` and nothing else in the site changes (no holding mode; existing logins work). A wrong code, a missing code and a closed registration all give the **same** message: "Registration is not available with those details. Check the registration code and try again." The code is compared in constant time. An email that already exists gets the same `202` as a new one (the first account and password are kept). `/healthz` shows `registration: "code" | "open" | "closed"` (never the code).
+
+**Cookie and session.** `zentro_session` is an HS256 JWT `{sub, sid, iat, exp}` (`sid` is a random id; the database stores only its SHA-256 as `sessions.id`). `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` everywhere except plain http on the developer's own machine. Every request loads the session row: revoked, past the sliding 7 days or past the absolute 30 days means `401` and the stale cookie is cleared. The organization is the one the **session row** names, and the person must still hold an active membership in it.
+
+**Same-origin check.** Every non-GET/HEAD/OPTIONS request under `/api` must carry an `Origin` (or, if absent, a `Referer`) naming this site: the address in `APP_URL` when set, otherwise the request's own `Host` / `X-Forwarded-Host`. Otherwise `403 cross_origin`. (`APP_URL` stays optional in 2.1 so the live site cannot be sent into holding mode by it.)
+
+**Rate limits** (in memory, per process; a restart forgets them). Failed logins: 8 per account and 30 per address in 15 minutes. Registration: 20 attempts per address per hour; wrong codes: 5 per address in 15 minutes and 40 across everyone per hour. When a limit trips: `429 rate_limited` with `details.retryAfterSeconds`; each repeat doubles the block, up to a cap. A successful login clears that account's failures.
+
+**Errors.** `401 invalid_credentials` ("Invalid email or password", the same for a wrong password, an unknown email and a disabled account); `403 registration_unavailable`; `403 cross_origin`; `403 no_organization` (signed in but not yet in an organization); `409 already_in_organization`; `429 rate_limited`; validation as in section 1. Responses that carry personal data send `Cache-Control: no-store`.
 
 ## 3. Organizations and settings
 

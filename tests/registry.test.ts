@@ -47,7 +47,16 @@ describe("route registry: every route declares its protection", () => {
   it("lists the registered routes with their markers (basis for the generated matrices in 2.3)", () => {
     t = makeTestApp();
     const rows = t.registry.list().map((r) => `${r.method.toUpperCase()} ${r.path} ${r.access.kind}`).sort();
-    expect(rows).toEqual(["GET /api/cron/tick cron", "GET /healthz public"]);
+    expect(rows).toEqual([
+      "GET /api/auth/me baseline",
+      "GET /api/cron/tick cron",
+      "GET /api/organization baseline",
+      "GET /healthz public",
+      "POST /api/auth/login public",
+      "POST /api/auth/logout public",
+      "POST /api/auth/register public",
+      "POST /api/organizations baseline",
+    ]);
   });
 });
 

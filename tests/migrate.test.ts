@@ -27,9 +27,9 @@ describe("migration runner", () => {
   it("applies the real migrations once and is idempotent", () => {
     const { db } = openDatabase(mk());
     const first = migrate(db, migrationsDir);
-    expect(first.applied).toEqual(["0001_spike_counters.sql", "0002_scheduled_job_runs.sql"]);
+    expect(first.applied).toEqual(["0001_spike_counters.sql", "0002_scheduled_job_runs.sql", "0003_auth_core.sql"]);
     expect(first.backupFile).toBeNull(); // fresh database: nothing to protect
-    expect(migrate(db, migrationsDir)).toMatchObject({ applied: [], total: 2, backupFile: null });
+    expect(migrate(db, migrationsDir)).toMatchObject({ applied: [], total: 3, backupFile: null });
     db.close();
   });
 

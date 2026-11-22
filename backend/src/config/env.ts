@@ -7,6 +7,31 @@ export interface Config {
   logLevel: LogLevel;
   trustProxy: number;
   nodeEnv: string;
+  registration: Registration;
+}
+
+/**
+ * Who may create an account. FAIL CLOSED: anything but a complete, valid setting means "closed". A missing or wrong
+ * setting here never puts the server into holding mode (only SESSION_SECRET and ENCRYPTION_KEY do that); existing
+ * logins keep working and only new registrations are refused.
+ */
+export type Registration =
+  | { mode: "closed"; code?: undefined }
+  | { mode: "code"; code: string }
+  | { mode: "open"; code?: undefined };
+
+/** The registration code must be at least this long, so a trivial one cannot be guessed. */
+export const MIN_REGISTRATION_CODE_LENGTH = 8;
+
+/** Exported for tests. `REGISTRATION_MODE`: `code` (needs REGISTRATION_CODE), `open`; anything else is closed. */
+export function parseRegistration(env: NodeJS.ProcessEnv): Registration {
+  const mode = (env.REGISTRATION_MODE ?? "").trim().toLowerCase();
+  if (mode === "open") return { mode: "open" };
+  if (mode === "code") {
+    const code = env.REGISTRATION_CODE ?? "";
+    if (code.trim().length >= MIN_REGISTRATION_CODE_LENGTH) return { mode: "code", code: code.trim() };
+  }
+  return { mode: "closed" };
 }
 
 export type ConfigResult =
@@ -66,7 +91,15 @@ export function loadConfig(env: NodeJS.ProcessEnv): ConfigResult {
   if (missing.length > 0 || invalid.length > 0) return { ok: false, missing, invalid };
   return {
     ok: true,
-    config: { sessionSecret, encryptionKey, appUrl, logLevel, trustProxy, nodeEnv: env.NODE_ENV ?? "development" },
+    config: {
+      sessionSecret,
+      encryptionKey,
+      appUrl,
+      logLevel,
+      trustProxy,
+      nodeEnv: env.NODE_ENV ?? "development",
+      registration: parseRegistration(env),
+    },
   };
 }
 
