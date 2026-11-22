@@ -74,7 +74,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 **M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[x]` 1.5 Performance hygiene (added at the owner's request; live on `dfc4401`, checked by the owner)
 
-**M2 Auth and organization** · `[~]` 2.1 Auth core (deployed, live on `ea52494`, waiting for the owner's check) · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
+**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
 **M3 OKR and KPI** · `[ ]` 3.1 Objectives and key results · `[ ]` 3.2 Alignment and health · `[ ]` 3.3 KPI definitions · `[ ]` 3.4 KPI measurements and trends · `[ ]` 3.5 OKR/KPI polish
 
@@ -491,3 +491,8 @@ Covers the follow-ups listed under "Stage 1.4 closed" (items 1 to 3). Nothing fr
 
 **Deployed (2026-11-22, owner said "yes, deploy" and approved the env-vars call).** The owner typed the registration code in chat when asked. It was sent only to the Embarko env-vars API (`PUT /api/apps/zentro/env-vars`, `apply: true`, only `REGISTRATION_MODE=code` and `REGISTRATION_CODE`; the other four variables untouched, confirmed by listing the keys). The code is not in the repo, logs, tests or this file. Then `scripts/embarko-deploy.sh zentro` uploaded `ea52494`: build success, live. `/healthz`: version `ea52494`, migrations **3 of 3**, `registration: "code"`, tick ok. Live probes (no account created): `/api/auth/me` signed out 401; login with the site's own Origin and wrong credentials 401 `invalid_credentials` (so the same-origin check works behind Embarko's proxy without `APP_URL`); a foreign Origin 403 `cross_origin`; register with a wrong code 403 generic `registration_unavailable`; `/login`, `/register`, `/overview`, `/design` 200.
 **Not yet verified (needs the owner):** the click list below on the live site. Tick 2.1 only after the owner confirms; merge to `main` only with a separate approval.
+
+### Stage 2.1 closed (2026-11-22)
+- Owner reported the live checks passed. Stage 2.1 ticked.
+- Owner approved this one merge: `claude/stage-2-1` → `main` by pull request. Live runs `ea52494`; registration is `code` (the code lives only in Embarko's environment variables).
+- **Exact next step: stage 2.2 (password reset and invitations)** in a new session from `main`. Likely needs nothing from the owner unless the viaSocket email flow is wanted (`VIASOCKET_EMAIL_FLOW_URL`). Open follow-ups: make `APP_URL` required when emailed links arrive (2.2), drop the unused `spike_counters` table in its own migration, replace the placeholder sidebar visibility with the real capability check (2.3), ask Embarko about the bottom-left badge covering the phone-menu version footer.
