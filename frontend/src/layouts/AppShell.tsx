@@ -7,7 +7,9 @@ import { StatusPill } from "@/components/common/StatusPill";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { publicConfig } from "@/config/public";
+import { prefetchWhenIdle } from "@/lib/preload";
 import { titleFor } from "@/routes/navigation";
+import { PREFETCH_PAGES } from "@/routes/pages";
 import { PageTransition } from "@/motion/PageTransition";
 import { SidebarNav } from "./SidebarNav";
 
@@ -28,10 +30,20 @@ export function AppShell() {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const firstRender = useRef(true);
 
+  // Phone menu: start fetching it right after the first paint (not when idle), because it is the first thing a phone
+  // user taps. Page chunks wait for the browser to be idle after the first load, one at a time, so they never
+  // compete with the first paint.
   useEffect(() => {
-    if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 1023px)").matches) return;
-    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500));
-    idle(fetchSheet);
+    const narrow = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1023px)").matches;
+    let frame2 = 0;
+    // Two animation frames: the first lets the browser paint the page, the second runs right after that paint.
+    const frame1 = narrow ? window.requestAnimationFrame(() => (frame2 = window.requestAnimationFrame(fetchSheet))) : 0;
+    const cancel = prefetchWhenIdle(PREFETCH_PAGES.map((page) => () => page.preload()));
+    return () => {
+      window.cancelAnimationFrame(frame1);
+      window.cancelAnimationFrame(frame2);
+      cancel();
+    };
   }, [fetchSheet]);
 
   useEffect(() => {

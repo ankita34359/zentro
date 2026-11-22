@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-21 · Blueprint approved · Stages 1.1, 1.2, 1.3 and 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · live on version `fce10f1` and merged to `main` · next stage 2.1 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-22 · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
 
 ---
 
@@ -72,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner)
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[x]` 1.5 Performance hygiene (added at the owner's request; live on `dfc4401`, checked by the owner)
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -123,6 +123,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | 1.4 complete | The owner confirmed the live checks passed for the design/motion stage and the Aurora indigo colour refresh. Ticked. Pull request `claude/stage-1-4` → `main` opened and merged with the owner's explicit approval. No further stage started. |
 | 2026-11-21 | 1.4 colour refresh deployed | Owner said "yes, deploy". Uploaded `fce10f1` (99 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Colour refresh deploy record"). Not ticked; not merged. |
 | 2026-11-21 | 1.4 colour refresh built | The owner found the colours still dull and asked me to choose a direction: "Aurora indigo". Frontend only, same branch `claude/stage-1-4`. 163 tests pass on Node 20.20.2 from a clean checkout; contrast measured from real pixels. **Not deployed, not merged.** Details in "Stage 1.4 colour and depth refresh" below. |
+| 2026-11-22 | 1.5 built | Owner added stage **1.5 "Performance hygiene (added at the owner's request)"**: compression, cache headers, quiet logs, idle prefetch. Branch `claude/stage-1-5` from `origin/main` (`6024888`). 185 tests pass on Node 20.20.2. Details in "Stage 1.5" below. |
 | 2026-11-21 | 1.4 deployed | Owner said "yes, deploy". Uploaded `81f6d5c` (98 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.4 deploy record"). Not ticked until the owner confirms; not merged. |
 | 2026-11-21 | 1.4 added and built | The owner asked for a new stage 1.4 "Visual design and motion" (the UI felt dull). Recorded in `docs/milestones.md` and here. Branch `claude/stage-1-4` from `main` (`4641378`). Frontend only. 156 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium. **Not deployed.** Details in "Stage 1.4" below. |
 | 2026-11-21 | 1.3 complete | The owner confirmed the live checks passed. Ticked. Pull request `claude/stage-1-3` → `main` opened and merged with the owner's explicit approval. Milestone 1 done. Nothing further started. |
@@ -415,3 +416,50 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
   3. Prefetch the lazy page chunks while idle (first visit to each section commits about 300 ms late on a real network) and keep the phone-menu prefetch.
   4. Make `APP_URL` required, drop the unused `spike_counters` table in a migration of its own, and replace the placeholder sidebar visibility with the real capability check (all from earlier notes).
   5. Ask Embarko whether its bottom-left "Embarko" badge, which covers the phone-menu version footer, can be moved or removed; otherwise move that footer.
+
+### Stage 1.5 Performance hygiene (added at the owner's request) (2026-11-22, in progress)
+
+Covers the follow-ups listed under "Stage 1.4 closed" (items 1 to 3). Nothing from the owner is needed (no secret).
+
+**What was implemented**
+- **Compression** (`backend/src/http/compress.ts`): the `compression` package (1.8.2; it uses Node's built-in zlib for brotli, so no native code; `npm run check:node20` still passes for all 384 locked packages). Brotli when the browser accepts it, else gzip; text only; responses under 1 KB are left alone; **`/api` is never compressed** (small JSON that can hold cookies and secrets later; avoids BREACH-style risk).
+- **Cache headers** (`backend/src/http/cacheHeaders.ts`, `spa.ts`): hashed files under `/assets` (Vite's `name-<8 chars>.ext`) get `public, max-age=31536000, immutable`. `index.html`, the app-shell fallback for deep links, unhashed files (favicon) and `/healthz` get `no-cache` (browser must revalidate; unchanged files answer 304 through their weak ETag). `/api` answers carry no cache header from us.
+- **Quiet logs** (`requestLog.ts`): requests that match no route and are **not** under `/api` (static files, the app shell) log at `debug` unless they fail (status 400 or more). Unknown `/api` paths and every real API route stay at `info`.
+- **Idle prefetch** (`frontend/src/lib/preload.ts`, `routes/pages.ts`, `AppShell.tsx`): `lazyWithPreload` gives each page a `preload()` that shares one download with the real navigation (a failed download is forgotten so the visit can retry). After the window `load` event and when the browser is idle, the shell fetches one chunk at a time: the phone menu first (narrow screens only), then Overview, section and 404 pages. `/design` (unlisted) is not prefetched.
+- **Security headers:** the repo sets none today (no helmet; only `x-powered-by` is disabled and `X-Request-Id` is sent). Both are kept and tested on compressed and static answers. No header was removed; adding security headers is not part of this stage (belongs to 9.1).
+
+**Files.** New: `backend/src/http/{compress,cacheHeaders}.ts`, `frontend/src/lib/preload.ts`, `frontend/src/routes/pages.ts`, `tests/performance.test.ts`, `tests/frontend/prefetch.test.tsx`. Changed: `backend/src/{app.ts, http/spa.ts, http/requestLog.ts}`, `frontend/src/{App.tsx, layouts/AppShell.tsx}`, `package.json` and lock (+`compression`, +dev `@types/compression`), `docs/milestones.md`, this file.
+
+**Tests (Node 20.20.2).** `npm ci` → `npm run typecheck` → `npm run build` → `npm test`: 23 files, **185 of 185 pass** (163 before, 22 new): brotli and gzip bytes on the wire decode back exactly, identity when nothing is accepted, text types compressed, tiny responses and `/api` (200 and 404) not compressed, per-path cache headers, 304 on revalidation, no cache header on `/api`, `x-powered-by`/request id/SPA fallback/JSON 404 unchanged, static and shell requests at debug and none in an info-level log, API lines still info, prefetch (shared download, retry after failure, waits for idle and for `load`, in order, survives a failed chunk, cancels, shell preloads all pages, phone menu opens at once).
+
+
+**Deployed (2026-11-22, owner said "yes, deploy").** `scripts/embarko-deploy.sh zentro` uploaded `347c762` (103 files): `action: updated`, build success, live. `/healthz` shows version `347c762`, migrations 2 of 2, tick ok.
+
+**Before and after, live site, from this sandbox (Chromium, cold cache, median of 3; same script both times).**
+
+| Measure | Before (`fce10f1`) | After (`347c762`) |
+| --- | --- | --- |
+| First load, total bytes on the wire (incl. 2.5 s of idle prefetch) | 559,460 | **231,468** |
+| First load, JavaScript on the wire | 456,355 | **164,237** |
+| Entry script on the wire | 351,414 (no compression) | **114,431** (brotli) |
+| Hashed `/assets` files | `public, max-age=0` | `public, max-age=31536000, immutable` |
+| `/overview` (index.html) | `public, max-age=0` | `no-cache` (still brotli from the platform, 6,085 bytes, same as before) |
+| `/healthz` | no header | `no-cache` |
+| `/api/*` | no cache header, not compressed | unchanged |
+| First visit to Leadership (first section) | 389 ms | **71 ms** |
+| First visit to OKRs / My Work | 62 / 63 ms | 62 / 64 ms |
+| Phone menu tapped 300 ms after load | 842 ms | **248 ms** (one run 855 ms, see below) |
+| Phone menu tapped 3 s after load | 102 ms | 98 ms |
+
+**Notes.** The 15 requests after include the page chunks fetched by the idle prefetch (before: 12). Fonts (woff2) are already compressed, so they stay the same size. Embarko's own HTML handling still works with the app's `no-cache` HTML (same 6,085-byte brotli answer). Still not instant: a phone tap in the first moments after load, before the browser has gone idle, can still wait for the 12 KB menu chunk (248 ms median, one 855 ms outlier); a second or more later it is about 100 ms. Possible refinement if wanted: start the menu chunk straight after first paint instead of waiting for idle.
+
+**Next.** The owner checks the live list; then tick 1.5. Merge to `main` only with a separate approval. After that, stage 2.1.
+
+**Phone menu follow-up (2026-11-22, owner asked; built, tests pass, not deployed).** The menu chunk now starts loading right after the first paint (two animation frames, narrow screens only) instead of waiting for browser idle; page chunks still wait for idle. One file changed (`frontend/src/layouts/AppShell.tsx`) plus its test (`tests/frontend/prefetch.test.tsx`, which fails on the old code and passes on the new). 185 of 185 tests pass on Node 20.20.2; typecheck and build ok. Local throttled run (400 ms latency, 300 KB/s, 5 runs) could not tell old from new (tap at 0 ms: 179 vs 162 ms; at 300 ms: 101 vs 100 ms), because on localhost the idle callback fires almost at once. The live numbers are the real check and are recorded after the deploy.
+
+**Phone menu follow-up deployed (2026-11-22, owner said "yes, deploy").** Uploaded `dfc4401`: build success, live, `/healthz` ok (migrations 2 of 2). Live numbers, same script, from this sandbox: tap 300 ms after load, 3 runs **366, 354, 356 ms** (median 356), then a second batch of 6 runs **352, 344, 95, 251, 873, 877 ms** (median 352); before the fix the 3 runs were 248, 855, 245 ms (median 248). Tap 3 s after load: about 100 ms (unchanged). First visit to sections 74 / 73 / 73 ms; first-load bytes unchanged (231,480). **Result: no clear improvement.** A tap in the first 300 ms is dominated by the network round trip for the 12 KB chunk (this sandbox sees about 0.4 to 0.85 s per request), so the numbers swing between about 100 ms (chunk already there) and about 870 ms (a tap that has to wait for the chunk). The change is correct (chunk requested earlier, test proves it) but cannot beat the round trip. Only remaining lever: a `modulepreload` hint in `index.html` so the browser fetches the chunk in parallel with the entry script (costs desktop visitors 12 KB they never use unless done by a media query). Not done; awaiting the owner's decision.
+
+### Stage 1.5 closed (2026-11-22)
+- Owner reported the live checks passed. Stage 1.5 ticked. Owner decided: **no `modulepreload` hint; the current phone-menu behaviour is accepted** (an early tap can wait for the 12 KB chunk, about 100 ms once it has arrived).
+- Owner approved this one merge: `claude/stage-1-5` → `main` by pull request. Live runs `dfc4401`.
+- **Exact next step: stage 2.1 (auth core)** in a new session from `main` (needs the owner to type `REGISTRATION_CODE`). Remaining small follow-ups from the 1.4 list: make `APP_URL` required, drop the unused `spike_counters` table in its own migration, replace the placeholder sidebar visibility with the real capability check, and ask Embarko about the bottom-left badge covering the phone-menu version footer.

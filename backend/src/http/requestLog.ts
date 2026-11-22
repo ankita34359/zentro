@@ -11,7 +11,11 @@ export function requestLog(log: Logger) {
     res.on("finish", () => {
       const ms = Number((process.hrtime.bigint() - start) / 1_000_000n);
       const route = typeof req.route?.path === "string" ? `${req.baseUrl}${req.route.path}` : "unmatched";
-      const quiet = route === "/healthz" || route === "/api/cron/tick"; // polled constantly; keep the log short
+      // Quiet (debug) unless it failed: polled routes, and anything outside /api that matched no route (static files,
+      // the app shell, probes). That is most of the traffic and would crowd Embarko's small recent-log window.
+      // Unknown /api paths stay at info: they are the useful "client called something that does not exist" lines.
+      const outsideApi = route === "unmatched" && !req.originalUrl.startsWith("/api/") && req.originalUrl !== "/api";
+      const quiet = route === "/healthz" || route === "/api/cron/tick" || outsideApi;
       (quiet && res.statusCode < 400 ? log.debug : log.info).call(log, "request", {
         requestId: res.locals.requestId,
         method: req.method,

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { lazy, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { MotionProvider } from "@/motion/MotionProvider";
@@ -7,11 +7,7 @@ import { AppShell } from "@/layouts/AppShell";
 import { ApiError } from "@/services/api";
 import { DEFAULT_PATH, NAV_ITEMS } from "@/routes/navigation";
 
-// Pages load on demand (one small chunk each), so the first paint only pays for the shell.
-const OverviewPage = lazy(() => import("@/pages/OverviewPage"));
-const SectionPage = lazy(() => import("@/pages/SectionPage"));
-const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
-const DesignPage = lazy(() => import("@/pages/DesignPage"));
+import { DesignPage, NotFoundPage, OverviewPage, SectionPage } from "@/routes/pages";
 
 export function createQueryClient(): QueryClient {
   return new QueryClient({
