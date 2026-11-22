@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-22 · Stage 2.1 complete and merged · Stage 2.2 (reset and invitations) complete (owner-verified live on `fe85552`) and merged to `main` (PR #8, `8ebb100`) · next stage 2.3 awaiting the owner's approval of the plan · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-23 · Blueprint approved · Milestone 1 (stages 1.1 to 1.5) complete · Stages 2.1 (auth core), 2.2 (reset and invitations) and 2.3 (RBAC engine, Delete my account, restore-at-start-up) complete and live-checked by the owner; 2.3 merged to `main` · live on `5422c57` · next stage 2.4 (role editor, assignments, audit) in progress on its own branch · live at https://zentro.embarko.app
 
 ---
 
