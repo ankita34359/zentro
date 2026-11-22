@@ -74,7 +74,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 **M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[x]` 1.5 Performance hygiene (added at the owner's request; live on `dfc4401`, checked by the owner)
 
-**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[~]` 2.3 RBAC engine (deployed, live on `5422c57`, waiting for the owner's check) · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
+**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[x]` 2.3 RBAC engine (live on `5422c57`, checked by the owner; includes Delete my account and the restore-at-start-up setting) · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
 **M3 OKR and KPI** · `[ ]` 3.1 Objectives and key results · `[ ]` 3.2 Alignment and health · `[ ]` 3.3 KPI definitions · `[ ]` 3.4 KPI measurements and trends · `[ ]` 3.5 OKR/KPI polish
 
@@ -588,3 +588,8 @@ Also in 2.4 as planned: assign a role to someone who joined with no role (an "As
 **Live facts reported by the owner (Users page):** one organization **Walkover** is visible to them: ankita (Owner), piyush (joined, no role), karishma (pending invitation, no account). The live database holds **2 organizations** (from the start-up log), so a second organization with an account the Users page does not show exists (probably from the stage 2.1 click test, step 10).
 
 **No-role check (answered):** a person with no role keeps OKRs & Goals, Team Performance and Performance Intelligence in the sidebar because those items need no permission. Those three pages are static placeholders ("Planned for stage …") and the API has **no OKR, KPI, task, performance or team route at all**, so they show no data of any kind (neither their own nor the organization's). Nothing needed fixing. Guard tests added: the person with no role is refused every permission route and can use every baseline route; the only baseline GET routes are `/api/auth/me`, `/api/organization` and the delete-account preview (so a later stage cannot slip an organization-wide data route in as "baseline" without failing a test); and on the three pages the browser asks the server for nothing but who they are and the health check. **Rule for later stages:** own-data routes are baseline and read only the caller's own rows; anything wider is a permission route.
+
+### Stage 2.3 closed (2026-11-23)
+- Owner reported the live click test passed. Stage 2.3 ticked.
+- Owner approved this one merge: `claude/stage-2-3` → `main` by pull request, if all checks pass. Live runs `5422c57`.
+- **Next: stage 2.4** (role editor, assignments, audit) on a new branch from the updated `main`, using the five decisions recorded above.
