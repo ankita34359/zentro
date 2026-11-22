@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-22 · Stage 1.5 "Performance hygiene (added at the owner's request)" built and tested on branch `claude/stage-1-5`, not deployed, not merged (live is still `fce10f1`) · Blueprint approved · Stages 1.1, 1.2, 1.3 and 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · live on version `fce10f1` and merged to `main` · next stage 2.1 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-22 · Stage 1.5 "Performance hygiene (added at the owner's request)" built and tested on branch `claude/stage-1-5`, not deployed, not merged (live now on `347c762`) · Blueprint approved · Stages 1.1, 1.2, 1.3 and 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · live on version `fce10f1` and merged to `main` · next stage 2.1 not started · live at https://zentro.embarko.app
 
 ---
 
@@ -72,7 +72,7 @@ SQLite + SQL migrations (D1) · one Express app (D2) · `tsc` → `build/` (D3, 
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
-**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[~]` 1.5 Performance hygiene (added at the owner's request; built and tested on `claude/stage-1-5`, not deployed)
+**M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[~]` 1.5 Performance hygiene (added at the owner's request; deployed, live on `347c762`, waiting for the owner's check)
 
 **M2 Auth and organization** · `[ ]` 2.1 Auth core · `[ ]` 2.2 Reset and invitations · `[ ]` 2.3 RBAC engine · `[ ]` 2.4 Roles UI · `[ ]` 2.5 Organization structure · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
 
@@ -123,7 +123,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-21 | 1.4 complete | The owner confirmed the live checks passed for the design/motion stage and the Aurora indigo colour refresh. Ticked. Pull request `claude/stage-1-4` → `main` opened and merged with the owner's explicit approval. No further stage started. |
 | 2026-11-21 | 1.4 colour refresh deployed | Owner said "yes, deploy". Uploaded `fce10f1` (99 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Colour refresh deploy record"). Not ticked; not merged. |
 | 2026-11-21 | 1.4 colour refresh built | The owner found the colours still dull and asked me to choose a direction: "Aurora indigo". Frontend only, same branch `claude/stage-1-4`. 163 tests pass on Node 20.20.2 from a clean checkout; contrast measured from real pixels. **Not deployed, not merged.** Details in "Stage 1.4 colour and depth refresh" below. |
-| 2026-11-22 | 1.5 built | Owner added stage **1.5 "Performance hygiene (added at the owner's request)"**: compression, cache headers, quiet logs, idle prefetch. Branch `claude/stage-1-5` from `origin/main` (`6024888`). 185 tests pass on Node 20.20.2. **Not deployed, not merged.** Details in "Stage 1.5" below. |
+| 2026-11-22 | 1.5 built | Owner added stage **1.5 "Performance hygiene (added at the owner's request)"**: compression, cache headers, quiet logs, idle prefetch. Branch `claude/stage-1-5` from `origin/main` (`6024888`). 185 tests pass on Node 20.20.2. Details in "Stage 1.5" below. |
 | 2026-11-21 | 1.4 deployed | Owner said "yes, deploy". Uploaded `81f6d5c` (98 files): `action: updated`, `claimed:true`, build success, live. Live checks passed (see "Stage 1.4 deploy record"). Not ticked until the owner confirms; not merged. |
 | 2026-11-21 | 1.4 added and built | The owner asked for a new stage 1.4 "Visual design and motion" (the UI felt dull). Recorded in `docs/milestones.md` and here. Branch `claude/stage-1-4` from `main` (`4641378`). Frontend only. 156 tests pass on Node 20.20.2 from a clean checkout; checked in real Chromium. **Not deployed.** Details in "Stage 1.4" below. |
 | 2026-11-21 | 1.3 complete | The owner confirmed the live checks passed. Ticked. Pull request `claude/stage-1-3` → `main` opened and merged with the owner's explicit approval. Milestone 1 done. Nothing further started. |
@@ -432,4 +432,25 @@ Covers the follow-ups listed under "Stage 1.4 closed" (items 1 to 3). Nothing fr
 
 **Tests (Node 20.20.2).** `npm ci` → `npm run typecheck` → `npm run build` → `npm test`: 23 files, **185 of 185 pass** (163 before, 22 new): brotli and gzip bytes on the wire decode back exactly, identity when nothing is accepted, text types compressed, tiny responses and `/api` (200 and 404) not compressed, per-path cache headers, 304 on revalidation, no cache header on `/api`, `x-powered-by`/request id/SPA fallback/JSON 404 unchanged, static and shell requests at debug and none in an info-level log, API lines still info, prefetch (shared download, retry after failure, waits for idle and for `load`, in order, survives a failed chunk, cancels, shell preloads all pages, phone menu opens at once).
 
-**Measured before (live `fce10f1`, from this sandbox, Chromium 3 runs each, median):** see "Before and after" below once deployed.
+
+**Deployed (2026-11-22, owner said "yes, deploy").** `scripts/embarko-deploy.sh zentro` uploaded `347c762` (103 files): `action: updated`, build success, live. `/healthz` shows version `347c762`, migrations 2 of 2, tick ok.
+
+**Before and after, live site, from this sandbox (Chromium, cold cache, median of 3; same script both times).**
+
+| Measure | Before (`fce10f1`) | After (`347c762`) |
+| --- | --- | --- |
+| First load, total bytes on the wire (incl. 2.5 s of idle prefetch) | 559,460 | **231,468** |
+| First load, JavaScript on the wire | 456,355 | **164,237** |
+| Entry script on the wire | 351,414 (no compression) | **114,431** (brotli) |
+| Hashed `/assets` files | `public, max-age=0` | `public, max-age=31536000, immutable` |
+| `/overview` (index.html) | `public, max-age=0` | `no-cache` (still brotli from the platform, 6,085 bytes, same as before) |
+| `/healthz` | no header | `no-cache` |
+| `/api/*` | no cache header, not compressed | unchanged |
+| First visit to Leadership (first section) | 389 ms | **71 ms** |
+| First visit to OKRs / My Work | 62 / 63 ms | 62 / 64 ms |
+| Phone menu tapped 300 ms after load | 842 ms | **248 ms** (one run 855 ms, see below) |
+| Phone menu tapped 3 s after load | 102 ms | 98 ms |
+
+**Notes.** The 15 requests after include the page chunks fetched by the idle prefetch (before: 12). Fonts (woff2) are already compressed, so they stay the same size. Embarko's own HTML handling still works with the app's `no-cache` HTML (same 6,085-byte brotli answer). Still not instant: a phone tap in the first moments after load, before the browser has gone idle, can still wait for the 12 KB menu chunk (248 ms median, one 855 ms outlier); a second or more later it is about 100 ms. Possible refinement if wanted: start the menu chunk straight after first paint instead of waiting for idle.
+
+**Next.** The owner checks the live list; then tick 1.5. Merge to `main` only with a separate approval. After that, stage 2.1.
