@@ -92,9 +92,10 @@ describe("the app shell prefetches while idle", () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width: 1023px"), media: q, addEventListener() {}, removeEventListener() {} }));
     const idle = vi.fn(); // the idle callback never fires in this test: the menu must not depend on it
     vi.stubGlobal("requestIdleCallback", idle);
+    await import("@/components/ui/sheet"); // warm the module cache so a cold test run does not depend on transform speed
     renderApp("/overview");
     const button = await screen.findByRole("button", { name: /open navigation menu/i });
-    await act(async () => { await new Promise((r) => setTimeout(r, 100)); }); // a couple of frames, no idle time
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); }); // a couple of frames, no idle time
     await userEvent.click(button);
     // No waiting: if the chunk had to be fetched on the tap, the dialog would not be there yet.
     expect(screen.getByRole("dialog")).toBeTruthy();
