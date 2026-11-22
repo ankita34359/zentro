@@ -56,7 +56,7 @@ if (!loaded.ok) {
       preMigrationCopy: result.backupFile ? path.basename(result.backupFile) : null,
       cronConfigured: Boolean(cronSecret),
       appAddressSet: Boolean(config.appUrl),
-      registration: config.registration.mode,
+      signUps: config.registration.mode,
       staticBuild: fs.existsSync(path.join(root, "dist", "index.html")),
     });
   });

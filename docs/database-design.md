@@ -240,6 +240,8 @@ Notation: `col` = column; `FK→t` = foreign key; **UQ** = unique; `?` = nullabl
 
 **Built in migration `0004_invitations_and_reset.sql` (stage 2.2).** `invitations` (organization-owned: `membership_id`, `email` NOCASE, `code_hash` UNIQUE, `initial_role_id` reserved, `invited_by_membership_id`, `expires_at`, `accepted_at`, `revoked_at`; a partial unique index allows one open invitation per address per organization) and `auth_tokens` (global: `user_id`, `purpose`, `token_hash` UNIQUE, `expires_at`, `used_at`, `revoked_at` (added: "replaced by a newer link"), `created_by_user_id`). Only SHA-256 hashes of the secrets are stored. The invitation code is `<organization id>.<secret>` so the public accept route knows which organization's rows to search.
 
+**Built in migration `0005_permissions_and_role_grants.sql` (stage 2.3).** `permissions` (global; `id` = `key`; the catalogue) and `role_permissions` (organization-owned: `role_id`, `permission_id`, `scope_mode`, with the **primary key (role_id, permission_id, scope_mode)**: wider than the `PK(role_id, permission_id)` sketched above, because "reports" and "my_teams" can both be granted). Additive only: the migration creates the two tables, inserts the catalogue and gives each existing Owner role every permission at `all_in_scope`; it changes nothing that exists, so the previous version keeps running on the upgraded database. `invitations.initial_role_id` (added in 0004) is now used. "Delete my account" removes an organization's rows from every table in `ORGANIZATION_TABLES_IN_DELETE_ORDER` (`erasure.ts`); a test fails if a later stage adds a table with an `organization_id` column that is not in that list.
+
 ### 3.2 Organization hierarchy
 
 | Table | Columns | Notes |

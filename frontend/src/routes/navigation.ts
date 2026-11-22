@@ -33,8 +33,8 @@ export interface NavItem {
   /** One line shown under the page title. */
   description: string;
   /**
-   * Permission key that will gate this item once sessions and roles exist (stages 2.1 and 2.3).
-   * Until then every item is shown. Hiding an item is a convenience only; the server enforces access.
+   * Permission key the person must hold for the item to show in the sidebar (stage 2.3). Hiding an item is a
+   * convenience only; the server enforces access. Items without a key always show.
    */
   requires?: string;
 }
