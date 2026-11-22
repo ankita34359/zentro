@@ -54,6 +54,21 @@ describe("the sidebar follows what the person may do (a convenience; the server 
   });
 });
 
+describe("a person with no role and the pages they can still open", () => {
+  it("OKRs, Team Performance and Performance Intelligence show only the placeholder: the browser asks the server for nothing but who they are and the health check", async () => {
+    setMe(ME_NO_ROLE);
+    const f = server();
+    for (const [path, title] of [["/okrs", "OKRs & Goals"], ["/team-performance", "Team Performance"], ["/performance", "Performance Intelligence"]] as const) {
+      const { unmount } = renderApp(path);
+      expect(await screen.findByRole("heading", { level: 1, name: title })).toBeTruthy();
+      expect(screen.getByText(/Planned for stage \d\.\d/)).toBeTruthy(); // no data, no numbers: an honest "not built yet"
+      unmount();
+    }
+    const urls = new Set(f.mock.calls.map((c) => String(c[0])));
+    expect([...urls].filter((u) => u !== "/api/auth/me" && u !== "/healthz")).toEqual([]); // no organization data was requested
+  });
+});
+
 describe("pages that need a permission", () => {
   it("/settings/users and /settings/roles show a clear message (and ask nothing) for someone without the permission", async () => {
     setMe(ME_NO_ROLE);

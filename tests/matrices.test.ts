@@ -52,6 +52,22 @@ describe("permission matrix: every role template × every route that needs a per
     expect(cells).toBe(routes.length * ROLE_TEMPLATES.length);
   });
 
+  it("a person with NO role (joined before roles existed) is refused every permission route and can use every baseline route", async () => {
+    t = makeAuthApp();
+    const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
+    const nobody = (await addPerson(t.app, owner, "norole@example.com", undefined, "No Role")).cookie;
+    for (const route of t.registry.list().filter((r) => r.access.kind === "permission")) {
+      expect((await call(route, nobody, {})).status, `no role: ${route.method} ${route.path}`).toBe(403);
+    }
+    for (const route of t.registry.list().filter((r) => r.access.kind === "baseline" && r.path !== "/api/organizations")) {
+      expect([401, 403], `no role: ${route.method} ${route.path}`).not.toContain((await call(route, nobody, {})).status);
+    }
+    // and the API holds no organization-wide data route at all that a baseline person could reach: every route that
+    // returns lists of people or records is a permission route (this fails if someone adds a data route as baseline)
+    const baselineGets = t.registry.list().filter((r) => r.access.kind === "baseline" && r.method === "get").map((r) => r.path).sort();
+    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/organization"]);
+  });
+
   it("every role can use the baseline routes without any permission", async () => {
     t = makeAuthApp();
     const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
