@@ -74,6 +74,8 @@ describe("Settings → Roles: the editor", () => {
     expect(sent.grants).toHaveLength(3);
     expect(sent.confirmSensitive).toBeUndefined();
     expect((await screen.findByText(/Saved\. People holding this role/)).textContent).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 300)); // the list is re-read after saving: the notice must stay
+    expect(screen.getByText(/Saved\. People holding this role/)).toBeTruthy();
   });
 
   it("cells the catalogue does not allow are disabled (roles.manage is 'everyone' only)", async () => {

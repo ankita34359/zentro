@@ -42,11 +42,15 @@ export default function RolesPage() {
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
+    // The grid is re-read after a save: start the draft from the saved state (the success notice must survive that).
     setDraft(new Set(original));
     setConfirmSensitive(false);
-    setProblem(null);
-    setSaved(false);
   }, [original]);
+  useEffect(() => {
+    // Choosing another role starts clean.
+    setSaved(false);
+    setProblem(null);
+  }, [activeId]);
 
   const added = [...draft].filter((c) => !original.has(c));
   const removed = [...original].filter((c) => !draft.has(c));
