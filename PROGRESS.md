@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-22 · Stage 2.1 (auth core) built and tested on branch `claude/stage-2-1`, not deployed, not merged (live now on `ea52494`) · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-22 · Stage 2.1 (auth core) complete (owner-verified live on `ea52494`) and merged to `main` · next stage 2.2 not started · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
 
 ---
 
