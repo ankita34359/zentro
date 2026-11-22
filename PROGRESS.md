@@ -2,7 +2,7 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-22 · Stage 2.1 complete and merged · Stage 2.2 (reset and invitations) complete (owner-verified live on `fe85552`; merge to `main` pending the owner's approval) · next stage 2.3 not started · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
+Last updated: 2026-11-22 · Stage 2.1 complete and merged · Stage 2.2 (reset and invitations) complete (owner-verified live on `fe85552`) and merged to `main` (PR #8, `8ebb100`) · next stage 2.3 awaiting the owner's approval of the plan · Blueprint approved · Stages 1.1, 1.2, 1.3, 1.4 and 1.5 (performance hygiene, added at the owner's request) complete; live on `dfc4401`; 1.5 merged to `main`. Stages 1.1 to 1.4 complete (Milestone 1 done, including the owner-requested 1.4 visual design and motion with the Aurora indigo colour refresh) · next stage 2.1 not started · live at https://zentro.embarko.app
 
 ---
 
@@ -533,6 +533,10 @@ Covers the follow-ups listed under "Stage 1.4 closed" (items 1 to 3). Nothing fr
 - Pull request `claude/stage-2-2` → `main` is opened; it is merged only after the owner says yes. Live already runs the code (`fe85552`). Pull requests #6 (stage 1.5) and #7 (stage 2.1) are already merged into `main`, so this one targets `main` directly and no base change is needed.
 - **Exact next step: stage 2.3 (RBAC engine)** in a new session from `main`, after the owner approves the plan. It deletes `backend/src/modules/auth/ownerGate.ts`.
 
+### After stage 2.2: merge, decisions, rollback script (2026-11-22)
+- Owner approved the merge: pull request #8 (`claude/stage-2-2` → `main`) merged as `8ebb100`. #6 (stage 1.5) and #7 (stage 2.1) were already merged; no base branch needed changing. Live runs `fe85552`.
+- **Owner decisions:** (1) do **not** build "Delete organization" now; build a small **"Delete my account" at the end of stage 2.3**; an Owner removing a person goes into the people-management part of 2.3/2.4. (2) add `scripts/embarko-rollback.sh` (done, on branch `claude/rollback-script`, dry-run tested; it lists deployments, rolls back with `previous` or a deploymentId, polls the status and prints `/healthz`; it never prints the token). (3) before stage 2.3 touches the live database: backup and rehearsal options were laid out for the owner; the plan for 2.3 is approved only after that answer.
+- Test accounts on the live site (the owner's) cannot be deleted until "Delete my account" exists; the last Owner of an organization cannot delete their account while others remain (see the open question to the owner about an empty organization).
 ### Stage 2.3 RBAC engine and Delete my account (2026-11-23, built, not deployed)
 
 **Decisions recorded (owner)**
