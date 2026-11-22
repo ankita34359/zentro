@@ -1,4 +1,5 @@
 import { pruneRuns } from "../../db/jobRuns.js";
+import { AuthTokensRepository } from "../../modules/auth/repositories/authTokens.js";
 import { SessionsRepository } from "../../modules/auth/repositories/sessions.js";
 import type { JobDef } from "../registry.js";
 
@@ -11,5 +12,6 @@ export const housekeepingJob: JobDef = {
   run: ({ db, now }) => ({
     prunedJobRuns: pruneRuns(db, new Date(now.getTime() - KEEP_DAYS * 86_400_000)),
     purgedSessions: new SessionsRepository(db).purgeExpired(now.toISOString()),
+    purgedResetTokens: new AuthTokensRepository(db).purgeExpired(new Date(now.getTime() - 86_400_000).toISOString()),
   }),
 };

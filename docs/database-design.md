@@ -238,6 +238,8 @@ Notation: `col` = column; `FK→t` = foreign key; **UQ** = unique; `?` = nullabl
 
 **Built in migration `0003_auth_core.sql` (stage 2.1).** Tables `users`, `organizations`, `organization_memberships`, `roles`, `user_role_assignments` and `sessions`, with only the columns 2.1 needs (later stages ALTER them). Added columns not in the table above: `users.default_organization_id` (the organization a new session opens in, so login needs no cross-organization query). `sessions.id` is the SHA-256 of the random session id inside the cookie's JWT. `permissions`, `role_permissions`, `invitations`, `auth_tokens`, `organization_settings` and `user_preferences` arrive in 2.2 to 2.4. Organization-owned tables are reached only through the tenant-scoped handle (the lint requires `organization_id = @organization_id`); the global tables are read by the ids the session carries.
 
+**Built in migration `0004_invitations_and_reset.sql` (stage 2.2).** `invitations` (organization-owned: `membership_id`, `email` NOCASE, `code_hash` UNIQUE, `initial_role_id` reserved, `invited_by_membership_id`, `expires_at`, `accepted_at`, `revoked_at`; a partial unique index allows one open invitation per address per organization) and `auth_tokens` (global: `user_id`, `purpose`, `token_hash` UNIQUE, `expires_at`, `used_at`, `revoked_at` (added: "replaced by a newer link"), `created_by_user_id`). Only SHA-256 hashes of the secrets are stored. The invitation code is `<organization id>.<secret>` so the public accept route knows which organization's rows to search.
+
 ### 3.2 Organization hierarchy
 
 | Table | Columns | Notes |

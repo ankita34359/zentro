@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { ApiError, setUnauthenticatedHandler } from "@/services/api";
-import { createOrganization as createOrganizationRequest, getMe, login as loginRequest, logout as logoutRequest, type Me } from "@/services/auth";
+import { acceptInvitation as acceptInvitationRequest, createOrganization as createOrganizationRequest, getMe, login as loginRequest, logout as logoutRequest, type Me } from "@/services/auth";
 
 /** loading: not known yet · signedOut: no session · needsOnboarding: signed in, no organization · ready: signed in with an organization */
 export type AuthStatus = "loading" | "signedOut" | "needsOnboarding" | "ready" | "error";
@@ -13,6 +13,7 @@ interface AuthValue {
   login: (email: string, password: string) => Promise<Me>;
   logout: () => Promise<void>;
   createOrganization: (name: string, timezone: string) => Promise<Me>;
+  acceptInvitation: (body: { code: string; name?: string; email?: string; password?: string }) => Promise<Me>;
   retry: () => void;
 }
 
@@ -73,11 +74,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [client],
   );
 
+  const acceptInvitation = useCallback(
+    async (body: { code: string; name?: string; email?: string; password?: string }) => {
+      const me = await acceptInvitationRequest(body);
+      client.setQueryData(ME_KEY, me);
+      return me;
+    },
+    [client],
+  );
+
   const value = useMemo<AuthValue>(() => {
     const me = query.data ?? null;
     const status: AuthStatus = query.isPending ? "loading" : query.isError ? "error" : !me ? "signedOut" : me.needsOnboarding ? "needsOnboarding" : "ready";
-    return { status, me, error: query.error, login, logout, createOrganization, retry: () => void query.refetch() };
-  }, [query, login, logout, createOrganization]);
+    return { status, me, error: query.error, login, logout, createOrganization, acceptInvitation, retry: () => void query.refetch() };
+  }, [query, login, logout, createOrganization, acceptInvitation]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

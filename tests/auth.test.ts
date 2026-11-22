@@ -101,7 +101,7 @@ describe("register", () => {
     closed.cleanup();
     // same database, registration switched off: build a second app on the first database
     const { createApp } = await import("../backend/src/app.js");
-    const again = createApp({ db: t.db, config: testConfig(), version: "t", cronSecret: undefined, migrationsTotal: 3, log: createLogger("error", () => undefined) });
+    const again = createApp({ db: t.db, config: testConfig(), version: "t", cronSecret: undefined, migrationsTotal: 4, log: createLogger("error", () => undefined) });
     expect((await post(again.app, "/api/auth/login", { email: "ada@example.com", password: PASSWORD })).status).toBe(200);
     expect((await post(again.app, "/api/auth/register", body({ email: "new@example.com" }))).status).toBe(403);
   });
@@ -483,7 +483,7 @@ describe("the registry marks every new route", () => {
   it("every auth route declares its access, and the baseline ones answer 401 with no session", async () => {
     t = makeAuthApp();
     const rows = t.registry.list().filter((r) => r.path.startsWith("/api/auth") || r.path.startsWith("/api/org"));
-    expect(rows.length).toBe(6);
+    expect(rows.length).toBe(12);
     for (const r of rows.filter((x) => x.access.kind === "baseline")) {
       const res = await (r.method === "get" ? get(t.app, r.path) : post(t.app, r.path, {}));
       expect(res.status, r.path).toBe(401);

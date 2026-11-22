@@ -40,6 +40,15 @@ export class OrganizationsRepository {
 }
 
 /** Everything below is organization-owned: it goes through the tenant-scoped handle, whose organization id comes from the session. */
+export interface MemberListRow {
+  id: string;
+  display_name: string;
+  work_email: string | null;
+  status: string;
+  user_id: string | null;
+  login_email: string | null;
+}
+
 export class MembershipsRepository {
   constructor(private readonly tdb: TenantDb) {}
 
@@ -54,6 +63,54 @@ export class MembershipsRepository {
     this.tdb.run(
       "INSERT INTO organization_memberships (id, organization_id, user_id, display_name, work_email, status, created_at, updated_at) VALUES (@id, @organization_id, @userId, @displayName, @workEmail, 'active', @now, @now)",
       m,
+    );
+  }
+
+  findById(id: string): MembershipRow | undefined {
+    return this.tdb.get<MembershipRow>(
+      "SELECT id, organization_id, user_id, display_name, status FROM organization_memberships WHERE organization_id = @organization_id AND id = @id",
+      { id },
+    );
+  }
+
+  /** A person invited by email: no login yet (user_id stays NULL until they accept). */
+  insertInvited(m: { id: string; displayName: string; workEmail: string; now: string }): void {
+    this.tdb.run(
+      "INSERT INTO organization_memberships (id, organization_id, user_id, display_name, work_email, status, created_at, updated_at) VALUES (@id, @organization_id, NULL, @displayName, @workEmail, 'invited', @now, @now)",
+      m,
+    );
+  }
+
+  /** Binds the invited person to a login. Only an unbound, invited membership can be bound, once. */
+  bindUser(id: string, userId: string, displayName: string, now: string): boolean {
+    return (
+      this.tdb.run(
+        "UPDATE organization_memberships SET user_id = @userId, display_name = @displayName, status = 'active', archived_at = NULL, updated_at = @now WHERE organization_id = @organization_id AND id = @id AND user_id IS NULL AND status = 'invited'",
+        { id, userId, displayName, now },
+      ).changes === 1
+    );
+  }
+
+  /** An invitation was revoked or replaced: the person who never joined leaves the list. */
+  retireInvited(id: string, now: string): void {
+    this.tdb.run(
+      "UPDATE organization_memberships SET status = 'left', archived_at = @now, updated_at = @now WHERE organization_id = @organization_id AND id = @id AND user_id IS NULL AND status = 'invited'",
+      { id, now },
+    );
+  }
+
+  /** Back to invited (a revoked or expired invitation was regenerated). */
+  reinvite(id: string, now: string): void {
+    this.tdb.run(
+      "UPDATE organization_memberships SET status = 'invited', archived_at = NULL, updated_at = @now WHERE organization_id = @organization_id AND id = @id AND user_id IS NULL AND status IN ('invited', 'left')",
+      { id, now },
+    );
+  }
+
+  /** Active or invited people with the login's email, for the Users screen. */
+  listPeople(): MemberListRow[] {
+    return this.tdb.all<MemberListRow>(
+      "SELECT m.id AS id, m.display_name AS display_name, m.work_email AS work_email, m.status AS status, m.user_id AS user_id, u.email AS login_email FROM organization_memberships m LEFT JOIN users u ON u.id = m.user_id WHERE m.organization_id = @organization_id AND m.archived_at IS NULL ORDER BY m.display_name COLLATE NOCASE",
     );
   }
 
@@ -80,6 +137,17 @@ export class RolesRepository {
         { membershipId, today },
       )
       .map((x) => x.key);
+  }
+
+  /** Role keys held right now by every person in the organization, for the Users screen. */
+  keysByMembership(today: string): Map<string, string[]> {
+    const rows = this.tdb.all<{ membership_id: string; key: string }>(
+      "SELECT a.membership_id AS membership_id, r.key AS key FROM user_role_assignments a JOIN roles r ON r.id = a.role_id AND r.organization_id = @organization_id WHERE a.organization_id = @organization_id AND a.revoked_at IS NULL AND a.valid_from <= @today AND (a.valid_to IS NULL OR a.valid_to >= @today) AND r.archived_at IS NULL ORDER BY r.key",
+      { today },
+    );
+    const out = new Map<string, string[]>();
+    for (const r of rows) out.set(r.membership_id, [...(out.get(r.membership_id) ?? []), r.key]);
+    return out;
   }
 
   assign(a: { id: string; membershipId: string; roleId: string; now: string }): void {

@@ -43,7 +43,7 @@ export class AuthService {
   private readonly users: AuthStore["users"];
   private readonly sessions: AuthStore["sessions"];
   private readonly orgs: AuthStore["orgs"];
-  private readonly now: () => number;
+  readonly now: () => number;
   /** Failed logins per account (email) and per address. */
   readonly loginByAccount: RateLimiter;
   readonly loginByIp: RateLimiter;
@@ -66,9 +66,9 @@ export class AuthService {
     this.codeFailGlobal = new RateLimiter({ max: 40, windowMs: 60 * min, blockMs: 15 * min, maxBlockMs: 120 * min }, clock);
   }
 
-  private iso = (t = this.now()): string => new Date(t).toISOString();
+  readonly iso = (t = this.now()): string => new Date(t).toISOString();
 
-  private tooMany(ms: number): HttpError {
+  tooMany(ms: number): HttpError {
     const seconds = Math.max(1, Math.ceil(ms / 1000));
     return new HttpError(429, "rate_limited", "Too many attempts. Wait a little and try again.", { retryAfterSeconds: seconds });
   }
@@ -123,25 +123,31 @@ export class AuthService {
     }
     this.loginByAccount.reset(accountKey);
 
-    const t = this.now();
-    const secret = newSessionSecret();
-    const absolute = t + SESSION_ABSOLUTE_MS;
     // The session opens in the organization the person last used, but only if they are still an active member there.
     let organizationId: string | null = null;
     if (user.default_organization_id) {
       const tdb = this.tenantFor(user.default_organization_id, user.id, "login");
       if (this.o.store.memberships(tdb).findActiveForUser(user.id)) organizationId = user.default_organization_id;
     }
+    const opened = this.openSession(user.id, organizationId);
+    this.users.touchLogin(user.id, this.iso());
+    return { user, ...opened };
+  }
+
+  /** Creates the session row for a login (sign-in, or accepting an invitation) and returns the secret for the cookie. */
+  openSession(userId: string, organizationId: string | null): { sessionSecret: string; absoluteExpiresAt: number } {
+    const t = this.now();
+    const secret = newSessionSecret();
+    const absolute = t + SESSION_ABSOLUTE_MS;
     this.sessions.insert({
       id: sessionRowId(secret),
-      userId: user.id,
+      userId,
       organizationId,
       now: this.iso(t),
       expiresAt: this.iso(Math.min(t + SESSION_SLIDING_MS, absolute)),
       absoluteExpiresAt: this.iso(absolute),
     });
-    this.users.touchLogin(user.id, this.iso(t));
-    return { user, sessionSecret: secret, absoluteExpiresAt: absolute };
+    return { sessionSecret: secret, absoluteExpiresAt: absolute };
   }
 
   logout(auth: AuthContext): void {
@@ -181,7 +187,7 @@ export class AuthService {
     return { userId, sessionId: id, organizationId, membershipId };
   }
 
-  private tenantFor(organizationId: string, userId: string, sessionId: string): TenantDb {
+  tenantFor(organizationId: string, userId: string, sessionId: string): TenantDb {
     const ctx: TenantCtx = { userId, membershipId: "", organizationId, sessionId, requestId: "" };
     return this.o.store.tenant(ctx);
   }
@@ -196,6 +202,26 @@ export class AuthService {
 
   tenantDb(ctx: TenantCtx): TenantDb {
     return this.o.store.tenant(ctx);
+  }
+
+  /** The context for a session row we just changed (the secret is not needed: the caller already authenticated it this request). */
+  authenticateRow(sessionRowIdValue: string, userId: string): AuthContext {
+    const s = this.sessions.find(sessionRowIdValue);
+    let organizationId = s?.active_organization_id ?? null;
+    let membershipId: string | null = null;
+    if (organizationId) {
+      const m = this.o.store.memberships(this.tenantFor(organizationId, userId, sessionRowIdValue)).findActiveForUser(userId);
+      if (m) membershipId = m.id;
+      else organizationId = null;
+    }
+    return { userId, sessionId: sessionRowIdValue, organizationId, membershipId };
+  }
+
+  /** TEMPORARY (2.2): does the person hold the Owner role right now? Replaced by the permission engine in 2.3. */
+  isOwner(auth: AuthContext): boolean {
+    if (!auth.organizationId || !auth.membershipId) return false;
+    const tdb = this.tenantFor(auth.organizationId, auth.userId, auth.sessionId);
+    return this.o.store.roles(tdb).keysForMembership(auth.membershipId, this.iso()).includes("owner");
   }
 
   // ---------- me ----------

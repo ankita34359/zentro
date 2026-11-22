@@ -43,3 +43,18 @@ export async function signUpWithOrg(app: Express, email: string, orgName: string
   if (r.status !== 201) throw new Error(`create org failed ${r.status}`);
   return c;
 }
+
+/** Owner invites a person; returns the one-time code and the invitation. */
+export async function invite(app: Express, ownerCookie: string, email: string, name?: string) {
+  const res = await post(app, "/api/invitations", { email, ...(name ? { name } : {}) }, ownerCookie);
+  if (res.status !== 201) throw new Error(`invite failed ${res.status} ${JSON.stringify(res.body)}`);
+  return { code: res.body.data.code as string, invitation: res.body.data.invitation as { id: string; membershipId: string; status: string; expiresAt: string }, res };
+}
+
+/** The invited person (no account yet) accepts; returns the response and their cookie. */
+export async function acceptNew(app: Express, code: string, email: string, name = "Invited Person", password = PASSWORD) {
+  const res = await post(app, "/api/auth/accept-invitation", { code, email, name, password });
+  return { res, cookie: cookieFrom(res) };
+}
+
+export const acceptAs = (app: Express, code: string, cookie: string) => post(app, "/api/auth/accept-invitation", { code }, cookie);

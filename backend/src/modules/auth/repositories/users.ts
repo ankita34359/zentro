@@ -41,6 +41,11 @@ export class UsersRepository {
       .run({ userId, organizationId, now });
   }
 
+  /** Replaces the password hash (reset or change). */
+  setPassword(userId: string, passwordHash: string, now: string): void {
+    this.db.prepare("UPDATE users SET password_hash = @passwordHash, updated_at = @now WHERE id = @userId").run({ userId, passwordHash, now });
+  }
+
   touchLogin(userId: string, now: string): void {
     this.db.prepare("UPDATE users SET last_login_at = @now WHERE id = @userId").run({ userId, now });
   }
