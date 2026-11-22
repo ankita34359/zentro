@@ -125,3 +125,12 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **No way to remove another person yet.** "Delete my account" is the only way someone leaves; an administrator removing a person comes with people management (2.4 to 2.6).
 - **Delete my account keeps an empty tombstone** for a login that created an organization that continues (the organization needs its creator reference); no email, name or password remains. When an organization is deleted with its last member, nothing of it is kept. Every later stage that adds an organization-owned table must add it to `erasure.ts` (a test enforces this).
 - **Restoring from the automatic backup is a setting, not a button.** The backups (`<data folder>/backups/pre-<migration>-<time>.db`, the newest three kept, on the same disk as the database, so they do not protect against losing the whole volume) cannot be fetched or placed by hand on Embarko. The recovery path is the one-time **`RESTORE_BACKUP`** environment variable (see architecture section 11): set it to a backup's file name and restart. It takes a fresh backup of the current data first, restores, logs what it did, and runs once per value. Embarko's own "no backups" rule still applies to the platform: only these copies exist.
+
+## Added in stage 2.4 (role editor, assignments, audit)
+
+- **Audit entries keep what they said when written.** Names and invitation email addresses in the one-sentence summaries are not erased when a person later deletes their account (the log is append-only); the actor shows as "Former member" because the membership is anonymised. The whole log goes only when the organization itself is deleted with its last member.
+- **No IP addresses and only the Owner can read the log.** Owner decisions for now; whether to record IP addresses, or to add a separate permission to view the log, is an open later decision.
+- **Assignments apply to the whole organization.** Department and team scopes are disabled in the form until stage 2.5 supplies departments and teams.
+- **Roles cannot be deleted, only archived,** and not while anyone holds them. There is no "reset a template to its original" action yet. The Owner role can never be changed.
+- **Capabilities are read per request, the screen per page load.** A person whose role changes sees their sidebar change when their page next loads or the tab regains focus (the server enforces the new rights on the very next request).
+- Role names must be unique among live roles (case-insensitive); an archived role's name becomes free again.

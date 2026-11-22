@@ -7,6 +7,7 @@ import type { LinkDelivery } from "./delivery.js";
 import type { AuthStore } from "./repositories/store.js";
 import type { AuthContext, AuthService } from "./service.js";
 import type { Capabilities, PermissionService } from "../permissions/service.js";
+import type { AuditService } from "../audit/service.js";
 import { scopeContainsMember } from "../permissions/resolver.js";
 import { hashesEqual, hashSecret, isResetTokenShape, newSecret } from "./secrets.js";
 
@@ -17,6 +18,7 @@ export interface AccountServiceOptions {
   store: AuthStore;
   auth: AuthService;
   permissions: PermissionService;
+  audit: AuditService;
   log: Logger;
   delivery: LinkDelivery;
 }
@@ -83,6 +85,7 @@ export class AccountService {
     this.store.transaction(() => {
       this.store.tokens.revokeOpenForUser(user.id, "password_reset", now); // a new link replaces every older unused one
       this.store.tokens.insert({ id: newId(), userId: user.id, purpose: "password_reset", tokenHash: hashSecret(token), expiresAt, createdByUserId: auth.userId, now });
+      this.o.audit.record(this.store.tenant(ctx), ctx, { action: "password_reset_link.create", entityType: "membership", entityId: membership.id, summary: `Generated a password reset link for ${membership.display_name}` }); // the link itself is never recorded
     });
     this.o.delivery.passwordResetIssued({ userId: user.id, token, expiresAt });
     this.o.log.info("reset link created", { requestId });
@@ -151,9 +154,11 @@ export class AccountService {
   // ---------- members, for the Users screen ----------
 
   /** The people inside the caller's `people.manage` scope (and always themselves). Replaced by the people API in stage 2.6. */
-  members(auth: AuthContext, requestId: string, caps: Capabilities): Array<{ id: string; displayName: string; email: string | null; status: string; hasLogin: boolean; roles: { key: string; name: string }[]; isYou: boolean }> {
+  members(auth: AuthContext, requestId: string, caps: Capabilities): Array<{ id: string; displayName: string; email: string | null; status: string; hasLogin: boolean; roles: { key: string; name: string }[]; assignments: { id: string; roleId: string; roleName: string; validTo: string | null }[]; isYou: boolean }> {
     const tdb = this.store.tenant(this.auth.tenantCtx(auth, requestId));
     const roles = this.store.roles(tdb).byMembership(this.auth.iso());
+    const nowIso = this.auth.iso();
+    const assignments = this.store.grants(tdb).assignmentsFor(null, nowIso).filter((a) => a.revoked_at === null && a.valid_from <= nowIso && (a.valid_to === null || a.valid_to >= nowIso));
     const scope = caps.scope("people.manage");
     return this.store
       .memberships(tdb)
@@ -166,6 +171,7 @@ export class AccountService {
         status: m.status,
         hasLogin: m.user_id !== null,
         roles: roles.get(m.id) ?? [],
+        assignments: assignments.filter((a) => a.membership_id === m.id).map((a) => ({ id: a.id, roleId: a.role_id, roleName: a.role_name, validTo: a.valid_to })),
         isYou: m.id === auth.membershipId,
       }));
   }
@@ -229,6 +235,8 @@ export class AccountService {
           er.deleteOrganizationRows(tdb);
           er.deleteOrganization(auth.organizationId);
         } else {
+          const ctx = this.auth.tenantCtx(auth, requestId);
+          this.o.audit.record(tdb, ctx, { action: "person.leave", entityType: "membership", entityId: auth.membershipId, summary: "A member deleted their own account and left the organization" });
           er.retireMembership(tdb, auth.membershipId, now);
         }
       }

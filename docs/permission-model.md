@@ -284,6 +284,14 @@ SQLite has no Row Level Security. The replacement is layered and tested rather t
 - **Last administrator** (section 6, rule 2) protects Delete my account: someone who holds `roles.manage` and `org.settings` at all_in_scope organization-wide cannot leave while they are the only such person and others remain. The same helper protects role and assignment changes in 2.4.
 - **Test matrices** (`tests/matrices.test.ts`) are generated from the route registry: every role template × every route that needs a permission (403 exactly when the template does not grant the key), every baseline route for every template, every non-public route without a session (401), and an organization B administrator against every route that takes an id (404, lists never contain A's rows, A's data unchanged). A new route cannot be added without appearing in these.
 
+## 7b. What stage 2.4 built (the role editor, assignments and audit)
+
+- **Protected roles.** `roles.is_protected` (data, set by migration 0006 for the creator template and when an organization is created) makes a role view only: not editable, not archivable. The Owner role is the only one. Everything else, templates included, is editable.
+- **Guardrails 1, 2, 5 and 6 of section 6 are enforced:** you cannot grant what you do not hold (adding permissions, assigning, revoking, copying a role); the last administrator is protected on every change that could remove administration (editing a role, archiving, revoking, an end date, removing a person, deleting an account), checked inside the same transaction as the change; assignments carry `valid_from`/`valid_to` and revocation takes effect on the next request; role editing is audited with what was added and removed.
+- **Sensitive permissions** (the `sensitive` flag in the catalogue) need an explicit confirmation to add and are named in the audit summary.
+- **Scope.** Assignment scope is `organization` only until stage 2.5 supplies departments and teams. Role definitions and invitations are organization-wide objects (an organization-wide `roles.manage`/`invitations.manage` is required); assignments and removals are checked against the caller's scope set.
+- **Audit** is Owner only by default (`audit.view`), append-only, kept forever, without IP addresses.
+
 ## 8. Authentication and session flows
 
 | Flow | Behavior |

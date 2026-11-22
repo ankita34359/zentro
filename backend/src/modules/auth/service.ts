@@ -7,6 +7,7 @@ import { decoyHash, hashPassword, safeEqual, verifyPassword } from "../../lib/pa
 import { RateLimiter } from "../../lib/rateLimit.js";
 import type { OrganizationRow, RoleRef } from "./repositories/organizations.js";
 import type { PermissionService } from "../permissions/service.js";
+import type { AuditService } from "../audit/service.js";
 import { BASELINE_RIGHTS } from "../permissions/catalog.js";
 import { CREATOR_ROLE_KEY } from "../permissions/roleTemplates.js";
 import type { SessionRow } from "./repositories/sessions.js";
@@ -41,6 +42,7 @@ const GENERIC_LOGIN = "Invalid email or password";
 export interface AuthServiceOptions {
   store: AuthStore;
   permissions: PermissionService;
+  audit: AuditService;
   config: Config;
   log: Logger;
   now?: () => number;
@@ -276,6 +278,7 @@ export class AuthService {
       const roleIds = this.o.permissions.seedTemplates(tdb, now);
       const creatorRoleId = roleIds.get(CREATOR_ROLE_KEY)!;
       this.o.store.grants(tdb).assign({ id: newId(), membershipId, roleId: creatorRoleId, grantedByMembershipId: membershipId, now });
+      this.o.audit.record(tdb, { userId: user.id, membershipId, organizationId, sessionId: auth.sessionId, requestId: "" }, { action: "organization.create", entityType: "organization", entityId: organizationId, summary: `Created the organization "${input.name}"` });
       this.users.setDefaultOrganization(user.id, organizationId, now);
       this.sessions.setOrganization(auth.sessionId, organizationId);
     });

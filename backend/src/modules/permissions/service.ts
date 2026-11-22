@@ -56,6 +56,8 @@ export interface RoleView {
   name: string;
   description: string;
   kind: string;
+  /** Protected roles are view only: they cannot be edited or archived. */
+  isProtected: boolean;
   permissionCount: number;
   holderCount: number;
 }
@@ -112,7 +114,7 @@ export class PermissionService {
   private insertTemplate(tdb: TenantDb, t: RoleTemplate, now: string): string {
     const grants = this.store.grants(tdb);
     const id = newId();
-    grants.insertRole({ id, key: t.key, name: t.name, description: t.description, now });
+    grants.insertRole({ id, key: t.key, name: t.name, description: t.description, now, kind: "template", isProtected: t.key === CREATOR_ROLE_KEY });
     for (const [permission, mode] of this.templateGrants(t)) grants.insertGrant({ roleId: id, permission, mode, now });
     return id;
   }
@@ -168,6 +170,7 @@ export class PermissionService {
       name: r.name,
       description: r.description,
       kind: r.kind,
+      isProtected: r.is_protected === 1,
       permissionCount: new Set(this.store.grants(this.tdb(ctx)).roleGrants(r.id).map((g) => g.permission)).size,
       holderCount: r.holder_count,
     }));
@@ -187,6 +190,7 @@ export class PermissionService {
       name: role.name,
       description: role.description,
       kind: role.kind,
+      isProtected: role.is_protected === 1,
       permissionCount: byKey.size,
       holderCount: holder?.holder_count ?? 0,
       permissions: PERMISSIONS.filter((p) => byKey.has(p.key)).map((p) => ({

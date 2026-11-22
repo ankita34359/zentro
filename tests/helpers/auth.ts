@@ -58,3 +58,10 @@ export async function acceptNew(app: Express, code: string, email: string, name 
 }
 
 export const acceptAs = (app: Express, code: string, cookie: string) => post(app, "/api/auth/accept-invitation", { code }, cookie);
+
+/** PATCH / PUT / DELETE-style calls with the site's Origin. */
+export const send = (app: Express, method: "patch" | "put", path: string, body: unknown, cookie?: string) => {
+  const r = request(app)[method](path).set("Origin", ORIGIN);
+  if (cookie) r.set("Cookie", cookie);
+  return r.send(body as object);
+};

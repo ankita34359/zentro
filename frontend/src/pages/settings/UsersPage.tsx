@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { FormAlert, FormField } from "@/components/common/FormField";
 import { OneTimeLink } from "@/components/common/OneTimeLink";
+import { PersonRow } from "@/components/common/PersonRow";
 import { PageHeader } from "@/components/common/PageHeader";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +48,7 @@ export default function UsersPage() {
   const canInvite = auth.can("invitations.manage");
   const canPeople = auth.can("people.manage");
   const canSeeRoles = auth.can("roles.view");
+  const canAssign = auth.can("roles.manage");
   const [roleId, setRoleId] = useState("");
   const [shown, setShown] = useState<Shown | null>(null);
   const [email, setEmail] = useState("");
@@ -57,7 +59,7 @@ export default function UsersPage() {
 
   const invitations = useQuery({ queryKey: ["invitations"], queryFn: listInvitations, enabled: canInvite, retry: false });
   const members = useQuery({ queryKey: ["members"], queryFn: listMembers, enabled: canPeople, retry: false });
-  const roles = useQuery({ queryKey: ["roles"], queryFn: listRoles, enabled: canInvite && canSeeRoles, retry: false });
+  const roles = useQuery({ queryKey: ["roles"], queryFn: listRoles, enabled: (canInvite || canAssign) && canSeeRoles, retry: false });
   const refresh = () => Promise.all([client.invalidateQueries({ queryKey: ["invitations"] }), client.invalidateQueries({ queryKey: ["members"] })]);
 
   const showInvite = (code: string, who: string, expiresAt: string) =>
@@ -210,7 +212,7 @@ export default function UsersPage() {
         <Card lift={false}>
           <CardHeader>
             <CardTitle>People</CardTitle>
-            <CardDescription>Generate a one-time link for someone who lost their password. You send it to them.</CardDescription>
+            <CardDescription>Give people roles, remove people, or generate a one-time link for someone who lost their password. You send the link to them.</CardDescription>
           </CardHeader>
           <CardContent>
             {members.isPending ? (
@@ -220,27 +222,7 @@ export default function UsersPage() {
             ) : (
               <ul className="divide-y divide-border" aria-label="People">
                 {members.data.map((m) => (
-                  <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-body font-medium">
-                        {m.displayName} {m.isYou && <span className="text-caption font-normal text-muted-foreground">(you)</span>}
-                      </p>
-                      <p className="truncate text-caption text-muted-foreground">{m.email ?? "No email"}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {m.roles.map((r) => (
-                        <Badge key={r.key} variant="primary">
-                          {r.name}
-                        </Badge>
-                      ))}
-                      {m.status === "invited" && <Badge variant="dashed">Not joined yet</Badge>}
-                      {m.hasLogin && !m.isYou && (
-                        <Button variant="outline" size="sm" aria-label={`Reset password link for ${m.displayName}`} disabled={reset.isPending} onClick={() => reset.mutate({ id: m.id })}>
-                          <KeyRound aria-hidden="true" /> Reset password link
-                        </Button>
-                      )}
-                    </div>
-                  </li>
+                  <PersonRow key={m.id} m={m} tz={tz} roles={roles.data} canAssign={canAssign} canPeople={canPeople} onReset={(id) => reset.mutate({ id })} resetBusy={reset.isPending} onProblem={setProblem} />
                 ))}
               </ul>
             )}

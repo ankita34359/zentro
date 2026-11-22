@@ -13,6 +13,7 @@ import { RequireAuth } from "@/routes/RequireAuth";
 import { RequireCapability } from "@/routes/RequireCapability";
 import {
   AcceptInvitePage,
+  AuditPage,
   DesignPage,
   ForgotPasswordPage,
   LoginPage,
@@ -74,6 +75,9 @@ export function AppRoutes() {
           </Route>
           <Route element={<RequireCapability any={["roles.view"]} />}>
             <Route path="/settings/roles" element={<RolesPage />} />
+          </Route>
+          <Route element={<RequireCapability any={["audit.view"]} />}>
+            <Route path="/settings/audit" element={<AuditPage />} />
           </Route>
           <Route path="/settings/profile" element={<ProfilePage />} />
           {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings").map((n) => (

@@ -77,6 +77,18 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 
 **Rate limits** (in memory). Forgot password: 10 an hour per address and 5 an hour per email; reset: 10 wrong tokens per 15 minutes per address (and 30 calls); invitation preview and accept: 10 wrong codes per 15 minutes and 60 calls per address; change password: 5 wrong current passwords per 15 minutes per person. `429 rate_limited` with `details.retryAfterSeconds`.
 
+### 2.4 Stage 2.4 details
+
+**Guardrails on every change.** One transaction does the change, writes its audit row and re-checks the last administrator, so a change that would leave the organization without anyone who holds `roles.manage` and `org.settings` (all_in_scope, organization-wide) is rolled back whole and answers `409 last_admin` (no audit row remains). You cannot add a permission you do not hold (`403 cannot_grant_permission`), assign or revoke a role carrying more than you hold (`403 cannot_grant_role`), or edit/archive a **protected** role (`403 role_protected`: the Owner role is view only; it can still be assigned, revoked and copied). Every grid cell must be a mode the catalogue allows (`400`). Adding a sensitive permission needs `confirmSensitive: true` (`400 sensitive_confirmation_required`, with the list in `details.permissions`). Archiving a role people hold is refused (`409 role_in_use`, `details.holders`). Role definitions need an organization-wide `roles.manage`; assignments and removals are checked against the caller's scope (a person outside it looks like `404`).
+
+**Assignments.** Only people who have **joined** can be given a role (`404` for an invited person). `scopeType` may only be `organization` for now (`400 scope_not_available` for department or team: stage 2.5). `validTo` must be in the future and after `validFrom`; the same role cannot be assigned twice while open (`409 already_assigned`). Their capabilities change on their very next request. `GET /api/role-assignments` shows each assignment's `state`: active, scheduled, ended or revoked.
+
+**Removing a person.** Their roles end, their membership becomes "left" (their name stays for history, detached from the login so they can be invited again), their sessions and default organization stop pointing at it, and their login stays: `me` then says `needsOnboarding` so they can create an organization. Not yourself (`409 use_delete_account`), not someone who has not joined, not the last administrator.
+
+**Audit log.** `audit_logs`: `action` (for example `role.permissions.update`), entity, a one-sentence `summary`, and changed-fields-only `before`/`after`; never a link, code, token or password; **no IP addresses** (owner decision; whether to add them, or a separate permission to view logs, is a later decision). Written for: organization creation, invitation create/regenerate/revoke/accept, reset-link generation, role create/update/permissions/archive, assignment create/revoke, person removal and leaving. Owner only (`audit.view` is in the Owner template only). Append-only: no code updates or deletes rows (a test greps for it); the one deletion is an organization leaving with its last member.
+
+`GET /api/organization`'s `memberCount` counts only people who have joined and still belong (not invited, not left).
+
 ### 2.3 Stage 2.3 details
 
 **Roles (read only).** `GET /api/permissions` (key, module, description, the scope modes a role may give it, `sensitive`), `GET /api/roles` (the organization's roles with `permissionCount` and `holderCount`) and `GET /api/roles/:id` (one role with each permission and the modes it grants), all `roles.view`. Another organization's role id is `404`. Editing roles and assigning them is stage 2.4.
@@ -138,11 +150,13 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 | POST / PATCH | `/api/departments/:id/members[/:mid]` | `hierarchy.manage` | head, deputy, member |
 | CRUD | `/api/designations`, `/api/role-families` | `org.view` / `org.manage` | |
 | GET | `/api/permissions` | `roles.view` | The catalog |
-| GET / POST | `/api/roles` | `roles.view` / `roles.manage` | |
-| GET / PATCH | `/api/roles/:id` | `roles.view` / `roles.manage` | |
-| PUT | `/api/roles/:id/permissions` | `roles.manage` | Array of `{permissionKey, scopeMode}`; cannot grant beyond own |
-| GET / POST | `/api/role-assignments` | `roles.view` / `roles.manage` | `{membershipId, roleId, scopeType, scopeId, validFrom, validTo}` |
-| POST | `/api/role-assignments/:id/revoke` | `roles.manage` | Last-admin guard |
+| GET / POST | `/api/roles` **2.3 / 2.4** | `roles.view` / `roles.manage` | POST `{name, description?, copyFromRoleId?}` creates a custom role (unique name) |
+| GET / PATCH | `/api/roles/:id` **2.3 / 2.4** | `roles.view` / `roles.manage` | PATCH `{name?, description?}`; 403 `role_protected` for the Owner role |
+| PUT | `/api/roles/:id/permissions` **2.4** | `roles.manage` | `{grants: [{permission, mode}], confirmSensitive?}` replaces the grid; cannot add beyond what you hold; sensitive additions need confirmation; last-admin guard |
+| POST | `/api/roles/:id/archive` **2.4** | `roles.manage` | 409 `role_in_use` while people hold it; 403 `role_protected` |
+| GET / POST | `/api/role-assignments` **2.4** | `roles.view` / `roles.manage` | POST `{membershipId, roleId, scopeType?: organization, validFrom?, validTo?}`; department/team scopes arrive in 2.5 |
+| POST | `/api/role-assignments/:id/revoke` **2.4** | `roles.manage` | Last-admin guard; you can only revoke a role you could assign |
+| POST | `/api/people/:membershipId/remove` **2.4** | `people.manage` (in scope) | Removes a joined person from the organization; their login stays |
 
 ## 5. Objectives and OKRs
 
@@ -284,7 +298,7 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 | GET | `/api/notifications` | own | `?unread` |
 | POST | `/api/notifications/:id/read` / `/read-all` | own | |
 | GET / PUT | `/api/preferences` | own | Notification channels per event, theme, quiet hours display |
-| GET | `/api/audit-logs` | `audit.view` | `?actorId&entityType&entityId&action&from&to`, read only |
+| GET | `/api/audit-logs` **2.4** | `audit.view` | `?actorId&entityType&entityId&action&from&to&limit&cursor`, newest first, read only, paged (`meta.page.nextCursor`) |
 | GET | `/api/system/status` | `system.view` | Version, migrations, last tick, job table, outbox backlog, AI/viaSocket configured flags |
 | POST | `/api/export` / GET `/api/export/:id/download` | `data.export` | Per-table JSON bundle; async |
 | GET | `/api/demo/status` | `demo.manage` | |

@@ -54,7 +54,9 @@ describe("route registry: every route declares its protection", () => {
       "GET /api/invitations permission",
       "GET /api/organization baseline",
       "GET /api/organization/members permission",
+      "GET /api/audit-logs permission",
       "GET /api/permissions permission",
+      "GET /api/role-assignments permission",
       "GET /api/roles permission",
       "GET /api/roles/:id permission",
       "GET /healthz public",
@@ -71,8 +73,15 @@ describe("route registry: every route declares its protection", () => {
       "POST /api/invitations/:id/regenerate permission",
       "POST /api/invitations/:id/revoke permission",
       "POST /api/organizations baseline",
+      "PATCH /api/roles/:id permission",
+      "POST /api/people/:membershipId/remove permission",
       "POST /api/people/:membershipId/reset-link permission",
-    ]);
+      "POST /api/role-assignments permission",
+      "POST /api/role-assignments/:id/revoke permission",
+      "POST /api/roles permission",
+      "POST /api/roles/:id/archive permission",
+      "PUT /api/roles/:id/permissions permission",
+    ].sort());
   });
 });
 

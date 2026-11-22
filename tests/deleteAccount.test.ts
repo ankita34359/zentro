@@ -87,7 +87,7 @@ describe("Delete my account: the only member deletes the whole organization", ()
     const before = snap();
     expect((await del(a, { password: PASSWORD, confirmEmail: "a@example.com", confirmOrganizationName: "Alpha Co" })).status).toBe(200);
     expect(snap()).toBe(before);
-    expect((await get(t.app, "/api/organization", b)).body.data).toMatchObject({ name: "Beta Co", memberCount: 3 });
+    expect((await get(t.app, "/api/organization", b)).body.data).toMatchObject({ name: "Beta Co", memberCount: 2 }); // the owner and one joined person; the pending invitation is not a member
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM organizations").n).toBe(1);
   });
 });

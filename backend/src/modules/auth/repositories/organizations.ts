@@ -119,8 +119,23 @@ export class MembershipsRepository {
     );
   }
 
+  /** People who have joined and still belong (active or suspended). Not people who left, and not people only invited. */
   count(): number {
-    return this.tdb.get<{ n: number }>("SELECT COUNT(*) AS n FROM organization_memberships WHERE organization_id = @organization_id")?.n ?? 0;
+    return (
+      this.tdb.get<{ n: number }>("SELECT COUNT(*) AS n FROM organization_memberships WHERE organization_id = @organization_id AND status IN ('active', 'suspended') AND archived_at IS NULL")?.n ?? 0
+    );
+  }
+
+  /**
+   * An administrator removes a person from the organization. Their LOGIN stays (so they can create or join another
+   * organization); the membership keeps their name for history but is detached from the login, so the same login can
+   * be invited again later without clashing with the old row.
+   */
+  detachRemoved(id: string, now: string): void {
+    this.tdb.run(
+      "UPDATE organization_memberships SET user_id = NULL, status = 'left', archived_at = @now, updated_at = @now WHERE organization_id = @organization_id AND id = @id AND user_id IS NOT NULL",
+      { id, now },
+    );
   }
 }
 

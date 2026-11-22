@@ -44,6 +44,11 @@ export class SessionsRepository {
     this.db.prepare("UPDATE sessions SET revoked_at = @now WHERE user_id = @userId AND revoked_at IS NULL").run({ userId, now });
   }
 
+  /** The person was removed from an organization: their sessions stop pointing at it (their next request says "no organization"). */
+  detachOrganization(userId: string, organizationId: string): void {
+    this.db.prepare("UPDATE sessions SET active_organization_id = NULL WHERE user_id = @userId AND active_organization_id = @organizationId").run({ userId, organizationId });
+  }
+
   /** Every session of the user except the one they are using now (after a password change). */
   revokeOthersForUser(userId: string, keepId: string, now: string): void {
     this.db.prepare("UPDATE sessions SET revoked_at = @now WHERE user_id = @userId AND id <> @keepId AND revoked_at IS NULL").run({ userId, keepId, now });

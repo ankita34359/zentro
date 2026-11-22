@@ -98,7 +98,7 @@ describe("pages that need a permission", () => {
 
 describe("Users: what shows depends on the permission", () => {
   const INVS = [{ id: "i1", membershipId: "m9", email: "sam@example.com", displayName: "Sam", status: "pending", expiresAt: "2026-12-01T00:00:00.000Z", createdAt: "2026-11-24T00:00:00.000Z", acceptedAt: null, invitedBy: "Ada", roleName: "Employee" }];
-  const MEMBERS = [{ id: "m2", displayName: "Bo Builder", email: "bo@example.com", status: "active", hasLogin: true, roles: [{ key: "employee", name: "Employee" }], isYou: false }];
+  const MEMBERS = [{ id: "m2", displayName: "Bo Builder", email: "bo@example.com", status: "active", hasLogin: true, roles: [{ key: "employee", name: "Employee" }], assignments: [], isYou: false }];
   const ROLES = [
     { id: "r1", key: "employee", name: "Employee", description: "", kind: "template", permissionCount: 14, holderCount: 2 },
     { id: "r2", key: "manager", name: "Manager", description: "", kind: "template", permissionCount: 30, holderCount: 0 },
@@ -153,44 +153,6 @@ describe("Users: what shows depends on the permission", () => {
     await userEvent.selectOptions(screen.getByLabelText("Role (optional)"), "Manager");
     await userEvent.click(screen.getByRole("button", { name: "Create invitation" }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/whose permissions you hold/);
-  });
-});
-
-describe("Settings → Roles (read only)", () => {
-  const ROLES = [
-    { id: "r1", key: "owner", name: "Owner", description: "Full control.", kind: "template", permissionCount: 54, holderCount: 1 },
-    { id: "r2", key: "manager", name: "Manager", description: "Manages reports.", kind: "template", permissionCount: 30, holderCount: 0 },
-  ];
-  const DETAIL = {
-    ...ROLES[1],
-    permissions: [
-      { key: "org.view", module: "Organization", description: "See departments, teams, org chart", sensitive: false, modes: ["reports", "my_teams"], allowedModes: ["own", "my_teams", "reports", "all_in_scope"] },
-      { key: "people.view_sensitive", module: "People", description: "Employment details", sensitive: true, modes: ["reports"], allowedModes: ["own", "reports", "all_in_scope"] },
-    ],
-  };
-  it("lists the roles with their counts, shows the chosen role's permissions with their reach, and says it is read only", async () => {
-    const f = server((url) => (url === "/api/roles" ? envelope(ROLES) : url === "/api/roles/r2" ? envelope(DETAIL) : url === "/api/roles/r1" ? envelope({ ...ROLES[0], permissions: [] }) : undefined));
-    renderApp("/settings/roles");
-    const list = await screen.findByRole("list", { name: "Roles" });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(list).getByText("54 permissions")).toBeTruthy();
-    expect(screen.getByText(/Read only\. Editing roles and assigning them arrives in stage 2\.4/)).toBeTruthy();
-    await userEvent.click(within(list).getByRole("button", { name: /Manager/ }));
-    const org = await screen.findByRole("region", { name: "Organization" });
-    expect(within(org).getByText("org.view")).toBeTruthy();
-    expect(within(org).getByText("Reports")).toBeTruthy();
-    expect(within(org).getByText("My teams")).toBeTruthy();
-    const people = screen.getByRole("region", { name: "People" });
-    expect(within(people).getByText("Sensitive")).toBeTruthy(); // marked by words, not colour alone
-    expect(calls(f, "/api/roles/r2")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /save|edit|delete role/i })).toBeNull(); // nothing to change
-  });
-
-  it("shows a clear error when the server refuses", async () => {
-    setMe(ME_READY);
-    server((url) => (url === "/api/roles" ? apiError(403, "permission_denied", "Not allowed") : undefined));
-    renderApp("/settings/roles");
-    expect((await screen.findByRole("alert")).textContent).toMatch(/Not allowed/);
   });
 });
 

@@ -149,9 +149,9 @@ describe("Settings → Users and invitations", () => {
     { id: "i3", membershipId: "m7", email: "done@example.com", displayName: "Done", status: "accepted", expiresAt: "2026-11-20T00:00:00.000Z", createdAt: "2026-11-13T00:00:00.000Z", acceptedAt: "2026-11-14T00:00:00.000Z", invitedBy: "Ada", roleName: null },
   ];
   const MEMBERS = [
-    { id: "m1", displayName: "Ada Lovelace", email: "ada@example.com", status: "active", hasLogin: true, roles: [{ key: "owner", name: "Owner" }], isYou: true },
-    { id: "m2", displayName: "Bo Builder", email: "bo@example.com", status: "active", hasLogin: true, roles: [], isYou: false },
-    { id: "m9", displayName: "Sam", email: "sam@example.com", status: "invited", hasLogin: false, roles: [], isYou: false },
+    { id: "m1", displayName: "Ada Lovelace", email: "ada@example.com", status: "active", hasLogin: true, roles: [{ key: "owner", name: "Owner" }], assignments: [], isYou: true },
+    { id: "m2", displayName: "Bo Builder", email: "bo@example.com", status: "active", hasLogin: true, roles: [], assignments: [], isYou: false },
+    { id: "m9", displayName: "Sam", email: "sam@example.com", status: "invited", hasLogin: false, roles: [], assignments: [], isYou: false },
   ];
   const api = (extra: (url: string, init?: RequestInit) => Response | undefined = () => undefined) =>
     server((url, init) => {
