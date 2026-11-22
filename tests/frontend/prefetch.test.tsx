@@ -88,15 +88,15 @@ describe("the app shell prefetches while idle", () => {
     await waitFor(() => spies.forEach((s) => expect(s).toHaveBeenCalled()));
   });
 
-  it("on a phone the menu chunk is fetched first and the menu opens at once when tapped", async () => {
-    stubMatchMedia(false);
+  it("on a phone the menu is ready right after the first paint, without waiting for the browser to be idle", async () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width: 1023px"), media: q, addEventListener() {}, removeEventListener() {} }));
-    instantIdle();
+    const idle = vi.fn(); // the idle callback never fires in this test: the menu must not depend on it
+    vi.stubGlobal("requestIdleCallback", idle);
     renderApp("/overview");
     const button = await screen.findByRole("button", { name: /open navigation menu/i });
-    // Wait for the idle prefetch to deliver the menu component; only then tap.
-    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); }); // a couple of frames, no idle time
     await userEvent.click(button);
-    expect(await screen.findByRole("dialog", {}, { timeout: 200 })).toBeTruthy();
+    // No waiting: if the chunk had to be fetched on the tap, the dialog would not be there yet.
+    expect(screen.getByRole("dialog")).toBeTruthy();
   });
 });
