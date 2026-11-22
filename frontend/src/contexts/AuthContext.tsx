@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApiError, setUnauthenticatedHandler } from "@/services/api";
-import { acceptInvitation as acceptInvitationRequest, createOrganization as createOrganizationRequest, getMe, login as loginRequest, logout as logoutRequest, type Me } from "@/services/auth";
+import { acceptInvitation as acceptInvitationRequest, deleteAccountRequest, createOrganization as createOrganizationRequest, getMe, login as loginRequest, logout as logoutRequest, type Me } from "@/services/auth";
 
 /** loading: not known yet · signedOut: no session · needsOnboarding: signed in, no organization · ready: signed in with an organization */
 export type AuthStatus = "loading" | "signedOut" | "needsOnboarding" | "ready" | "error";
@@ -14,6 +14,12 @@ interface AuthValue {
   logout: () => Promise<void>;
   createOrganization: (name: string, timezone: string) => Promise<Me>;
   acceptInvitation: (body: { code: string; name?: string; email?: string; password?: string }) => Promise<Me>;
+  deleteAccount: (body: { password: string; confirmEmail: string; confirmOrganizationName?: string }) => Promise<{ organizationDeleted: boolean }>;
+  /** Does the signed-in person hold this permission (any scope)? Chooses screens only; the server decides. */
+  can: (key: string) => boolean;
+  /** A one-time message for the sign-in page (for example after deleting the account). */
+  notice: "accountDeleted" | null;
+  clearNotice: () => void;
   retry: () => void;
 }
 
@@ -26,6 +32,7 @@ const AuthContext = createContext<AuthValue | null>(null);
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
+  const [notice, setNotice] = useState<"accountDeleted" | null>(null);
   const query = useQuery({
     queryKey: ME_KEY,
     queryFn: async ({ signal }): Promise<Me | null> => {
@@ -83,11 +90,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [client],
   );
 
+  const deleteAccount = useCallback(
+    async (body: { password: string; confirmEmail: string; confirmOrganizationName?: string }) => {
+      const r = await deleteAccountRequest(body);
+      setNotice("accountDeleted"); // set first: the guard sends the person to /login the moment the session is cleared
+      client.removeQueries({ predicate: (q) => q.queryKey[0] !== ME_KEY[0] });
+      client.setQueryData(ME_KEY, null);
+      return { organizationDeleted: r.organizationDeleted };
+    },
+    [client],
+  );
+
   const value = useMemo<AuthValue>(() => {
     const me = query.data ?? null;
     const status: AuthStatus = query.isPending ? "loading" : query.isError ? "error" : !me ? "signedOut" : me.needsOnboarding ? "needsOnboarding" : "ready";
-    return { status, me, error: query.error, login, logout, createOrganization, acceptInvitation, retry: () => void query.refetch() };
-  }, [query, login, logout, createOrganization, acceptInvitation]);
+    return { status, me, error: query.error, login, logout, createOrganization, acceptInvitation, deleteAccount, can: (key: string) => Boolean(me?.capabilities[key]), notice, clearNotice: () => setNotice(null), retry: () => void query.refetch() };
+  }, [query, login, logout, createOrganization, acceptInvitation, deleteAccount, notice]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

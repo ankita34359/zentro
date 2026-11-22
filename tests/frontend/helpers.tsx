@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, vi } from "vitest";
 import { AppProviders, AppRoutes } from "@/App";
+import { PERMISSIONS } from "../../backend/src/modules/permissions/catalog.js";
 
 export const HEALTH_OK = {
   ok: true,
@@ -39,11 +40,15 @@ export const ME_READY = {
   user: { id: "u1", email: "ada@example.com", name: "Ada Lovelace" },
   organization: { id: "o1", name: "Acme Robotics", slug: "acme-robotics", timezone: "UTC" },
   membership: { id: "m1", displayName: "Ada Lovelace" },
-  roles: ["owner"],
-  capabilities: [],
+  roles: [{ key: "owner", name: "Owner" }],
+  // what the server reports for an Owner: every permission at all_in_scope
+  capabilities: Object.fromEntries(PERMISSIONS.map((p) => [p.key, ["all_in_scope"]])),
+  baseline: ["self.profile"],
   needsOnboarding: false,
 };
-export const ME_ONBOARDING = { ...ME_READY, organization: null, membership: null, roles: [], needsOnboarding: true };
+export const ME_ONBOARDING = { ...ME_READY, organization: null, membership: null, roles: [], capabilities: {}, needsOnboarding: true };
+/** A signed-in person whose roles grant nothing (for example just after accepting an invitation without a role). */
+export const ME_NO_ROLE = { ...ME_READY, roles: [], capabilities: {} };
 
 /** Who the stubbed server says is signed in (null = nobody). Reset to "signed in with an organization" before every test. */
 let signedInAs: unknown = ME_READY;

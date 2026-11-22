@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { DeleteAccount } from "@/components/common/DeleteAccount";
 import { FormAlert, FormField, FormNotice } from "@/components/common/FormField";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -58,8 +59,8 @@ export default function ProfilePage() {
             <p className="text-muted-foreground">{me?.organization?.name}</p>
             <div className="flex flex-wrap gap-2 pt-1">
               {me?.roles.map((r) => (
-                <Badge key={r} variant="primary">
-                  {r === "owner" ? "Owner" : r}
+                <Badge key={r.key} variant="primary">
+                  {r.name}
                 </Badge>
               ))}
             </div>
@@ -84,6 +85,9 @@ export default function ProfilePage() {
             </form>
           </CardContent>
         </Card>
+      </div>
+      <div className="mt-6">
+        <DeleteAccount />
       </div>
     </>
   );

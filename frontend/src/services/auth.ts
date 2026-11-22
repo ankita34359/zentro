@@ -4,8 +4,10 @@ export interface Me {
   user: { id: string; email: string; name: string };
   organization: { id: string; name: string; slug: string; timezone: string } | null;
   membership: { id: string; displayName: string } | null;
-  roles: string[];
-  capabilities: string[];
+  roles: { key: string; name: string }[];
+  /** `{ permissionKey: [scope modes] }`. Only used to choose screens; the server decides access. */
+  capabilities: Record<string, string[]>;
+  baseline: string[];
   needsOnboarding: boolean;
 }
 
@@ -28,6 +30,7 @@ export interface InvitationView {
   createdAt: string;
   acceptedAt: string | null;
   invitedBy: string | null;
+  roleName: string | null;
 }
 export interface IssuedInvitation {
   invitation: InvitationView;
@@ -41,7 +44,7 @@ export interface MemberView {
   email: string | null;
   status: string;
   hasLogin: boolean;
-  roles: string[];
+  roles: { key: string; name: string }[];
   isYou: boolean;
 }
 export interface InvitationPreview {
@@ -52,7 +55,7 @@ export interface InvitationPreview {
 }
 
 export const listInvitations = () => api<InvitationView[]>("/api/invitations");
-export const createInvitation = (body: { email: string; name?: string }) => api<IssuedInvitation>("/api/invitations", { method: "POST", body });
+export const createInvitation = (body: { email: string; name?: string; roleId?: string }) => api<IssuedInvitation>("/api/invitations", { method: "POST", body });
 export const revokeInvitation = (id: string) => api<InvitationView>(`/api/invitations/${id}/revoke`, { method: "POST" });
 export const regenerateInvitation = (id: string) => api<IssuedInvitation>(`/api/invitations/${id}/regenerate`, { method: "POST" });
 export const listMembers = () => api<MemberView[]>("/api/organization/members");
@@ -72,3 +75,39 @@ export const invitationLink = (code: string, origin = window.location.origin) =>
 export const resetLinkUrl = (token: string, origin = window.location.origin) => `${origin}/reset-password#token=${encodeURIComponent(token)}`;
 /** Reads `key=value` out of a URL fragment such as "#code=abc". */
 export const fragmentParam = (hash: string, key: string): string | null => new URLSearchParams(hash.replace(/^#/, "")).get(key);
+
+// ---------- stage 2.3: roles (read only) and delete my account ----------
+
+export interface RoleView {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  kind: string;
+  permissionCount: number;
+  holderCount: number;
+}
+export interface RolePermission {
+  key: string;
+  module: string;
+  description: string;
+  sensitive: boolean;
+  modes: string[];
+  allowedModes: string[];
+}
+export interface RoleDetail extends RoleView {
+  permissions: RolePermission[];
+}
+export const listRoles = () => api<RoleView[]>("/api/roles");
+export const getRole = (id: string) => api<RoleDetail>(`/api/roles/${id}`);
+
+export interface DeletionPreview {
+  mode: "account_only" | "account_and_organization" | "blocked";
+  organizationName: string | null;
+  others: number;
+  pendingInvitations: number;
+  reason: "last_admin" | "pending_invitations" | null;
+}
+export const deletionPreview = () => api<DeletionPreview>("/api/auth/delete-account/preview");
+export const deleteAccountRequest = (body: { password: string; confirmEmail: string; confirmOrganizationName?: string }) =>
+  api<{ deleted: true; organizationDeleted: boolean }>("/api/auth/delete-account", { method: "POST", body });

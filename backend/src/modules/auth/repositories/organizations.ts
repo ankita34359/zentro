@@ -26,6 +26,11 @@ export class OrganizationsRepository {
       .get({ id }) as OrganizationRow | undefined;
   }
 
+  /** Every organization id (start-up steps that must visit each tenant). */
+  listIds(): string[] {
+    return (this.db.prepare("SELECT id FROM organizations ORDER BY created_at").all() as { id: string }[]).map((r) => r.id);
+  }
+
   slugTaken(slug: string): boolean {
     return this.db.prepare("SELECT 1 AS x FROM organizations WHERE slug = @slug").get({ slug }) !== undefined;
   }
@@ -119,41 +124,31 @@ export class MembershipsRepository {
   }
 }
 
+export interface RoleRef {
+  key: string;
+  name: string;
+}
+
+/** Reads of who holds which role (the writes of roles and grants live in the permissions module). */
 export class RolesRepository {
   constructor(private readonly tdb: TenantDb) {}
 
-  insert(r: { id: string; key: string; name: string; description: string; now: string }): void {
-    this.tdb.run(
-      "INSERT INTO roles (id, organization_id, key, name, description, kind, created_at, updated_at) VALUES (@id, @organization_id, @key, @name, @description, 'template', @now, @now)",
-      r,
+  /** The roles the person holds right now (not revoked, inside their validity window). */
+  forMembership(membershipId: string, today: string): RoleRef[] {
+    return this.tdb.all<RoleRef>(
+      "SELECT r.key AS key, r.name AS name FROM user_role_assignments a JOIN roles r ON r.id = a.role_id AND r.organization_id = @organization_id WHERE a.organization_id = @organization_id AND a.membership_id = @membershipId AND a.revoked_at IS NULL AND a.valid_from <= @today AND (a.valid_to IS NULL OR a.valid_to >= @today) AND r.archived_at IS NULL ORDER BY r.name",
+      { membershipId, today },
     );
   }
 
-  /** Keys of the roles the person holds right now (not revoked, inside their validity window). */
-  keysForMembership(membershipId: string, today: string): string[] {
-    return this.tdb
-      .all<{ key: string }>(
-        "SELECT r.key AS key FROM user_role_assignments a JOIN roles r ON r.id = a.role_id AND r.organization_id = @organization_id WHERE a.organization_id = @organization_id AND a.membership_id = @membershipId AND a.revoked_at IS NULL AND a.valid_from <= @today AND (a.valid_to IS NULL OR a.valid_to >= @today) AND r.archived_at IS NULL ORDER BY r.key",
-        { membershipId, today },
-      )
-      .map((x) => x.key);
-  }
-
-  /** Role keys held right now by every person in the organization, for the Users screen. */
-  keysByMembership(today: string): Map<string, string[]> {
-    const rows = this.tdb.all<{ membership_id: string; key: string }>(
-      "SELECT a.membership_id AS membership_id, r.key AS key FROM user_role_assignments a JOIN roles r ON r.id = a.role_id AND r.organization_id = @organization_id WHERE a.organization_id = @organization_id AND a.revoked_at IS NULL AND a.valid_from <= @today AND (a.valid_to IS NULL OR a.valid_to >= @today) AND r.archived_at IS NULL ORDER BY r.key",
+  /** Roles held right now by every person in the organization, for the Users screen. */
+  byMembership(today: string): Map<string, RoleRef[]> {
+    const rows = this.tdb.all<{ membership_id: string; key: string; name: string }>(
+      "SELECT a.membership_id AS membership_id, r.key AS key, r.name AS name FROM user_role_assignments a JOIN roles r ON r.id = a.role_id AND r.organization_id = @organization_id WHERE a.organization_id = @organization_id AND a.revoked_at IS NULL AND a.valid_from <= @today AND (a.valid_to IS NULL OR a.valid_to >= @today) AND r.archived_at IS NULL ORDER BY r.name",
       { today },
     );
-    const out = new Map<string, string[]>();
-    for (const r of rows) out.set(r.membership_id, [...(out.get(r.membership_id) ?? []), r.key]);
+    const out = new Map<string, RoleRef[]>();
+    for (const r of rows) out.set(r.membership_id, [...(out.get(r.membership_id) ?? []), { key: r.key, name: r.name }]);
     return out;
-  }
-
-  assign(a: { id: string; membershipId: string; roleId: string; now: string }): void {
-    this.tdb.run(
-      "INSERT INTO user_role_assignments (id, organization_id, membership_id, role_id, scope_type, valid_from, granted_by_membership_id, created_at) VALUES (@id, @organization_id, @membershipId, @roleId, 'organization', @now, @membershipId, @now)",
-      a,
-    );
   }
 }

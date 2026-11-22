@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { describeProblem, loadConfig } from "./config/env.js";
 import { createHoldingApp } from "./config/holding.js";
 import { migrate } from "./db/migrate.js";
+import { applyRestoreRequest } from "./db/restore.js";
 import { openDatabase } from "./db/open.js";
 import { findProjectRoot } from "./lib/paths.js";
 import { createLogger } from "./lib/logger.js";
@@ -26,12 +27,14 @@ if (!loaded.ok) {
   const { config } = loaded;
   const log = createLogger(config.logLevel);
   const dataDir = process.env.DATA_DIR || path.join(root, "data"); // ./data only for local dev
+  // One-time recovery: restores a named automatic backup BEFORE the database is opened (see db/restore.ts). Does nothing unless RESTORE_BACKUP is set.
+  applyRestoreRequest({ dataDir, request: process.env.RESTORE_BACKUP, log });
   const { db, file } = openDatabase(dataDir);
   const migrationsDir = path.join(root, "database", "migrations");
   const result = migrate(db, migrationsDir);
   if (result.unknownApplied.length > 0) log.warn("database is newer than this code", { unknown: result.unknownApplied });
 
-  const { app } = createApp({
+  const { app, permissions } = createApp({
     db,
     config,
     version,
@@ -40,6 +43,10 @@ if (!loaded.ok) {
     log,
     staticDir: path.join(root, "dist"),
   });
+  // After the migrations: make sure the catalogue matches the code and every organization has every role template.
+  permissions.syncCatalog();
+  const seeded = permissions.ensureRoleTemplates();
+  if (seeded.rolesCreated > 0) log.info("role templates added", { rolesCreated: seeded.rolesCreated, organizations: seeded.organizations });
   if (config.registration.mode === "closed") {
     log.warn("registration is closed", { hint: "set REGISTRATION_MODE=code and REGISTRATION_CODE (at least 8 characters) to allow sign-ups" });
   }
@@ -52,7 +59,7 @@ if (!loaded.ok) {
       preMigrationCopy: result.backupFile ? path.basename(result.backupFile) : null,
       cronConfigured: Boolean(cronSecret),
       appAddressSet: Boolean(config.appUrl),
-      registration: config.registration.mode,
+      signUps: config.registration.mode,
       staticBuild: fs.existsSync(path.join(root, "dist", "index.html")),
     });
   });

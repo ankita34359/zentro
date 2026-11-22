@@ -111,8 +111,17 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 ## Added in stage 2.2 (reset and invitations)
 
 - **No email is sent.** Invitation and password-reset links are shown once to the administrator, who copies and sends them. "Forgot password" cannot send anything: it tells the person to ask their administrator. Email arrives with the outbox in stage 8 through one marked hook (`modules/auth/delivery.ts`).
-- **Only Owners can invite people and generate reset links**, until the permission engine (stage 2.3). The check is marked temporary in `ownerGate.ts` and in the route registry keys are already the real ones.
+- *(Resolved in 2.3: the permission engine now decides; see below.)*
 - **A link shown once cannot be shown again.** If an administrator loses it they use "New link" (invitations) or generate another reset link; the old one then stops working.
 - **Nobody can join two organizations yet.** A person who already belongs to an organization cannot accept another invitation (`409`); organization switching comes later. A reset link can only be created for a login that belongs to the administrator's own organization.
 - **An invitee's email address is not verified** beyond possession of the link (no email flow yet): whoever holds the link and types the invited address can join. Treat an invitation link like a password and send it privately.
 - Rate limits are in memory (see stage 2.1). The administrator's list of people (`/api/organization/members`) is a temporary view that the people API (2.6) replaces.
+
+## Added in stage 2.3 (RBAC engine)
+
+- **Teams, departments and reporting lines do not exist yet** (stages 2.5 and 2.6). Until then the resolver knows nobody belongs to a team and nobody reports to anyone: a grant in `reports` mode reaches only the person themselves, and `my_teams` and department/team-limited assignments reach nobody. Owner, CEO and other organization-wide grants work fully; manager and team-lead grants become useful when the hierarchy arrives. The resolver itself is tested with a full fake hierarchy.
+- **Invitation management is organization-wide only.** An assignment limited to a department or team cannot invite people (an invitation has no subject until it is accepted); revisit with 2.5.
+- **Roles are read only** (`/settings/roles`). Creating and editing roles, assigning roles with a scope and dates, the "last administrator" guard for role changes, and the audit log are stage 2.4. Until then a person gets a role only by being invited into one (the new organization's creator is the Owner).
+- **No way to remove another person yet.** "Delete my account" is the only way someone leaves; an administrator removing a person comes with people management (2.4 to 2.6).
+- **Delete my account keeps an empty tombstone** for a login that created an organization that continues (the organization needs its creator reference); no email, name or password remains. When an organization is deleted with its last member, nothing of it is kept. Every later stage that adds an organization-owned table must add it to `erasure.ts` (a test enforces this).
+- **Restoring from the automatic backup is a setting, not a button.** The backups (`<data folder>/backups/pre-<migration>-<time>.db`, the newest three kept, on the same disk as the database, so they do not protect against losing the whole volume) cannot be fetched or placed by hand on Embarko. The recovery path is the one-time **`RESTORE_BACKUP`** environment variable (see architecture section 11): set it to a backup's file name and restart. It takes a fresh backup of the current data first, restores, logs what it did, and runs once per value. Embarko's own "no backups" rule still applies to the platform: only these copies exist.

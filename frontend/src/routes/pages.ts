@@ -16,6 +16,7 @@ export const ResetPasswordPage = lazyWithPreload(() => import("@/pages/auth/Rese
 export const AcceptInvitePage = lazyWithPreload(() => import("@/pages/auth/AcceptInvitePage"));
 export const SettingsPage = lazyWithPreload(() => import("@/pages/settings/SettingsPage"));
 export const UsersPage = lazyWithPreload(() => import("@/pages/settings/UsersPage"));
+export const RolesPage = lazyWithPreload(() => import("@/pages/settings/RolesPage"));
 export const ProfilePage = lazyWithPreload(() => import("@/pages/settings/ProfilePage"));
 
 /** Every page a visitor can reach from the sidebar. The unlisted /design style guide is left out on purpose. */

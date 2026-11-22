@@ -6,6 +6,8 @@ import { RateLimiter } from "../../lib/rateLimit.js";
 import type { LinkDelivery } from "./delivery.js";
 import type { AuthStore } from "./repositories/store.js";
 import type { AuthContext, AuthService } from "./service.js";
+import type { Capabilities, PermissionService } from "../permissions/service.js";
+import { scopeContainsMember } from "../permissions/resolver.js";
 import { hashesEqual, hashSecret, isResetTokenShape, newSecret } from "./secrets.js";
 
 /** A reset link is valid for 1 hour and works once. */
@@ -14,6 +16,7 @@ export const RESET_TTL_MS = 60 * 60 * 1000;
 export interface AccountServiceOptions {
   store: AuthStore;
   auth: AuthService;
+  permissions: PermissionService;
   log: Logger;
   delivery: LinkDelivery;
 }
@@ -30,6 +33,8 @@ export class AccountService {
   private readonly resetCallsByIp: RateLimiter;
   /** Wrong current passwords per signed-in person. */
   private readonly changeFailByUser: RateLimiter;
+  /** Wrong passwords on "Delete my account", per signed-in person. */
+  private readonly deleteFailByUser: RateLimiter;
 
   constructor(private readonly o: AccountServiceOptions) {
     this.store = o.store;
@@ -41,6 +46,7 @@ export class AccountService {
     this.resetFailByIp = new RateLimiter({ max: 10, windowMs: 15 * min, blockMs: 15 * min, maxBlockMs: 240 * min }, clock);
     this.resetCallsByIp = new RateLimiter({ max: 30, windowMs: 15 * min, blockMs: 10 * min, maxBlockMs: 120 * min }, clock);
     this.changeFailByUser = new RateLimiter({ max: 5, windowMs: 15 * min, blockMs: 10 * min, maxBlockMs: 120 * min }, clock);
+    this.deleteFailByUser = new RateLimiter({ max: 5, windowMs: 15 * min, blockMs: 10 * min, maxBlockMs: 120 * min }, clock);
   }
 
   // ---------- forgot password (public) ----------
@@ -59,11 +65,11 @@ export class AccountService {
 
   // ---------- administrator-generated reset link ----------
 
-  /** TEMPORARY gate (Owners only) is applied by the route's permission key; here the person must be in the caller's own organization. */
-  createResetLink(auth: AuthContext, requestId: string, membershipId: string): { token: string; expiresAt: string; displayName: string } {
+  /** The route's permission key (`people.manage`) is checked by the guard; here the person must also be inside the caller's scope set and organization. */
+  createResetLink(auth: AuthContext, requestId: string, caps: Capabilities, membershipId: string): { token: string; expiresAt: string; displayName: string } {
     const ctx = this.auth.tenantCtx(auth, requestId);
     const membership = this.store.memberships(this.store.tenant(ctx)).findById(membershipId); // only this organization's people
-    if (!membership) throw notFound();
+    if (!membership || !scopeContainsMember(caps.scope("people.manage"), membership.id)) throw notFound(); // missing, another organization's, or outside the caller's scope: all look the same
     if (!membership.user_id) throw new HttpError(409, "no_login", "This person has not joined yet. Send them an invitation instead.");
     if (membership.user_id === auth.userId) throw new HttpError(409, "use_change_password", "Use Change password for your own account.");
     const user = this.store.users.findById(membership.user_id);
@@ -144,17 +150,102 @@ export class AccountService {
 
   // ---------- members, for the Users screen ----------
 
-  members(auth: AuthContext, requestId: string): Array<{ id: string; displayName: string; email: string | null; status: string; hasLogin: boolean; roles: string[]; isYou: boolean }> {
+  /** The people inside the caller's `people.manage` scope (and always themselves). Replaced by the people API in stage 2.6. */
+  members(auth: AuthContext, requestId: string, caps: Capabilities): Array<{ id: string; displayName: string; email: string | null; status: string; hasLogin: boolean; roles: { key: string; name: string }[]; isYou: boolean }> {
     const tdb = this.store.tenant(this.auth.tenantCtx(auth, requestId));
-    const roles = this.store.roles(tdb).keysByMembership(this.auth.iso());
-    return this.store.memberships(tdb).listPeople().map((m) => ({
-      id: m.id,
-      displayName: m.display_name,
-      email: m.login_email ?? m.work_email,
-      status: m.status,
-      hasLogin: m.user_id !== null,
-      roles: roles.get(m.id) ?? [],
-      isYou: m.id === auth.membershipId,
-    }));
+    const roles = this.store.roles(tdb).byMembership(this.auth.iso());
+    const scope = caps.scope("people.manage");
+    return this.store
+      .memberships(tdb)
+      .listPeople()
+      .filter((m) => m.id === auth.membershipId || scopeContainsMember(scope, m.id))
+      .map((m) => ({
+        id: m.id,
+        displayName: m.display_name,
+        email: m.login_email ?? m.work_email,
+        status: m.status,
+        hasLogin: m.user_id !== null,
+        roles: roles.get(m.id) ?? [],
+        isYou: m.id === auth.membershipId,
+      }));
   }
+
+  // ---------- delete my account ----------
+
+  /**
+   * What "Delete my account" would do for this person, so the screen can warn clearly BEFORE anything happens.
+   *   account_only           the login is erased; the organization continues without them
+   *   account_and_organization  they are the only member and nothing is pending: the whole organization goes with them
+   *   blocked                they cannot delete yet (`reason` says why)
+   */
+  deletionPreview(auth: AuthContext, requestId: string): DeletionPreview {
+    if (!auth.organizationId || !auth.membershipId) return { mode: "account_only", organizationName: null, others: 0, pendingInvitations: 0, reason: null };
+    const ctx = this.auth.tenantCtx(auth, requestId);
+    const tdb = this.store.tenant(ctx);
+    const org = this.auth.organizationFor(auth);
+    const counts = this.store.erasure.counts(tdb, auth.membershipId, this.auth.iso());
+    if (counts.others === 0 && counts.pendingInvitations === 0) {
+      return { mode: "account_and_organization", organizationName: org.name, ...counts, reason: null };
+    }
+    if (counts.others === 0) return { mode: "blocked", organizationName: org.name, ...counts, reason: "pending_invitations" };
+    const admins = this.o.permissions.administratorIdsFor(ctx);
+    if (admins.includes(auth.membershipId) && admins.length === 1) return { mode: "blocked", organizationName: org.name, ...counts, reason: "last_admin" };
+    return { mode: "account_only", organizationName: org.name, ...counts, reason: null };
+  }
+
+  async deleteAccount(
+    auth: AuthContext,
+    requestId: string,
+    input: { password: string; confirmEmail: string; confirmOrganizationName?: string },
+  ): Promise<{ organizationDeleted: boolean }> {
+    const wait = this.deleteFailByUser.retryAfterMs(auth.userId);
+    if (wait > 0) throw this.auth.tooMany(wait);
+    const user = this.store.users.findById(auth.userId);
+    if (!user) throw new HttpError(401, "unauthenticated", "Sign in required");
+    if (!(await verifyPassword(input.password, user.password_hash))) {
+      this.deleteFailByUser.fail(auth.userId);
+      throw new HttpError(403, "current_password_incorrect", "The password is not right");
+    }
+    if (input.confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()) {
+      throw new HttpError(400, "confirmation_mismatch", "Type your email address exactly to confirm");
+    }
+    const plan = this.deletionPreview(auth, requestId);
+    if (plan.mode === "blocked") {
+      throw plan.reason === "pending_invitations"
+        ? new HttpError(409, "pending_invitations", "You are the only member, but invitations are still pending. Revoke them first, then delete your account.")
+        : new HttpError(409, "last_admin", "You are the last administrator of an organization that still has other people. Make someone else an administrator first.");
+    }
+    if (plan.mode === "account_and_organization" && input.confirmOrganizationName !== plan.organizationName) {
+      throw new HttpError(400, "organization_confirmation_required", `This also deletes the organization "${plan.organizationName}" and everything in it. Type its name exactly to confirm.`, { organizationName: plan.organizationName });
+    }
+
+    const now = this.auth.iso();
+    const er = this.store.erasure;
+    this.store.transaction(() => {
+      if (auth.organizationId && auth.membershipId) {
+        const tdb = this.store.tenant(this.auth.tenantCtx(auth, requestId));
+        if (plan.mode === "account_and_organization") {
+          er.deleteLoginTraces(user.id);
+          er.deleteOrganizationRows(tdb);
+          er.deleteOrganization(auth.organizationId);
+        } else {
+          er.retireMembership(tdb, auth.membershipId, now);
+        }
+      }
+      er.deleteLoginTraces(user.id);
+      if (er.createdOrganizations(user.id) > 0) er.tombstoneUser(user.id, now);
+      else er.deleteUser(user.id);
+    });
+    this.deleteFailByUser.reset(auth.userId);
+    this.o.log.info("account deleted", { requestId, organizationDeleted: plan.mode === "account_and_organization" });
+    return { organizationDeleted: plan.mode === "account_and_organization" };
+  }
+}
+
+export interface DeletionPreview {
+  mode: "account_only" | "account_and_organization" | "blocked";
+  organizationName: string | null;
+  others: number;
+  pendingInvitations: number;
+  reason: "last_admin" | "pending_invitations" | null;
 }

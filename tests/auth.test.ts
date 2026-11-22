@@ -208,7 +208,7 @@ describe("login and sessions", () => {
     const c = await signUp(t.app, "ada@example.com", "Ada Lovelace");
     const me = await get(t.app, "/api/auth/me", c);
     expect(me.status).toBe(200);
-    expect(me.body.data).toMatchObject({ user: { email: "ada@example.com", name: "Ada Lovelace" }, organization: null, needsOnboarding: true, roles: [], capabilities: [] });
+    expect(me.body.data).toMatchObject({ user: { email: "ada@example.com", name: "Ada Lovelace" }, organization: null, needsOnboarding: true, roles: [], capabilities: {} });
     expect(JSON.stringify(me.body)).not.toMatch(/password|scrypt/);
     expect(me.headers["cache-control"]).toBe("no-store");
   });
@@ -337,7 +337,7 @@ describe("create organization (onboarding)", () => {
       user: { email: "ada@example.com" },
       organization: { name: "Acme Robotics", slug: "acme-robotics", timezone: "Asia/Kolkata" },
       membership: { displayName: "Ada Lovelace" },
-      roles: ["owner"],
+      roles: [{ key: "owner", name: "Owner" }],
       needsOnboarding: false,
     });
     const a = row<{ scope_type: string; key: string; organization_id: string }>(
@@ -447,8 +447,8 @@ describe("tenant isolation", () => {
     expect(() => tdb.all("SELECT * FROM roles WHERE organization_id = 'x'")).toThrow(/Tenant lint failed/);
     expect(() => tdb.all("SELECT * FROM user_role_assignments WHERE organization_id = @organization_id", { organization_id: A })).toThrow(/session/);
     const aRoles = createTenantDb(t.db, { userId: "u", membershipId: "m", organizationId: A, sessionId: "s", requestId: "r" }, { strict: true });
-    expect(aRoles.all("SELECT id FROM roles WHERE organization_id = @organization_id").length).toBe(1);
-    expect(tdb.all("SELECT id FROM roles WHERE organization_id = @organization_id").length).toBe(1);
+    expect(aRoles.all("SELECT id FROM roles WHERE organization_id = @organization_id").length).toBe(9); // the nine role templates
+    expect(tdb.all("SELECT id FROM roles WHERE organization_id = @organization_id").length).toBe(9);
   });
 });
 
@@ -483,7 +483,7 @@ describe("the registry marks every new route", () => {
   it("every auth route declares its access, and the baseline ones answer 401 with no session", async () => {
     t = makeAuthApp();
     const rows = t.registry.list().filter((r) => r.path.startsWith("/api/auth") || r.path.startsWith("/api/org"));
-    expect(rows.length).toBe(12);
+    expect(rows.length).toBe(14);
     for (const r of rows.filter((x) => x.access.kind === "baseline")) {
       const res = await (r.method === "get" ? get(t.app, r.path) : post(t.app, r.path, {}));
       expect(res.status, r.path).toBe(401);

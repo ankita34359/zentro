@@ -8,6 +8,8 @@ import type { LinkDelivery } from "./delivery.js";
 import type { InvitationListRow, InvitationRow } from "./repositories/invitations.js";
 import type { AuthStore } from "./repositories/store.js";
 import type { AuthContext, AuthService, MeData } from "./service.js";
+import type { Capabilities, PermissionService } from "../permissions/service.js";
+import { permissionDenied } from "../../lib/errors.js";
 import { hashesEqual, hashSecret, makeInvitationCode, parseInvitationCode } from "./secrets.js";
 
 /** An invitation link is valid for 7 days. */
@@ -25,11 +27,13 @@ export interface InvitationView {
   createdAt: string;
   acceptedAt: string | null;
   invitedBy: string | null;
+  roleName: string | null;
 }
 
 export interface InvitationServiceOptions {
   store: AuthStore;
   auth: AuthService;
+  permissions: PermissionService;
   log: Logger;
   delivery: LinkDelivery;
 }
@@ -68,18 +72,26 @@ export class InvitationService {
       createdAt: i.created_at,
       acceptedAt: i.accepted_at,
       invitedBy: i.invited_by_name,
+      roleName: i.role_name,
     };
   }
 
   // ---------- administration (organization from the session only) ----------
 
-  list(auth: AuthContext, requestId: string): InvitationView[] {
+  /** Invitations have no subject until someone accepts, so they are organization-wide: a holder whose assignment is limited to a department or team cannot manage them yet. */
+  private requireOrganizationWide(caps: Capabilities): void {
+    if (!caps.scope("invitations.manage").all) throw permissionDenied();
+  }
+
+  list(auth: AuthContext, requestId: string, caps: Capabilities): InvitationView[] {
+    this.requireOrganizationWide(caps);
     const now = this.auth.now();
     return this.store.invitations(this.tdbFor(auth, requestId)).list().map((i) => this.view(i, now));
   }
 
   /** Creates the membership ("invited") and its invitation. The code is returned here and never again. */
-  create(auth: AuthContext, requestId: string, input: { email: string; name?: string }): { invitation: InvitationView; code: string; expiresAt: string } {
+  create(auth: AuthContext, requestId: string, caps: Capabilities, input: { email: string; name?: string; roleId?: string }): { invitation: InvitationView; code: string; expiresAt: string } {
+    this.requireOrganizationWide(caps);
     const tdb = this.tdbFor(auth, requestId);
     const ctx = this.auth.tenantCtx(auth, requestId);
     const email = input.email;
@@ -88,6 +100,14 @@ export class InvitationService {
     const invitations = this.store.invitations(tdb);
     const memberships = this.store.memberships(tdb);
 
+    // The role they will hold on joining (optional). "You cannot grant what you do not hold": the inviter must hold every
+    // permission of that role. A role of another organization looks like a missing one (404).
+    let initialRoleId: string | null = null;
+    if (input.roleId) {
+      const grants = this.o.permissions.roleGrantsFor(ctx, input.roleId);
+      if (!caps.covers(grants)) throw new HttpError(403, "cannot_grant_role", "You can only invite people into a role whose permissions you hold yourself");
+      initialRoleId = input.roleId;
+    }
     const code = makeInvitationCode(ctx.organizationId);
     const id = newId();
     this.store.transaction(() => {
@@ -104,7 +124,7 @@ export class InvitationService {
       }
       const membershipId = newId();
       memberships.insertInvited({ id: membershipId, displayName: (input.name ?? "").trim() || email.split("@")[0]!, workEmail: email, now });
-      invitations.insert({ id, membershipId, email, codeHash: hashSecret(code), invitedByMembershipId: ctx.membershipId, expiresAt: this.auth.iso(nowMs + INVITATION_TTL_MS), now });
+      invitations.insert({ id, membershipId, email, codeHash: hashSecret(code), invitedByMembershipId: ctx.membershipId, initialRoleId, expiresAt: this.auth.iso(nowMs + INVITATION_TTL_MS), now });
     });
     const row = invitations.list().find((i) => i.id === id)!;
     this.o.delivery.invitationIssued({ organizationId: ctx.organizationId, invitationId: id, email, code, expiresAt: row.expires_at });
@@ -113,7 +133,8 @@ export class InvitationService {
   }
 
   /** Ends an open invitation: the link stops working and the person who never joined leaves the list. */
-  revoke(auth: AuthContext, requestId: string, id: string): InvitationView {
+  revoke(auth: AuthContext, requestId: string, caps: Capabilities, id: string): InvitationView {
+    this.requireOrganizationWide(caps);
     const tdb = this.tdbFor(auth, requestId);
     const invitations = this.store.invitations(tdb);
     const inv = invitations.findById(id);
@@ -128,7 +149,8 @@ export class InvitationService {
   }
 
   /** A fresh link for the same person: the old one stops working. Allowed for pending, expired and revoked invitations. */
-  regenerate(auth: AuthContext, requestId: string, id: string): { invitation: InvitationView; code: string; expiresAt: string } {
+  regenerate(auth: AuthContext, requestId: string, caps: Capabilities, id: string): { invitation: InvitationView; code: string; expiresAt: string } {
+    this.requireOrganizationWide(caps);
     const tdb = this.tdbFor(auth, requestId);
     const ctx = this.auth.tenantCtx(auth, requestId);
     const invitations = this.store.invitations(tdb);
@@ -151,6 +173,7 @@ export class InvitationService {
         email: old.email,
         codeHash: hashSecret(code),
         invitedByMembershipId: ctx.membershipId,
+        initialRoleId: old.initial_role_id,
         expiresAt: this.auth.iso(nowMs + INVITATION_TTL_MS),
         now,
       });
@@ -159,6 +182,14 @@ export class InvitationService {
     this.o.delivery.invitationIssued({ organizationId: ctx.organizationId, invitationId: newInvitationId, email: old.email, code, expiresAt: row.expires_at });
     this.o.log.info("invitation regenerated", { requestId });
     return { invitation: this.view(row, nowMs), code, expiresAt: row.expires_at };
+  }
+
+  /** The role chosen when inviting becomes the person's assignment (organization-wide) at the moment they join. A role archived since then is skipped. */
+  private assignInitialRole(tdb: TenantDb, inv: InvitationRow, now: string): void {
+    if (!inv.initial_role_id) return;
+    const grants = this.store.grants(tdb);
+    if (!grants.findRole(inv.initial_role_id)) return;
+    grants.assign({ id: newId(), membershipId: inv.membership_id, roleId: inv.initial_role_id, grantedByMembershipId: inv.invited_by_membership_id, now });
   }
 
   // ---------- the invitee (public: the code is the credential) ----------
@@ -225,6 +256,7 @@ export class InvitationService {
         if (!memberships.bindUser(inv.membership_id, user.id, (input.name ?? "").trim() || user.name, now)) throw new HttpError(409, "conflict", "This invitation can no longer be used");
         this.store.users.setDefaultOrganization(user.id, organizationId, now);
         this.store.sessions.setOrganization(signedIn.sessionId, organizationId);
+        this.assignInitialRole(tdb, inv, now);
       });
       this.o.log.info("invitation accepted");
       const refreshed = this.auth.authenticateRow(signedIn.sessionId, user.id);
@@ -251,6 +283,7 @@ export class InvitationService {
       if (!invitations.markAccepted(inv.id, now)) throw new HttpError(410, "invitation_used", "This invitation was already used");
       if (!memberships.bindUser(inv.membership_id, userId, name, now)) throw new HttpError(409, "conflict", "This invitation can no longer be used");
       this.store.users.setDefaultOrganization(userId, organizationId, now);
+      this.assignInitialRole(tdb, inv, now);
     });
     const opened = this.auth.openSession(userId, organizationId);
     this.o.log.info("invitation accepted");

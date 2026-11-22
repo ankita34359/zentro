@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import type { Guards } from "../../http/registry.js";
 import { clearSessionCookie, cookieShouldBeSecure, readCookie } from "../../lib/cookies.js";
 import { unauthenticated } from "../../lib/errors.js";
-import { temporaryOwnerGate } from "./ownerGate.js";
+import type { PermissionService } from "../permissions/service.js";
 import type { AuthService, AuthContext } from "./service.js";
 import { COOKIE_NAME, verifySessionJwt } from "./tokens.js";
 
@@ -19,11 +19,9 @@ export function sessionFromRequest(service: AuthService, sessionSecret: string, 
 
 /**
  * Real sign-in guards (they replace the fail-closed defaults of stage 1.2). A missing, tampered, expired or revoked
- * session is a 401 and the stale cookie is cleared. `authorize` stays fail-closed: there is no permission catalogue
- * until the RBAC engine (stage 2.3), so a route that needs a permission key is refused for everyone until then.
+ * session is a 401 and the stale cookie is cleared. `authorize` is the permission engine (stage 2.3).
  */
-export function createAuthGuards(service: AuthService, sessionSecret: string, nodeEnv: string, cronSecret: string | undefined): Guards {
-  const ownerGate = temporaryOwnerGate(service);
+export function createAuthGuards(service: AuthService, permissions: PermissionService, sessionSecret: string, nodeEnv: string, cronSecret: string | undefined): Guards {
   return {
     authenticate: (req, res) => {
       const auth = sessionFromRequest(service, sessionSecret, req);
@@ -33,8 +31,8 @@ export function createAuthGuards(service: AuthService, sessionSecret: string, no
       }
       res.locals.auth = auth;
     },
-    // TEMPORARY (2.2): the two administration keys are allowed for Owners only; every other key stays refused.
-    authorize: (req, res, key) => ownerGate(req, res, key),
+    // The permission engine (stage 2.3): the caller must hold `key` with a non-empty scope set.
+    authorize: (req, res, key) => permissions.authorize(req, res, key),
     cronSecret,
   };
 }
