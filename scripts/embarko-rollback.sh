@@ -3,7 +3,8 @@
 #   scripts/embarko-rollback.sh <app-name>                 list the deployments (newest first); changes nothing
 #   scripts/embarko-rollback.sh <app-name> previous        roll back to the most recent good deploy before the current one
 #   scripts/embarko-rollback.sh <app-name> <deploymentId>  roll back to that deploy (pick it from the list)
-# Token: $DEPLOY_TOKEN, else line 1 of ~/.embarko/credentials. It is never printed.
+# Token: read ONLY from the environment variable DEPLOY_TOKEN. The script never stores, prints or logs it, and no
+# secret is ever written into this file or the repository.
 #
 # What a rollback does and does NOT do (Embarko's rules):
 #   - it keeps today's environment variables, domains and schedule;
@@ -16,8 +17,8 @@ set -euo pipefail
 APP="${1:?usage: $0 <app-name> [previous|<deploymentId>]}"
 TARGET="${2:-}"
 API="https://ship.embarko.ai"
-TOKEN="${DEPLOY_TOKEN:-$(head -1 "$HOME/.embarko/credentials" 2>/dev/null || true)}"
-[ -n "$TOKEN" ] || { echo "No token: set DEPLOY_TOKEN or put it on line 1 of ~/.embarko/credentials" >&2; exit 1; }
+TOKEN="${DEPLOY_TOKEN:-}"
+[ -n "$TOKEN" ] || { echo "No token: set the DEPLOY_TOKEN environment variable (it is never read from a file in this repository)." >&2; exit 1; }
 
 # The token goes to curl on stdin, so it never appears in the process list.
 ecurl() { printf 'oauth2-bearer = "%s"\n' "$TOKEN" | curl -sS -K - "$@"; }
