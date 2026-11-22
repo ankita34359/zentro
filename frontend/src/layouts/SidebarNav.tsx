@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router";
 import { cn } from "@/lib/cn";
 import { useHealth } from "@/hooks/useHealth";
 import { Brand } from "@/components/common/Brand";
+import { useAuth } from "@/contexts/AuthContext";
 import { NAV_GROUP_LABELS, NAV_ITEMS, type NavGroup } from "@/routes/navigation";
 
 const GROUP_ORDER: NavGroup[] = ["home", "strategy", "execution", "insight", "system"];
@@ -13,6 +14,10 @@ const GROUP_ORDER: NavGroup[] = ["home", "strategy", "execution", "insight", "sy
  */
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useHealth();
+  const { can, me } = useAuth();
+  // Hiding an item is a convenience only (the server refuses the data). Until we know who is signed in, items that need a permission are not shown.
+  void me;
+  const items = NAV_ITEMS.filter((i) => !i.requires || can(i.requires));
   const { pathname } = useLocation();
   const listRef = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
@@ -53,7 +58,8 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
           />
           {GROUP_ORDER.map((group) => {
             const label = NAV_GROUP_LABELS[group];
-            const items = NAV_ITEMS.filter((i) => i.group === group);
+            const groupItems = items.filter((i) => i.group === group);
+            if (groupItems.length === 0) return null; // no empty group headings
             return (
               <div key={group}>
                 {label && (
@@ -62,7 +68,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                   </p>
                 )}
                 <ul aria-labelledby={label ? `nav-group-${group}` : undefined} className="space-y-0.5">
-                  {items.map((item) => (
+                  {groupItems.map((item) => (
                     <li key={item.key}>
                       <NavLink
                         to={item.path}

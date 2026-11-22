@@ -48,14 +48,19 @@ describe("route registry: every route declares its protection", () => {
     t = makeTestApp();
     const rows = t.registry.list().map((r) => `${r.method.toUpperCase()} ${r.path} ${r.access.kind}`).sort();
     expect(rows).toEqual([
+      "GET /api/auth/delete-account/preview baseline",
       "GET /api/auth/me baseline",
       "GET /api/cron/tick cron",
       "GET /api/invitations permission",
       "GET /api/organization baseline",
       "GET /api/organization/members permission",
+      "GET /api/permissions permission",
+      "GET /api/roles permission",
+      "GET /api/roles/:id permission",
       "GET /healthz public",
       "POST /api/auth/accept-invitation public",
       "POST /api/auth/change-password baseline",
+      "POST /api/auth/delete-account baseline",
       "POST /api/auth/forgot-password public",
       "POST /api/auth/invitation-preview public",
       "POST /api/auth/login public",

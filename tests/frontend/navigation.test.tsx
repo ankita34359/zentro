@@ -28,11 +28,11 @@ describe("sidebar", () => {
   it("lists all eleven items in the order of the spec, each linking to its own route", async () => {
     expect(NAV_ITEMS.map((n) => n.label)).toEqual(LABELS);
     renderApp("/overview");
+    await screen.findByRole("heading", { level: 1, name: "Overview" }); // the signed-in person is known now
     const nav = screen.getAllByRole("navigation", { name: "Main" })[0]!;
     const links = within(nav).getAllByRole("link");
     expect(links.map((l) => l.textContent)).toEqual(LABELS);
     expect(links.map((l) => l.getAttribute("href"))).toEqual(NAV_ITEMS.map((n) => n.path));
-    await screen.findByRole("heading", { level: 1, name: "Overview" });
   });
 
   it("marks the current page with aria-current", async () => {

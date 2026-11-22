@@ -2,13 +2,14 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { sendData } from "../../http/envelope.js";
 import type { RouteRegistry } from "../../http/registry.js";
-import { cookieShouldBeSecure, serializeSessionCookie } from "../../lib/cookies.js";
+import { clearSessionCookie, cookieShouldBeSecure, serializeSessionCookie } from "../../lib/cookies.js";
 import { unauthenticated } from "../../lib/errors.js";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../lib/passwords.js";
 import type { AccountService } from "./accounts.js";
 import { authOf, sessionFromRequest } from "./guards.js";
 import type { InvitationService } from "./invitations.js";
 import type { AuthService } from "./service.js";
+import type { PermissionService } from "../permissions/service.js";
 import { COOKIE_NAME, signSessionJwt } from "./tokens.js";
 
 const email = z.string().trim().toLowerCase().max(254).email("Enter a valid email address");
@@ -23,9 +24,10 @@ const noStore = (res: Response) => res.setHeader("Cache-Control", "no-store");
 
 export function registerAccountRoutes(
   registry: RouteRegistry,
-  deps: { auth: AuthService; accounts: AccountService; invitations: InvitationService; sessionSecret: string; nodeEnv: string },
+  deps: { auth: AuthService; permissions: PermissionService; accounts: AccountService; invitations: InvitationService; sessionSecret: string; nodeEnv: string },
 ): void {
-  const { auth: authService, accounts, invitations } = deps;
+  const { auth: authService, permissions, accounts, invitations } = deps;
+  const caps = (res: Response) => permissions.capsOf(res, me(res));
   const me = (res: Response) => {
     const a = authOf(res);
     if (!a) throw unauthenticated();
@@ -83,6 +85,35 @@ export function registerAccountRoutes(
     },
   });
 
+  // ---------- signed in: delete my account ----------
+
+  registry.add({
+    method: "get",
+    path: "/api/auth/delete-account/preview",
+    access: { kind: "baseline" },
+    summary: "What Delete my account would do for the caller (account only / account and organization / blocked and why), so the screen can warn before anything happens",
+    handler: (_req, res) => {
+      noStore(res);
+      sendData(res, accounts.deletionPreview(me(res), rid(res)));
+    },
+  });
+
+  registry.add({
+    method: "post",
+    path: "/api/auth/delete-account",
+    access: { kind: "baseline" },
+    summary:
+      "Delete my account. Needs the password and the email typed again. If the caller is the only member and nothing is pending, the organization is deleted too and its name must be typed. Always signs the caller out",
+    schema: { body: z.object({ password: z.string().min(1).max(MAX_PASSWORD_LENGTH), confirmEmail: z.string().min(1).max(254), confirmOrganizationName: z.string().max(200).optional() }).strict() },
+    handler: async (req, res, v) => {
+      const b = v.body as { password: string; confirmEmail: string; confirmOrganizationName?: string };
+      noStore(res);
+      const r = await accounts.deleteAccount(me(res), rid(res), b);
+      res.append("Set-Cookie", clearSessionCookie(COOKIE_NAME, cookieShouldBeSecure(req, deps.nodeEnv)));
+      sendData(res, { deleted: true, organizationDeleted: r.organizationDeleted });
+    },
+  });
+
   // ---------- public: the invitee ----------
 
   registry.add({
@@ -123,7 +154,7 @@ export function registerAccountRoutes(
     },
   });
 
-  // ---------- administration (TEMPORARY: Owners only until the permission engine, stage 2.3) ----------
+  // ---------- administration (the permission engine decides; stage 2.3) ----------
 
   registry.add({
     method: "get",
@@ -132,7 +163,7 @@ export function registerAccountRoutes(
     summary: "The organization's invitations with their state (pending, accepted, revoked, expired). Never contains a code",
     handler: (_req, res) => {
       noStore(res);
-      sendData(res, invitations.list(me(res), rid(res)));
+      sendData(res, invitations.list(me(res), rid(res), caps(res)));
     },
   });
 
@@ -141,10 +172,10 @@ export function registerAccountRoutes(
     path: "/api/invitations",
     access: { kind: "permission", key: "invitations.manage" },
     summary: "Invite a person by email: creates their (invited) membership and an invitation. The code is returned ONCE; only its hash is stored",
-    schema: { body: z.object({ email, name: z.string().trim().max(100).optional() }).strict() },
+    schema: { body: z.object({ email, name: z.string().trim().max(100).optional(), roleId: z.string().uuid().optional() }).strict() },
     handler: (_req, res, v) => {
       noStore(res);
-      sendData(res, invitations.create(me(res), rid(res), v.body as { email: string; name?: string }), 201);
+      sendData(res, invitations.create(me(res), rid(res), caps(res), v.body as { email: string; name?: string; roleId?: string }), 201);
     },
   });
 
@@ -157,7 +188,7 @@ export function registerAccountRoutes(
     schema: { params: z.object({ id: uuid }) },
     handler: (_req, res, v) => {
       noStore(res);
-      sendData(res, invitations.revoke(me(res), rid(res), (v.params as { id: string }).id));
+      sendData(res, invitations.revoke(me(res), rid(res), caps(res), (v.params as { id: string }).id));
     },
   });
 
@@ -170,7 +201,7 @@ export function registerAccountRoutes(
     schema: { params: z.object({ id: uuid }) },
     handler: (_req, res, v) => {
       noStore(res);
-      sendData(res, invitations.regenerate(me(res), rid(res), (v.params as { id: string }).id));
+      sendData(res, invitations.regenerate(me(res), rid(res), caps(res), (v.params as { id: string }).id));
     },
   });
 
@@ -181,7 +212,7 @@ export function registerAccountRoutes(
     summary: "The organization's people (name, email, state, role keys) for the Users screen. Replaced by the people API in stage 2.6",
     handler: (_req, res) => {
       noStore(res);
-      sendData(res, accounts.members(me(res), rid(res)));
+      sendData(res, accounts.members(me(res), rid(res), caps(res)));
     },
   });
 
@@ -194,7 +225,7 @@ export function registerAccountRoutes(
     schema: { params: z.object({ membershipId: uuid }) },
     handler: (_req, res, v) => {
       noStore(res);
-      sendData(res, accounts.createResetLink(me(res), rid(res), (v.params as { membershipId: string }).membershipId), 201);
+      sendData(res, accounts.createResetLink(me(res), rid(res), caps(res), (v.params as { membershipId: string }).membershipId), 201);
     },
   });
 }

@@ -17,6 +17,9 @@ import { AccountService } from "./modules/auth/accounts.js";
 import { registerAccountRoutes } from "./modules/auth/accountRoutes.js";
 import { noDelivery, type LinkDelivery } from "./modules/auth/delivery.js";
 import { InvitationService } from "./modules/auth/invitations.js";
+import { PermissionService } from "./modules/permissions/service.js";
+import { noHierarchy, type HierarchyProvider } from "./modules/permissions/resolver.js";
+import { registerRoleRoutes } from "./modules/permissions/routes.js";
 import { createAuthGuards } from "./modules/auth/guards.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { createAuthStore } from "./modules/auth/repositories/store.js";
@@ -40,9 +43,11 @@ export interface AppOptions {
   guards?: Guards;
   /** Where invitation and reset links go besides the administrator's screen. Stage 2.2 default: nowhere (administrators copy links). Stage 8 supplies email. */
   delivery?: LinkDelivery;
+  /** Teams, departments and reporting lines. Stages 2.5 and 2.6 supply the real one; tests inject a fake. Default: none exist yet. */
+  hierarchy?: HierarchyProvider;
 }
 
-export function createApp(opts: AppOptions): { app: Express; registry: RouteRegistry; tick: ReturnType<typeof createTick>; auth: AuthService } {
+export function createApp(opts: AppOptions): { app: Express; registry: RouteRegistry; tick: ReturnType<typeof createTick>; auth: AuthService; permissions: PermissionService } {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", opts.config.trustProxy);
@@ -52,14 +57,16 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const registry = new RouteRegistry();
 
   const store = createAuthStore(opts.db);
-  const auth = new AuthService({ store, config: opts.config, log: opts.log });
+  const permissions = new PermissionService(store, opts.hierarchy ?? noHierarchy);
+  const auth = new AuthService({ store, permissions, config: opts.config, log: opts.log });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
   const delivery = opts.delivery ?? noDelivery;
-  const accounts = new AccountService({ store, auth, log: opts.log, delivery });
-  const invitations = new InvitationService({ store, auth, log: opts.log, delivery });
+  const accounts = new AccountService({ store, auth, permissions, log: opts.log, delivery });
+  const invitations = new InvitationService({ store, auth, permissions, log: opts.log, delivery });
   registerSystemRoutes(registry, { db: opts.db, version: opts.version, migrationsTotal: opts.migrationsTotal, tick, registration: opts.config.registration.mode });
   registerAuthRoutes(registry, auth, { sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
-  registerAccountRoutes(registry, { auth, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
+  registerRoleRoutes(registry, { auth, permissions });
+  registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
 
   app.use(requestId);
@@ -68,12 +75,12 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   app.use(revalidateHealthz);
   app.use(sameOriginCheck(opts.config.appUrl));
   app.use(express.json({ limit: "100kb" }));
-  registry.mount(app, opts.guards ?? createAuthGuards(auth, opts.config.sessionSecret, opts.config.nodeEnv, opts.cronSecret));
+  registry.mount(app, opts.guards ?? createAuthGuards(auth, permissions, opts.config.sessionSecret, opts.config.nodeEnv, opts.cronSecret));
   assertAllRegistered(app, registry);
 
   app.use("/api", apiNotFound);
   mountSpa(app, opts.staticDir);
   app.use(apiNotFound);
   app.use(errorHandler(opts.log));
-  return { app, registry, tick, auth };
+  return { app, registry, tick, auth, permissions };
 }

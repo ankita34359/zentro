@@ -19,6 +19,7 @@ import {
   invitationLink,
   listInvitations,
   listMembers,
+  listRoles,
   regenerateInvitation,
   resetLinkUrl,
   revokeInvitation,
@@ -38,12 +39,15 @@ const STATUS = {
   expired: { label: "Expired", icon: CircleDashed, variant: "dashed" },
 } as const;
 
-/** Settings → Users: invite people, copy and revoke links, and generate password-reset links. Owners only for now. */
+/** Settings → Users: invite people (into a role), copy and revoke links, and generate password-reset links. What shows depends on what the signed-in person may do. */
 export default function UsersPage() {
   const auth = useAuth();
   const client = useQueryClient();
   const tz = auth.me?.organization?.timezone ?? "UTC";
-  const isOwner = auth.me?.roles.includes("owner") ?? false;
+  const canInvite = auth.can("invitations.manage");
+  const canPeople = auth.can("people.manage");
+  const canSeeRoles = auth.can("roles.view");
+  const [roleId, setRoleId] = useState("");
   const [shown, setShown] = useState<Shown | null>(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -51,8 +55,9 @@ export default function UsersPage() {
   const [problem, setProblem] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
 
-  const invitations = useQuery({ queryKey: ["invitations"], queryFn: listInvitations, enabled: isOwner, retry: false });
-  const members = useQuery({ queryKey: ["members"], queryFn: listMembers, enabled: isOwner, retry: false });
+  const invitations = useQuery({ queryKey: ["invitations"], queryFn: listInvitations, enabled: canInvite, retry: false });
+  const members = useQuery({ queryKey: ["members"], queryFn: listMembers, enabled: canPeople, retry: false });
+  const roles = useQuery({ queryKey: ["roles"], queryFn: listRoles, enabled: canInvite && canSeeRoles, retry: false });
   const refresh = () => Promise.all([client.invalidateQueries({ queryKey: ["invitations"] }), client.invalidateQueries({ queryKey: ["members"] })]);
 
   const showInvite = (code: string, who: string, expiresAt: string) =>
@@ -63,11 +68,12 @@ export default function UsersPage() {
     });
 
   const invite = useMutation({
-    mutationFn: () => createInvitation({ email: email.trim(), ...(name.trim() ? { name: name.trim() } : {}) }),
+    mutationFn: () => createInvitation({ email: email.trim(), ...(name.trim() ? { name: name.trim() } : {}), ...(roleId ? { roleId } : {}) }),
     onSuccess: (r) => {
       showInvite(r.code, r.invitation.email, r.expiresAt);
       setEmail("");
       setName("");
+      setRoleId("");
       void refresh();
     },
     onError: (e) => setProblem(problemText(e)),
@@ -107,14 +113,14 @@ export default function UsersPage() {
     if (!err) invite.mutate();
   }
 
-  const header = <PageHeader eyebrow="Settings" title="Users and invitations" description="Invite people, copy their link, and help someone back in if they lose their password." />;
+  const header = <PageHeader eyebrow="Settings" title="Users and invitations" description="Invite people into a role, copy their link, and help someone back in if they lose their password." />;
   if (auth.status === "loading") return <PageSkeleton />;
-  if (!isOwner) {
+  if (!canInvite && !canPeople) {
     return (
       <>
         {header}
-        <EmptyState illustration="settings" title="Only owners can manage users for now">
-          <p>Roles and permissions arrive in stage 2.3. Until then the organization&apos;s owners manage invitations and password resets.</p>
+        <EmptyState illustration="settings" title="You do not manage users">
+          <p>Inviting people and helping them back in needs a role that allows it. Ask an administrator of your organization.</p>
         </EmptyState>
       </>
     );
@@ -127,22 +133,46 @@ export default function UsersPage() {
         {shown && <OneTimeLink {...shown} onDismiss={() => setShown(null)} />}
         {problem && <FormAlert>{problem}</FormAlert>}
 
+        {canInvite && (
         <Card lift={false}>
           <CardHeader>
             <CardTitle>Invite someone</CardTitle>
             <CardDescription>You get a link to copy and send. Nothing is emailed automatically yet.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+            <form onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-start">
               <FormField label="Email" type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} error={emailErr} />
               <FormField label="Name (optional)" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
-              <Button type="submit" className="w-full sm:mt-[1.65rem] sm:w-auto" disabled={invite.isPending}>
+              {canSeeRoles && roles.data && (
+                <div className="space-y-1.5">
+                  <label htmlFor="invite-role" className="text-label font-medium">
+                    Role (optional)
+                  </label>
+                  <select
+                    id="invite-role"
+                    value={roleId}
+                    onChange={(e) => setRoleId(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs focus-visible:border-ring"
+                  >
+                    <option value="">No role yet</option>
+                    {roles.data.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-caption text-muted-foreground">You can only choose roles whose permissions you hold.</p>
+                </div>
+              )}
+              <Button type="submit" className="w-full lg:mt-[1.65rem] lg:w-auto" disabled={invite.isPending}>
                 <MailPlus aria-hidden="true" /> {invite.isPending ? "Creating…" : "Create invitation"}
               </Button>
             </form>
           </CardContent>
         </Card>
+        )}
 
+        {canInvite && (
         <Card lift={false}>
           <CardHeader>
             <CardTitle>Invitations</CardTitle>
@@ -174,7 +204,9 @@ export default function UsersPage() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {canPeople && (
         <Card lift={false}>
           <CardHeader>
             <CardTitle>People</CardTitle>
@@ -197,8 +229,8 @@ export default function UsersPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {m.roles.map((r) => (
-                        <Badge key={r} variant="primary">
-                          {r === "owner" ? "Owner" : r}
+                        <Badge key={r.key} variant="primary">
+                          {r.name}
                         </Badge>
                       ))}
                       {m.status === "invited" && <Badge variant="dashed">Not joined yet</Badge>}
@@ -214,6 +246,7 @@ export default function UsersPage() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
     </>
   );
@@ -249,6 +282,7 @@ function InvitationRow({
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {inv.roleName && <Badge variant="outline">{inv.roleName}</Badge>}
         <Badge variant={s.variant}>
           <s.icon aria-hidden="true" /> {s.label}
         </Badge>

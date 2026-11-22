@@ -31,7 +31,7 @@ if (!loaded.ok) {
   const result = migrate(db, migrationsDir);
   if (result.unknownApplied.length > 0) log.warn("database is newer than this code", { unknown: result.unknownApplied });
 
-  const { app } = createApp({
+  const { app, permissions } = createApp({
     db,
     config,
     version,
@@ -40,6 +40,10 @@ if (!loaded.ok) {
     log,
     staticDir: path.join(root, "dist"),
   });
+  // After the migrations: make sure the catalogue matches the code and every organization has every role template.
+  permissions.syncCatalog();
+  const seeded = permissions.ensureRoleTemplates();
+  if (seeded.rolesCreated > 0) log.info("role templates added", { rolesCreated: seeded.rolesCreated, organizations: seeded.organizations });
   if (config.registration.mode === "closed") {
     log.warn("registration is closed", { hint: "set REGISTRATION_MODE=code and REGISTRATION_CODE (at least 8 characters) to allow sign-ups" });
   }

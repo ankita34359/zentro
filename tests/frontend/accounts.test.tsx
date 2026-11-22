@@ -2,7 +2,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiError, envelope, HEALTH_OK, json, ME_READY, renderApp, setMe, stubFetch, stubMatchMedia } from "./helpers";
+import { apiError, envelope, HEALTH_OK, json, ME_NO_ROLE, ME_READY, renderApp, setMe, stubFetch, stubMatchMedia } from "./helpers";
 
 beforeEach(() => stubMatchMedia(false));
 
@@ -144,12 +144,12 @@ describe("accept an invitation", () => {
 
 describe("Settings → Users and invitations", () => {
   const INVITATIONS = [
-    { id: "i1", membershipId: "m9", email: "sam@example.com", displayName: "Sam", status: "pending", expiresAt: "2026-12-01T00:00:00.000Z", createdAt: "2026-11-24T00:00:00.000Z", acceptedAt: null, invitedBy: "Ada" },
-    { id: "i2", membershipId: "m8", email: "old@example.com", displayName: "Old", status: "expired", expiresAt: "2026-11-01T00:00:00.000Z", createdAt: "2026-10-25T00:00:00.000Z", acceptedAt: null, invitedBy: "Ada" },
-    { id: "i3", membershipId: "m7", email: "done@example.com", displayName: "Done", status: "accepted", expiresAt: "2026-11-20T00:00:00.000Z", createdAt: "2026-11-13T00:00:00.000Z", acceptedAt: "2026-11-14T00:00:00.000Z", invitedBy: "Ada" },
+    { id: "i1", membershipId: "m9", email: "sam@example.com", displayName: "Sam", status: "pending", expiresAt: "2026-12-01T00:00:00.000Z", createdAt: "2026-11-24T00:00:00.000Z", acceptedAt: null, invitedBy: "Ada", roleName: null },
+    { id: "i2", membershipId: "m8", email: "old@example.com", displayName: "Old", status: "expired", expiresAt: "2026-11-01T00:00:00.000Z", createdAt: "2026-10-25T00:00:00.000Z", acceptedAt: null, invitedBy: "Ada", roleName: null },
+    { id: "i3", membershipId: "m7", email: "done@example.com", displayName: "Done", status: "accepted", expiresAt: "2026-11-20T00:00:00.000Z", createdAt: "2026-11-13T00:00:00.000Z", acceptedAt: "2026-11-14T00:00:00.000Z", invitedBy: "Ada", roleName: null },
   ];
   const MEMBERS = [
-    { id: "m1", displayName: "Ada Lovelace", email: "ada@example.com", status: "active", hasLogin: true, roles: ["owner"], isYou: true },
+    { id: "m1", displayName: "Ada Lovelace", email: "ada@example.com", status: "active", hasLogin: true, roles: [{ key: "owner", name: "Owner" }], isYou: true },
     { id: "m2", displayName: "Bo Builder", email: "bo@example.com", status: "active", hasLogin: true, roles: [], isYou: false },
     { id: "m9", displayName: "Sam", email: "sam@example.com", status: "invited", hasLogin: false, roles: [], isYou: false },
   ];
@@ -173,11 +173,11 @@ describe("Settings → Users and invitations", () => {
     expect(within(await screen.findByRole("list", { name: "People" })).getByText("Not joined yet")).toBeTruthy();
   });
 
-  it("a person who is not an Owner sees an explanation and the server is never asked", async () => {
-    setMe({ ...ME_READY, roles: [] });
+  it("a person whose roles do not allow it is told so on the page, and the server is never asked", async () => {
+    setMe(ME_NO_ROLE);
     const f = api();
     renderApp("/settings/users");
-    expect(await screen.findByText(/Only owners can manage users/)).toBeTruthy();
+    expect(await screen.findByText("You do not have access to this page")).toBeTruthy();
     expect(calls(f, "/api/invitations")).toHaveLength(0);
   });
 

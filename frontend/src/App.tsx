@@ -10,6 +10,7 @@ import { DEFAULT_PATH, NAV_ITEMS } from "@/routes/navigation";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RequireAuth } from "@/routes/RequireAuth";
+import { RequireCapability } from "@/routes/RequireCapability";
 import {
   AcceptInvitePage,
   DesignPage,
@@ -21,6 +22,7 @@ import {
   ProfilePage,
   RegisterPage,
   ResetPasswordPage,
+  RolesPage,
   SectionPage,
   SettingsPage,
   UsersPage,
@@ -67,7 +69,12 @@ export function AppRoutes() {
           <Route index element={<Navigate to={DEFAULT_PATH} replace />} />
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/users" element={<UsersPage />} />
+          <Route element={<RequireCapability any={["invitations.manage", "people.manage"]} />}>
+            <Route path="/settings/users" element={<UsersPage />} />
+          </Route>
+          <Route element={<RequireCapability any={["roles.view"]} />}>
+            <Route path="/settings/roles" element={<RolesPage />} />
+          </Route>
           <Route path="/settings/profile" element={<ProfilePage />} />
           {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings").map((n) => (
             <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />

@@ -5,7 +5,10 @@ import { newId } from "../../lib/ids.js";
 import type { Logger } from "../../lib/logger.js";
 import { decoyHash, hashPassword, safeEqual, verifyPassword } from "../../lib/passwords.js";
 import { RateLimiter } from "../../lib/rateLimit.js";
-import type { OrganizationRow } from "./repositories/organizations.js";
+import type { OrganizationRow, RoleRef } from "./repositories/organizations.js";
+import type { PermissionService } from "../permissions/service.js";
+import { BASELINE_RIGHTS } from "../permissions/catalog.js";
+import { CREATOR_ROLE_KEY } from "../permissions/roleTemplates.js";
 import type { SessionRow } from "./repositories/sessions.js";
 import type { AuthStore } from "./repositories/store.js";
 import type { UserRow } from "./repositories/users.js";
@@ -23,9 +26,12 @@ export interface MeData {
   user: { id: string; email: string; name: string };
   organization: { id: string; name: string; slug: string; timezone: string } | null;
   membership: { id: string; displayName: string } | null;
-  roles: string[];
-  /** Filled by the RBAC engine (stage 2.3); empty until then. The frontend never decides access from it. */
-  capabilities: string[];
+  /** The roles the person holds (names are data the organization edits; nothing decides access from them). */
+  roles: RoleRef[];
+  /** What the person may do: `{ permissionKey: [scope modes] }`, from the permission engine. The browser only uses it to choose screens; the server decides. */
+  capabilities: Record<string, string[]>;
+  /** Rights everyone has whatever their roles (docs/permission-model.md section 2.1). */
+  baseline: string[];
   needsOnboarding: boolean;
 }
 
@@ -34,6 +40,7 @@ const GENERIC_LOGIN = "Invalid email or password";
 
 export interface AuthServiceOptions {
   store: AuthStore;
+  permissions: PermissionService;
   config: Config;
   log: Logger;
   now?: () => number;
@@ -217,13 +224,6 @@ export class AuthService {
     return { userId, sessionId: sessionRowIdValue, organizationId, membershipId };
   }
 
-  /** TEMPORARY (2.2): does the person hold the Owner role right now? Replaced by the permission engine in 2.3. */
-  isOwner(auth: AuthContext): boolean {
-    if (!auth.organizationId || !auth.membershipId) return false;
-    const tdb = this.tenantFor(auth.organizationId, auth.userId, auth.sessionId);
-    return this.o.store.roles(tdb).keysForMembership(auth.membershipId, this.iso()).includes("owner");
-  }
-
   // ---------- me ----------
 
   me(auth: AuthContext): MeData {
@@ -231,14 +231,16 @@ export class AuthService {
     if (!user) throw unauthenticated();
     let organization: OrganizationRow | null = null;
     let membership: MeData["membership"] = null;
-    let roles: string[] = [];
+    let roles: RoleRef[] = [];
+    let capabilities: Record<string, string[]> = {};
     if (auth.organizationId && auth.membershipId) {
       organization = this.orgs.findById(auth.organizationId) ?? null;
       if (organization) {
         const tdb = this.tenantFor(auth.organizationId, auth.userId, auth.sessionId);
         const m = this.o.store.memberships(tdb).findActiveForUser(auth.userId);
         if (m) membership = { id: m.id, displayName: m.display_name };
-        roles = this.o.store.roles(tdb).keysForMembership(auth.membershipId, this.iso());
+        roles = this.o.store.roles(tdb).forMembership(auth.membershipId, this.iso());
+        capabilities = this.o.permissions.capabilities(auth).toMap();
       }
     }
     return {
@@ -246,7 +248,8 @@ export class AuthService {
       organization: organization ? { id: organization.id, name: organization.name, slug: organization.slug, timezone: organization.timezone } : null,
       membership,
       roles,
-      capabilities: [],
+      capabilities,
+      baseline: BASELINE_RIGHTS.map((b) => b.key),
       needsOnboarding: !organization,
     };
   }
@@ -269,10 +272,10 @@ export class AuthService {
       this.orgs.insert({ id: organizationId, name: input.name, slug, timezone: input.timezone, createdByUserId: user.id, now });
       const tdb = this.o.store.tenant({ userId: user.id, membershipId: "", organizationId, sessionId: auth.sessionId, requestId: "" });
       this.o.store.memberships(tdb).insert({ id: membershipId, userId: user.id, displayName: user.name, workEmail: user.email, now });
-      const roles = this.o.store.roles(tdb);
-      const ownerRoleId = newId();
-      roles.insert({ id: ownerRoleId, key: "owner", name: "Owner", description: "Full control of the organization. Cannot be left without one.", now });
-      roles.assign({ id: newId(), membershipId, roleId: ownerRoleId, now });
+      // The nine role templates (with their grants) are seeded, and the creator gets the creator template organization-wide.
+      const roleIds = this.o.permissions.seedTemplates(tdb, now);
+      const creatorRoleId = roleIds.get(CREATOR_ROLE_KEY)!;
+      this.o.store.grants(tdb).assign({ id: newId(), membershipId, roleId: creatorRoleId, grantedByMembershipId: membershipId, now });
       this.users.setDefaultOrganization(user.id, organizationId, now);
       this.sessions.setOrganization(auth.sessionId, organizationId);
     });

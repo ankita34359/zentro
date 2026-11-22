@@ -28,6 +28,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await auth.login(email.trim(), password);
+      auth.clearNotice();
       navigate(state?.from ?? "/", { replace: true });
     } catch (err) {
       setProblem(problemText(err));
@@ -49,6 +50,7 @@ export default function LoginPage() {
     >
       <form onSubmit={submit} noValidate className="space-y-4">
         {state?.registered && <FormNotice>Account created. Sign in with your email and password.</FormNotice>}
+        {auth.notice === "accountDeleted" && <FormNotice>Your account was deleted. You are signed out.</FormNotice>}
         {state?.passwordReset && <FormNotice>Password changed. Sign in with your new password.</FormNotice>}
         {problem && <FormAlert>{problem}</FormAlert>}
         <FormField label="Email" type="email" autoComplete="username" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} />

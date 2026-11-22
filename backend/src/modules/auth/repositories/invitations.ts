@@ -6,6 +6,7 @@ export interface InvitationRow {
   email: string;
   code_hash: string;
   invited_by_membership_id: string;
+  initial_role_id: string | null;
   expires_at: string;
   accepted_at: string | null;
   revoked_at: string | null;
@@ -15,18 +16,19 @@ export interface InvitationRow {
 export interface InvitationListRow extends InvitationRow {
   display_name: string;
   invited_by_name: string | null;
+  role_name: string | null;
 }
 
-const COLS = "id, membership_id, email, code_hash, invited_by_membership_id, expires_at, accepted_at, revoked_at, created_at";
+const COLS = "id, membership_id, email, code_hash, invited_by_membership_id, initial_role_id, expires_at, accepted_at, revoked_at, created_at";
 
 /** Organization-owned: every statement filters or inserts by the organization the tenant handle carries. */
 export class InvitationsRepository {
   constructor(private readonly tdb: TenantDb) {}
 
-  insert(i: { id: string; membershipId: string; email: string; codeHash: string; invitedByMembershipId: string; expiresAt: string; now: string }): void {
+  insert(i: { id: string; membershipId: string; email: string; codeHash: string; invitedByMembershipId: string; initialRoleId?: string | null; expiresAt: string; now: string }): void {
     this.tdb.run(
-      "INSERT INTO invitations (id, organization_id, membership_id, email, code_hash, invited_by_membership_id, expires_at, created_at, updated_at) VALUES (@id, @organization_id, @membershipId, @email, @codeHash, @invitedByMembershipId, @expiresAt, @now, @now)",
-      i,
+      "INSERT INTO invitations (id, organization_id, membership_id, email, code_hash, invited_by_membership_id, initial_role_id, expires_at, created_at, updated_at) VALUES (@id, @organization_id, @membershipId, @email, @codeHash, @invitedByMembershipId, @initialRoleId, @expiresAt, @now, @now)",
+      { ...i, initialRoleId: i.initialRoleId ?? null },
     );
   }
 
@@ -48,7 +50,7 @@ export class InvitationsRepository {
 
   list(): InvitationListRow[] {
     return this.tdb.all<InvitationListRow>(
-      "SELECT i.id, i.membership_id, i.email, i.code_hash, i.invited_by_membership_id, i.expires_at, i.accepted_at, i.revoked_at, i.created_at, m.display_name AS display_name, b.display_name AS invited_by_name FROM invitations i JOIN organization_memberships m ON m.id = i.membership_id AND m.organization_id = @organization_id LEFT JOIN organization_memberships b ON b.id = i.invited_by_membership_id AND b.organization_id = @organization_id WHERE i.organization_id = @organization_id ORDER BY i.created_at DESC",
+      "SELECT i.id, i.membership_id, i.email, i.code_hash, i.invited_by_membership_id, i.initial_role_id, i.expires_at, i.accepted_at, i.revoked_at, i.created_at, m.display_name AS display_name, b.display_name AS invited_by_name, r.name AS role_name FROM invitations i JOIN organization_memberships m ON m.id = i.membership_id AND m.organization_id = @organization_id LEFT JOIN organization_memberships b ON b.id = i.invited_by_membership_id AND b.organization_id = @organization_id LEFT JOIN roles r ON r.id = i.initial_role_id AND r.organization_id = @organization_id WHERE i.organization_id = @organization_id ORDER BY i.created_at DESC",
     );
   }
 
