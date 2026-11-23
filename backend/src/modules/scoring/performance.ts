@@ -13,7 +13,7 @@ import { computeScore, ENGINE_VERSION } from "./engine/engine.js";
 import { roundHalfUp1 } from "./engine/math.js";
 import type { ComponentResult, Explanation, ModelDef, ScoreInputs, ScoreResult } from "./engine/types.js";
 import { seedTemplates } from "./models.js";
-import { runScore, type RunOutcome, type Trigger } from "./runner.js";
+import { runScore, scoringOrder, type RunOutcome, type Trigger } from "./runner.js";
 import type { ModelRow, PeriodRow, ScoreComponentRow, ScoreRow, ScorecardRow } from "./repositories/scoring.js";
 
 export const PERIOD_TYPES = ["month", "quarter", "year", "custom"] as const;
@@ -183,7 +183,7 @@ export class PerformanceService {
       this.ensureModels(ctx, w);
       const info: PeriodInfo = { id: period.id, start: period.start_date, end: period.end_date, open: period.status === "open" };
       const collector = new Collector(w.tdb, info, w.today);
-      for (const p of targets) {
+      for (const p of scoringOrder(targets, collector)) {
         const r = this.runFor(w.tdb, ctx, collector, period, p.id, p.display_name, trigger);
         if (!r) skipped += 1;
         else if (r.created) scored += 1;
@@ -220,7 +220,7 @@ export class PerformanceService {
       w.cards.setPeriodStatus(id, "closed", ctx.membershipId, this.now());
       const closed = w.cards.period(id)!;
       const collector = new Collector(w.tdb, { id: closed.id, start: closed.start_date, end: closed.end_date, open: false }, w.today);
-      for (const person of people) {
+      for (const person of scoringOrder(people, collector)) {
         const r = this.runFor(w.tdb, ctx, collector, closed, person.id, person.display_name, "period_close");
         if (!r) out.skipped += 1;
         else if (r.created) out.scored += 1;

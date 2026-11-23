@@ -55,5 +55,11 @@ export function runScore(d: { cards: ScorecardRepository; models: ScoringReposit
     d.cards.insertScoreComponent({ id: newId(), scoreId, key: c.key, label: c.label, providerKey: c.providerKey, raw: c.rawValue, normalized: c.score, weight: c.weight, effective: c.effectiveWeight, points: c.points, state: c.state, sample: c.sampleSize, minSample: c.minSample, coverage: c.coverage, inputsJson: JSON.stringify(c.contributors), notesJson: JSON.stringify(c.notes) });
   }
   d.cards.pointScorecard(card.id, scoreId, model.id, cardStatus);
+  collector.forget(m);
   return { scoreId, created: true, changedFrom: last?.run ?? null };
+}
+
+/** Mentors are scored after everyone else, because a mentor's development score reads their mentees' scores from the same period. */
+export function scoringOrder<T extends { id: string }>(people: readonly T[], collector: Collector): T[] {
+  return [...people.filter((p) => !collector.mentorsAnyone(p.id)), ...people.filter((p) => collector.mentorsAnyone(p.id))];
 }

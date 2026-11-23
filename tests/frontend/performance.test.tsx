@@ -211,4 +211,72 @@ describe("Performance Intelligence (stage 5.2)", () => {
     expect(bodyOf(f.mock.calls.find((c) => c[0] === "/api/performance/comparisons" && (c[1] as RequestInit)?.method === "POST")!)).toMatchObject({ name: "Engineers now", periodId: "p1", minTenureDays: 30, includeInsufficient: false });
     expect(await screen.findByText(/shown exactly as it was saved/)).toBeTruthy();
   });
+
+  const ASSIGNMENT = { id: "as1", mentor: { id: "mo", name: "Mo Mentor" }, mentee: { id: "ni", name: "Nia Mentee" }, startDate: "2026-08-01", endDate: null, status: "active", goals: "Take on bigger work", cadenceDays: 14, activityCount: 2, lastActivityOn: "2026-11-10", isDemo: false, can: { manage: false, log: true } };
+  const EFFECT = { period: { id: "p1", name: "Q4 2026", status: "open" }, settings: { minDays: 60, k: 2.5 }, caveats: ["Mentee results have many causes. This shows how the people someone mentors changed while they were mentored, not what the mentor alone caused."], mentors: [{ mentor: { id: "mo", name: "Mo Mentor" }, development: { value: 68.8, state: "ok", sampleSize: 2, notes: [] }, activity: { value: 27.8, state: "ok", sampleSize: 2, notes: [] }, menteeCount: 2, averageDays: 50, mentees: [{ assignmentId: "as1", mentee: { id: "ni", name: "Nia Mentee" }, overlapDays: 50, durationFactor: 0.83, mentorCount: 2, creditShare: 0.5, improvementIndex: 100, detail: { baselineScore: 50, currentScore: 70, scoreDelta: 20, deliveryDelta: null, qualityDelta: null, goalAchievement: null }, activities: 2, expectedActivities: 3.6, cadenceDays: 14 }] }] };
+
+  it("Mentorship: the pair, what they did, the log form for the mentor, and the effect with every factor and the caveat", async () => {
+    setMe(withCaps({ "mentorship.view": ["own"], "mentorship.log": ["own"] }));
+    const f = server([PERIOD], (url, init) => {
+      if (url === "/api/mentorship/assignments" && isGet(init)) return envelope([ASSIGNMENT]);
+      if (url === "/api/mentorship/assignments/as1/activities" && init?.method === "POST") return envelope({ id: "x", type: "feedback", occurredOn: "2026-11-23", durationMinutes: null, summary: "Reviewed the PR", outcome: null, by: { id: "mo", name: "Mo Mentor" } }, 201);
+      if (url === "/api/mentorship/assignments/as1/activities") return envelope([{ id: "a1", type: "one_on_one", occurredOn: "2026-11-10", durationMinutes: 45, summary: "Weekly check-in", outcome: null, by: { id: "mo", name: "Mo Mentor" } }]);
+      if (url.startsWith("/api/mentorship/effectiveness")) return envelope(EFFECT);
+      return undefined;
+    });
+    renderApp("/performance?tab=mentorship");
+    await userEvent.click(await screen.findByRole("button", { name: "Open mentoring: Mo Mentor and Nia Mentee" }));
+    const detail = await screen.findByRole("region", { name: "Assignment" });
+    expect(await within(detail).findByText("Weekly check-in")).toBeTruthy();
+    expect(within(detail).queryByRole("button", { name: "End mentoring" })).toBeNull(); // the mentor logs, but does not manage
+    await userEvent.type(within(detail).getByLabelText("What happened"), "Reviewed the PR");
+    await userEvent.click(within(detail).getByRole("button", { name: "Log session" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/mentorship/assignments/as1/activities" && (c[1] as RequestInit)?.method === "POST")).toBe(true));
+    expect(bodyOf(f.mock.calls.find((c) => c[0] === "/api/mentorship/assignments/as1/activities" && (c[1] as RequestInit)?.method === "POST")!)).toEqual({ type: "one_on_one", summary: "Reviewed the PR" });
+    const effect = await screen.findByRole("list", { name: "Mentors" });
+    expect(within(effect).getByText("68.8")).toBeTruthy();
+    expect(within(effect).getByText("28%")).toBeTruthy();
+    expect(within(effect).getByText(/2 mentees · 50 days on average/)).toBeTruthy();
+    const factors = within(effect).getByRole("table", { name: "Factors for Mo Mentor" });
+    expect(within(factors).getByText("50 (factor 0.83)")).toBeTruthy();
+    expect(within(factors).getByText("2 (share 0.50)")).toBeTruthy();
+    expect(within(factors).getByText("+20.0")).toBeTruthy();
+    expect(screen.getByText(/Mentee results have many causes/)).toBeTruthy();
+  });
+
+  it("Mentorship, for someone who manages it: a new assignment, pause and a confirmed end; a person without the permission sees neither", async () => {
+    setMe(withCaps({ "mentorship.view": ["all_in_scope"], "mentorship.manage": ["all_in_scope"] }));
+    const f = server([PERIOD], (url, init) => {
+      if (url === "/api/mentorship/assignments" && init?.method === "POST") return envelope({ ...ASSIGNMENT, id: "as2", can: { manage: true, log: false } }, 201);
+      if (url === "/api/mentorship/assignments" && isGet(init)) return envelope([{ ...ASSIGNMENT, can: { manage: true, log: false } }]);
+      if (url === "/api/mentorship/assignments/as1" && init?.method === "PATCH") return envelope({ ...ASSIGNMENT, status: "ended", can: { manage: false, log: false } });
+      if (url === "/api/mentorship/assignments/as1/activities") return envelope([]);
+      if (url.startsWith("/api/mentorship/effectiveness")) return envelope({ ...EFFECT, mentors: [] });
+      if (url.startsWith("/api/employees")) return envelope({ people: [{ id: "mo", displayName: "Mo Mentor", status: "active", hasLogin: true, archived: false, designation: null, departments: [], teams: [], managers: [], email: null }, { id: "ni", displayName: "Nia Mentee", status: "active", hasLogin: false, archived: false, designation: null, departments: [], teams: [], managers: [], email: null }], total: 2, limit: 500, offset: 0 });
+      return undefined;
+    });
+    renderApp("/performance?tab=mentorship");
+    await userEvent.click(await screen.findByRole("button", { name: "New assignment" }));
+    const form = await screen.findByRole("form", { name: "New assignment" });
+    await userEvent.selectOptions(await within(form).findByLabelText("Mentor"), "mo");
+    await userEvent.selectOptions(within(form).getByLabelText("Mentee"), "ni");
+    await userEvent.click(within(form).getByRole("button", { name: "Create assignment" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/mentorship/assignments" && (c[1] as RequestInit)?.method === "POST")).toBe(true));
+    expect(bodyOf(f.mock.calls.find((c) => c[0] === "/api/mentorship/assignments" && (c[1] as RequestInit)?.method === "POST")!)).toEqual({ mentorId: "mo", menteeId: "ni", cadenceDays: 14, goals: "" });
+    await userEvent.click(await screen.findByRole("button", { name: "Open mentoring: Mo Mentor and Nia Mentee" }));
+    await userEvent.click(await screen.findByRole("button", { name: "End mentoring" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Confirm: end mentoring" });
+    expect(f.mock.calls.some((c) => (c[1] as RequestInit)?.method === "PATCH")).toBe(false); // nothing until the answer
+    await userEvent.click(within(dialog).getByRole("button", { name: "Yes, end it" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/mentorship/assignments/as1" && (c[1] as RequestInit)?.method === "PATCH")).toBe(true));
+    expect(bodyOf(f.mock.calls.find((c) => (c[1] as RequestInit)?.method === "PATCH")!)).toEqual({ status: "ended" });
+  });
+
+  it("Mentorship, without any permission: no buttons to assign or end", async () => {
+    setMe(withCaps({ "mentorship.view": ["own"] }));
+    server([PERIOD], (url, init) => (url === "/api/mentorship/assignments" && isGet(init) ? envelope([]) : url.startsWith("/api/mentorship/effectiveness") ? envelope({ ...EFFECT, mentors: [] }) : undefined));
+    renderApp("/performance?tab=mentorship");
+    expect(await screen.findByText("No mentoring yet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New assignment" })).toBeNull();
+  });
 });

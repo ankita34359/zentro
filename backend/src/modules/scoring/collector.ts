@@ -7,10 +7,15 @@ import { StructureRepository } from "../organization/repositories/structure.js";
 import { PeopleRepository } from "../people/repositories/people.js";
 import { addDays } from "../tasks/dates.js";
 import { TasksRepository } from "../tasks/repositories/tasks.js";
-import type { KeyResultInput, KpiInput, ObjectiveInput, ScoreInputs, TaskInput } from "./engine/types.js";
+import { MentorshipRepository, type ActivityRow, type AssignmentRow } from "../mentorship/repositories/mentorship.js";
+import { okrProvider } from "./engine/providers/okr.js";
+import { roundHalfUp1 } from "./engine/math.js";
+import { ScorecardRepository } from "./repositories/scoring.js";
+import type { KeyResultInput, KpiInput, MentorshipInputs, MentorshipLink, ObjectiveInput, ScoreInputs, TaskInput } from "./engine/types.js";
 
 export interface PeriodInfo { id: string; start: string; end: string; open: boolean }
 
+const daysBetweenDays = (a: string, b: string): number => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string): boolean => aStart <= bEnd && aEnd >= bStart;
 
 /**
@@ -31,6 +36,11 @@ export class Collector {
   private readonly teamMembers = new Map<string, Set<string>>();
   private readonly tasks: ReturnType<TasksRepository["list"]>;
   private readonly taskAssignees = new Map<string, Set<string>>();
+  private readonly cards: ScorecardRepository;
+  private readonly names = new Map<string, string>();
+  private readonly mentorLinks: { a: AssignmentRow; overlapDays: number }[] = [];
+  private readonly activities: ActivityRow[];
+  private readonly cardCache = new Map<string, { periodId: string; start: string; end: string; total: number | null; delivery: number | null; quality: number | null }[]>();
 
   constructor(tdb: TenantDb, readonly period: PeriodInfo, today: string) {
     this.asOf = period.open || period.end > today ? today : period.end;
@@ -46,6 +56,21 @@ export class Collector {
       if (r.membership_type === "lead" || r.membership_type === "deputy_lead") this.ledTeams.set(r.membership_id, new Set([...(this.ledTeams.get(r.membership_id) ?? []), r.team_id]));
     }
     for (const r of this.people.deptRows({ asOf: ref })) if (r.membership_type === "head") this.headedDepts.set(r.membership_id, new Set([...(this.headedDepts.get(r.membership_id) ?? []), r.department_id]));
+
+    this.cards = new ScorecardRepository(tdb);
+    for (const p of this.people.people()) this.names.set(p.id, p.display_name);
+    const mentorship = new MentorshipRepository(tdb);
+    this.activities = mentorship.activities();
+    // a paused assignment is not counted: pausing keeps it on record without crediting time nobody was mentoring
+    const overlapEnd = [period.end, ref].sort()[0]!;
+    for (const a of mentorship.assignments()) {
+      if (a.status === "paused") continue;
+      const from = a.start_date > period.start ? a.start_date : period.start;
+      const lastDay = a.end_date !== null ? addDays(a.end_date, -1) : overlapEnd;
+      const to = lastDay < overlapEnd ? lastDay : overlapEnd;
+      const overlapDays = to >= from ? daysBetweenDays(from, to) + 1 : 0;
+      if (overlapDays > 0) this.mentorLinks.push({ a, overlapDays });
+    }
 
     const okr = new OkrRepository(tdb);
     const krs = new Map<string, KeyResultRow[]>();
@@ -165,6 +190,75 @@ export class Collector {
     return this.tasks.filter((t) => t.due_at !== null && !t.archived_at && ((t.team_id !== null && teams.has(t.team_id)) || [...(this.taskAssignees.get(t.id) ?? [])].some((a) => members.has(a)))).map((t) => this.taskInput(t));
   }
 
+  // ---------- mentorship ----------
+
+  /** A score was just written for this person: what was remembered about their scores is out of date. */
+  forget(m: string): void {
+    this.cardCache.delete(m);
+  }
+
+  /** True for people who mentor someone in this period: their mentees' scores must be calculated before theirs. */
+  mentorsAnyone(m: string): boolean {
+    return this.mentorLinks.some((l) => l.a.mentor_membership_id === m);
+  }
+
+  /** The mentee's latest total (and the delivery and quality parts) in each period they have a score for. */
+  private scoresOfMentee(mentee: string) {
+    const cached = this.cardCache.get(mentee);
+    if (cached) return cached;
+    const periods = new Map(this.cards.periods().map((p) => [p.id, p]));
+    const out: { periodId: string; start: string; end: string; total: number | null; delivery: number | null; quality: number | null }[] = [];
+    for (const c of this.cards.scorecardsOfSubject(`m:${mentee}`)) {
+      const p = periods.get(c.period_id);
+      if (!p || !c.latest_score_id) continue;
+      const comps = this.cards.componentsOf(c.latest_score_id);
+      const score = this.cards.scoresOf(c.id).find((x) => x.id === c.latest_score_id);
+      const part = (provider: string): number | null => comps.find((k) => k.provider_key === provider)?.normalized_score ?? null;
+      out.push({ periodId: p.id, start: p.start_date, end: p.end_date, total: score?.total_score ?? null, delivery: part("tasks.delivery"), quality: part("quality.impact") });
+    }
+    out.sort((x, y) => x.start.localeCompare(y.start));
+    this.cardCache.set(mentee, out);
+    return out;
+  }
+
+  private goalAchievement(mentee: string): number | null {
+    const dev = this.okr.objectives.filter((o) => o.level === "individual" && o.objective_type === "development" && o.owner_membership_id === mentee && (!o.archived_at || o.archived_at.slice(0, 10) > this.period.end)).map((o) => this.objectiveInput(o));
+    const r = okrProvider(dev, 1, "development");
+    return r.state === "ok" ? r.value : null;
+  }
+
+  private linkOf(l: { a: AssignmentRow; overlapDays: number }, counterpart: string, mentee: string): MentorshipLink {
+    const mentorCount = this.mentorLinks.filter((x) => x.a.mentee_membership_id === mentee).length;
+    const scores = this.scoresOfMentee(mentee);
+    const current = scores.find((s) => s.periodId === this.period.id && s.total !== null) ?? null;
+    // baseline: the last score from before the assignment started, else the first one inside it; always from an EARLIER period than this one
+    const earlier = scores.filter((s) => s.total !== null && s.start < this.period.start);
+    const baseline = [...earlier].reverse().find((s) => s.end < l.a.start_date) ?? earlier.find((s) => s.start >= l.a.start_date) ?? null;
+    const both = current !== null && baseline !== null;
+    const diff = (a: number | null | undefined, b: number | null | undefined): number | null => (both && a !== null && a !== undefined && b !== null && b !== undefined ? roundHalfUp1(a - b) : null);
+    const acts = this.activities.filter((x) => x.assignment_id === l.a.id && x.occurred_on >= (l.a.start_date > this.period.start ? l.a.start_date : this.period.start) && x.occurred_on <= [this.period.end, this.asOf].sort()[0]!).length;
+    return {
+      assignmentId: l.a.id, counterpart: { id: counterpart, name: this.names.get(counterpart) ?? "Former member" }, overlapDays: l.overlapDays, mentorCount, baselineScore: baseline?.total ?? null, currentScore: current?.total ?? null,
+      scoreDelta: diff(current?.total, baseline?.total), deliveryDelta: diff(current?.delivery, baseline?.delivery), qualityDelta: diff(current?.quality, baseline?.quality), goalAchievement: this.goalAchievement(mentee), activities: acts, cadenceDays: l.a.cadence_days,
+    };
+  }
+
+  /** The mentor's view of one assignment (the counterpart is the mentee), or null when it does not count in this period. */
+  assignmentLink(assignmentId: string): MentorshipLink | null {
+    const l = this.mentorLinks.find((x) => x.a.id === assignmentId);
+    return l ? this.linkOf(l, l.a.mentee_membership_id, l.a.mentee_membership_id) : null;
+  }
+  mentorIds(): string[] {
+    return [...new Set(this.mentorLinks.map((l) => l.a.mentor_membership_id))];
+  }
+
+  mentorshipFor(m: string): MentorshipInputs {
+    return {
+      asMentor: this.mentorLinks.filter((l) => l.a.mentor_membership_id === m).map((l) => this.linkOf(l, l.a.mentee_membership_id, l.a.mentee_membership_id)),
+      asMentee: this.mentorLinks.filter((l) => l.a.mentee_membership_id === m).map((l) => this.linkOf(l, l.a.mentor_membership_id, m)),
+    };
+  }
+
   /** The snapshot for one person. */
   inputsFor(m: string, label: string): ScoreInputs {
     return {
@@ -176,6 +270,7 @@ export class Collector {
       teamKpis: this.teamKpisFor(m),
       tasks: this.tasksFor(m),
       teamTasks: this.teamTasksFor(m),
+      ...(this.mentorLinks.some((l) => l.a.mentor_membership_id === m || l.a.mentee_membership_id === m) ? { extra: { mentorship: this.mentorshipFor(m) } } : {}),
     };
   }
 }

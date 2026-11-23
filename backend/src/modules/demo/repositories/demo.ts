@@ -127,6 +127,12 @@ export class DemoRepository {
   insertTaskComment(r: { id: string; taskId: string; author: string; body: string; now: string }): void {
     this.tdb.run("INSERT INTO task_comments (id, organization_id, task_id, author_membership_id, body, created_at) VALUES (@id, @organization_id, @taskId, @author, @body, @now)", r);
   }
+  insertMentorship(a: { id: string; mentorId: string; menteeId: string; startDate: string; goals: string; cadenceDays: number; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO mentorship_assignments (id, organization_id, mentor_membership_id, mentee_membership_id, start_date, status, goals, cadence_days, created_by_membership_id, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @mentorId, @menteeId, @startDate, 'active', @goals, @cadenceDays, @by, 1, @now, @now)", a);
+  }
+  insertMentorshipActivity(a: { id: string; assignmentId: string; type: string; occurredOn: string; minutes: number; summary: string; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO mentorship_activities (id, organization_id, assignment_id, activity_type, occurred_on, duration_minutes, summary, outcome, created_by_membership_id, is_demo, created_at) VALUES (@id, @organization_id, @assignmentId, @type, @occurredOn, @minutes, @summary, NULL, @by, 1, @now)", a);
+  }
   insertDailyUpdate(r: { id: string; membershipId: string; day: string; summary: string; blockers: string | null; now: string }): void {
     this.tdb.run("INSERT INTO daily_updates (id, organization_id, membership_id, update_date, summary, blockers, submitted_at, updated_at) VALUES (@id, @organization_id, @membershipId, @day, @summary, @blockers, @now, @now)", r);
   }
@@ -165,6 +171,7 @@ export class DemoRepository {
     add("objective_assignments", n(`SELECT COUNT(*) AS n FROM objective_assignments oa WHERE oa.organization_id = @organization_id AND oa.end_date IS NULL AND oa.objective_id NOT IN ${DEMO_OBJECTIVES} AND (oa.assignee_membership_id IN ${DEMO_PEOPLE} OR oa.assignee_team_id IN (SELECT dtm.id FROM teams dtm WHERE dtm.organization_id = @organization_id AND dtm.is_demo = 1) OR oa.assignee_department_id IN (SELECT ddp.id FROM departments ddp WHERE ddp.organization_id = @organization_id AND ddp.is_demo = 1))`), (c) => `${c} of your own objectives ${c === 1 ? "is" : "are"} assigned to demo people, teams or departments. End ${c === 1 ? "that assignment" : "those assignments"} first.`);
     add("kpi_assignments", n(`SELECT COUNT(*) AS n FROM kpi_assignments ka WHERE ka.organization_id = @organization_id AND (ka.effective_to IS NULL OR ka.effective_to > @today) AND ka.kpi_id NOT IN (SELECT rk.id FROM kpis rk WHERE rk.organization_id = @organization_id AND rk.is_demo = 1) AND (ka.membership_id IN ${DEMO_PEOPLE} OR ka.team_id IN (SELECT dtm.id FROM teams dtm WHERE dtm.organization_id = @organization_id AND dtm.is_demo = 1) OR ka.department_id IN (SELECT ddp.id FROM departments ddp WHERE ddp.organization_id = @organization_id AND ddp.is_demo = 1) OR ka.designation_id IN (SELECT dds.id FROM designations dds WHERE dds.organization_id = @organization_id AND dds.is_demo = 1) OR ka.role_family_id IN (SELECT drf.id FROM role_families drf WHERE drf.organization_id = @organization_id AND drf.is_demo = 1))`), (c) => `${c} of your own KPI ${c === 1 ? "assignment points" : "assignments point"} at demo people, teams, departments, designations or role families. End ${c === 1 ? "it" : "them"} first.`);
     add("scoring_models", n(`SELECT COUNT(*) AS n FROM scoring_models sm WHERE sm.organization_id = @organization_id AND sm.is_demo = 0 AND (sm.designation_id IN (SELECT dds.id FROM designations dds WHERE dds.organization_id = @organization_id AND dds.is_demo = 1) OR sm.role_family_id IN (SELECT drf.id FROM role_families drf WHERE drf.organization_id = @organization_id AND drf.is_demo = 1))`), (c) => `${c} of your own scoring ${c === 1 ? "model is" : "models are"} set to a demo designation or role family. Change who ${c === 1 ? "it applies" : "they apply"} to first.`);
+    add("mentorship", n(`SELECT COUNT(*) AS n FROM mentorship_assignments ma WHERE ma.organization_id = @organization_id AND ma.is_demo = 0 AND ma.status <> 'ended' AND (ma.mentor_membership_id IN ${DEMO_PEOPLE} OR ma.mentee_membership_id IN ${DEMO_PEOPLE})`), (c) => `${c} of your own mentorship ${c === 1 ? "assignment involves" : "assignments involve"} a demo person. End ${c === 1 ? "it" : "them"} first.`);
     add("dependencies", n(`SELECT COUNT(*) AS n FROM task_dependencies d WHERE d.organization_id = @organization_id AND ((d.task_id IN (SELECT rt.id FROM tasks rt WHERE rt.organization_id = @organization_id AND rt.is_demo = 0) AND d.depends_on_task_id IN ${DEMO_TASKS}) OR (d.depends_on_task_id IN (SELECT rt2.id FROM tasks rt2 WHERE rt2.organization_id = @organization_id AND rt2.is_demo = 0) AND d.task_id IN ${DEMO_TASKS}))`), (c) => `${c} of your own ${c === 1 ? "task waits" : "tasks wait"} for, or ${c === 1 ? "is" : "are"} waited for by, demo tasks. Remove the dependenc${c === 1 ? "y" : "ies"} first.`);
     return found;
   }
@@ -179,6 +186,7 @@ export class DemoRepository {
       tasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = @organization_id AND is_demo = 1"),
       objectives: one("SELECT COUNT(*) AS n FROM objectives WHERE organization_id = @organization_id AND is_demo = 1"),
       keyResults: one("SELECT COUNT(*) AS n FROM key_results WHERE organization_id = @organization_id AND is_demo = 1"),
+      mentorships: one("SELECT COUNT(*) AS n FROM mentorship_assignments WHERE organization_id = @organization_id AND is_demo = 1"),
       periods: one("SELECT COUNT(*) AS n FROM performance_periods WHERE organization_id = @organization_id AND is_demo = 1"),
       scorecards: one("SELECT COUNT(*) AS n FROM performance_scorecards WHERE organization_id = @organization_id AND is_demo = 1"),
       kpis: one("SELECT COUNT(*) AS n FROM kpis WHERE organization_id = @organization_id AND is_demo = 1"),
@@ -205,6 +213,11 @@ export class DemoRepository {
     this.tdb.run("DELETE FROM key_results WHERE organization_id = @organization_id AND is_demo = 1");
     this.tdb.run("DELETE FROM objectives WHERE organization_id = @organization_id AND is_demo = 1");
     // scores of the demo: every run, its components, the scorecards and the demo's periods (scores are derived: they can be recalculated)
+    // mentorship of the demo (and anything that ended with a demo person) goes before the periods its ratings point at
+    const DEMO_ASSIGNMENTS = `(SELECT dma.id FROM mentorship_assignments dma WHERE dma.organization_id = @organization_id AND (dma.is_demo = 1 OR dma.mentor_membership_id IN ${DEMO_PEOPLE} OR dma.mentee_membership_id IN ${DEMO_PEOPLE}))`;
+    this.tdb.run(`DELETE FROM mentorship_progress WHERE mentorship_progress.organization_id = @organization_id AND mentorship_progress.assignment_id IN ${DEMO_ASSIGNMENTS}`);
+    this.tdb.run(`DELETE FROM mentorship_activities WHERE mentorship_activities.organization_id = @organization_id AND mentorship_activities.assignment_id IN ${DEMO_ASSIGNMENTS}`);
+    this.tdb.run(`DELETE FROM mentorship_assignments WHERE mentorship_assignments.organization_id = @organization_id AND mentorship_assignments.id IN ${DEMO_ASSIGNMENTS}`);
     this.tdb.run("DELETE FROM performance_comparisons WHERE performance_comparisons.organization_id = @organization_id AND performance_comparisons.period_id IN (SELECT dpp.id FROM performance_periods dpp WHERE dpp.organization_id = @organization_id AND dpp.is_demo = 1)");
     this.tdb.run(`DELETE FROM performance_score_components WHERE performance_score_components.organization_id = @organization_id AND performance_score_components.score_id IN (SELECT pss.id FROM performance_scores pss WHERE pss.organization_id = @organization_id AND pss.scorecard_id IN ${DEMO_CARDS})`);
     this.tdb.run(`DELETE FROM performance_scores WHERE performance_scores.organization_id = @organization_id AND performance_scores.scorecard_id IN ${DEMO_CARDS}`);

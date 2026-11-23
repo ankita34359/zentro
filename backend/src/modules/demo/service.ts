@@ -12,6 +12,8 @@ import { healthOf } from "../okr/healthSweep.js";
 import { periodEndOf, completedPeriods } from "../kpi/periods.js";
 import { applySeriesAlerts, buildSeries, loadSeriesInput } from "../kpi/series.js";
 import { Collector } from "../scoring/collector.js";
+import { seedTemplates } from "../scoring/models.js";
+import { scoringOrder } from "../scoring/runner.js";
 import type { PerformanceService } from "../scoring/performance.js";
 import { buildDemoCompany, demoEmail, type DemoTask, type RoleChoice } from "./seed.js";
 
@@ -214,6 +216,13 @@ export class DemoService {
       for (const d of company.dailyUpdates) repo.insertDailyUpdate({ id: newId(), membershipId: personId.get(d.personKey)!, day: addDays(today, d.dayOffset), summary: d.summary, blockers: d.blockers, now: at(addDays(today, d.dayOffset), 17) });
       this.insertNotifications(repo, company.tasks, taskId, personId, today, now);
 
+      // mentorship: who mentors whom, and what they did (stage 5.5), before the scores that read it
+      for (const m of company.mentorships) {
+        const aid = newId();
+        repo.insertMentorship({ id: aid, mentorId: personId.get(m.mentorKey)!, menteeId: personId.get(m.menteeKey)!, startDate: addDays(today, m.startOffset), goals: m.goals, cadenceDays: m.cadenceDays, by, now });
+        for (const x of m.activities) repo.insertMentorshipActivity({ id: newId(), assignmentId: aid, type: x.type, occurredOn: addDays(today, x.dayOffset), minutes: x.minutes, summary: x.summary, by: personId.get(m.mentorKey)!, now });
+      }
+
       // scores: the demo's two periods (last quarter and this quarter), and a run for every demo person in each (stage 5.2)
       {
         const scoring = this.o.store.scorecards(tdb);
@@ -229,11 +238,13 @@ export class DemoService {
         ];
         for (const p of periods) scoring.insertPeriod({ id: p.id, name: p.name, periodType: "quarter", startDate: p.start, endDate: p.end, isDemo: true, now });
         this.o.performance.ensureModels(ctx, { tdb, models: this.o.store.scoring(tdb) });
+        // the Mentor model, for the demo's Principal Engineers (who mentor): a demo copy bound to their demo designation
+        seedTemplates(this.o.store.scoring(tdb), by, now, { isDemo: true, only: ["model_mentor"], designationId: designationId.get("Principal Engineer")! });
         this.o.performance.prepareDemoPeriods(tdb, ctx, periods.map((p) => p.id), today);
         for (const p of periods) {
           const row = scoring.period(p.id)!;
           const collector = new Collector(tdb, { id: row.id, start: row.start_date, end: row.end_date, open: row.status === "open" }, today);
-          for (const person of company.people) this.o.performance.runFor(tdb, ctx, collector, row, personId.get(person.key)!, person.name, row.status === "open" ? "scheduled" : "period_close", true);
+          for (const person of scoringOrder(company.people.map((x) => ({ ...x, id: personId.get(x.key)! })), collector)) this.o.performance.runFor(tdb, ctx, collector, row, person.id, person.name, row.status === "open" ? "scheduled" : "period_close", true);
         }
       }
 

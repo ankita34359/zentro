@@ -304,11 +304,11 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | POST | `/api/performance/models/preview` | `performance.configure` | What-if dry run, stores nothing |
 | GET / POST | `/api/performance/reviews` | `reviews.read_shared` / `reviews.write` | Private notes only with `reviews.read_private` |
 | PATCH | `/api/performance/reviews/:id` | author | submit, acknowledge |
-| GET / POST | `/api/mentorship/assignments` | `mentorship.view` / `mentorship.manage` | |
-| PATCH | `/api/mentorship/assignments/:id` | `mentorship.manage` | pause/end |
-| GET / POST | `/api/mentorship/assignments/:id/activities` | `mentorship.view` / `mentorship.log` | |
-| GET | `/api/mentorship/assignments/:id/progress` | `mentorship.view` | |
-| GET | `/api/mentorship/effectiveness` | `mentorship.view` (scope) | `?mentorId&periodId`; factors disclosed |
+| GET / POST | `/api/mentorship/assignments` | `mentorship.view` / `mentorship.manage` | Own pairs and pairs where mentor or mentee is in scope; the mentee must be in the manager's scope; 409 `duplicate`, `loop` (live, 5.5) |
+| GET / PATCH | `/api/mentorship/assignments/:id` | `mentorship.view` / `mentorship.manage` | PATCH: goals, cadence, pause, resume, end (`endDate`, the day it stops applying); an ended one is final (live, 5.5) |
+| GET / POST | `/api/mentorship/assignments/:id/activities` | `mentorship.view` / `mentorship.log` | The mentor (or someone with log over them) logs; not while paused (live, 5.5) |
+| GET / POST | `/api/mentorship/assignments/:id/progress` | `mentorship.view` / `mentorship.log` | GET: ratings, and with `?periodId` the measured change; POST: a 1 to 5 rating by the mentor or the mentee (live, 5.5) |
+| GET | `/api/mentorship/effectiveness` | `mentorship.view` (scope) | `?periodId&mentorId`: development and activity per mentor with every factor (days, mentors, credit share, sessions vs cadence), caveats (live, 5.5) |
 
 ## 9. Dashboards and leadership
 

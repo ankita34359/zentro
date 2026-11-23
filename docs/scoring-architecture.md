@@ -289,6 +289,8 @@ For each mentorship assignment `e` (mentor `m`, mentee `x`) overlapping period `
 6. **Mentor development component** = `Σ(duration_factor_x × share_x × imp_x) / Σ(duration_factor_x × share_x)` over mentees whose metrics are `ok`. Needs at least `min_sample` (default 2) such mentees, else `insufficient`.
 7. **Mentoring activity component:** `min(1, activities_logged / (overlap_days / cadence_days))`, averaged over assignments, optionally blended with a mentee-entered rating (`skill_rating` rows).
 
+**Decisions made when this was built (stage 5.5):** the goal metric enters the improvement index as `goal_achievement − 50` (reaching half the development goals counts as no change); a **paused** assignment is not counted at all (it stays on record); the baseline always comes from an earlier period than the one being scored; mentors are scored after everyone else in a calculation, because their development reads their mentees' scores; ratings (`skill_rating`) are stored but do not enter the number. `blocker_resolution_days` is **not built**: it needs a baseline of blocker events that the data does not yet have.
+
 **Factors disclosed, not silently adjusted:** assignment duration, number of mentors per mentee, mentee workload change, team change during the period, the mentor's mentee count (capacity), and cadence adherence. The UI states that mentee results have many causes. Mentors are compared only with mentors (same role family), with mentee count and duration shown beside the score.
 
 ---

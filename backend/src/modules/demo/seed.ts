@@ -105,6 +105,15 @@ export interface DemoKpi {
   series: { subject: { kind: "person" | "team" | "department" | "organization"; key: string | null }; values: (number | null)[]; correction?: { index: number; value: number; note: string } }[];
 }
 export interface DemoDailyUpdate { personKey: string; dayOffset: number; summary: string; blockers: string | null }
+export interface DemoMentorship {
+  mentorKey: string;
+  menteeKey: string;
+  /** Days from the day of loading (negative = in the past). */
+  startOffset: number;
+  cadenceDays: number;
+  goals: string;
+  activities: { dayOffset: number; type: "one_on_one" | "feedback" | "review" | "unblock" | "training" | "goal_setting"; minutes: number; summary: string }[];
+}
 export interface DemoCompany {
   departments: DemoDepartment[];
   teams: DemoTeam[];
@@ -115,6 +124,7 @@ export interface DemoCompany {
   dailyUpdates: DemoDailyUpdate[];
   objectives: DemoObjective[];
   kpis: DemoKpi[];
+  mentorships: DemoMentorship[];
 }
 
 /** Small deterministic generator (mulberry32). */
@@ -532,6 +542,51 @@ export function buildDemoCompany(seed: string, today = "2026-02-14"): DemoCompan
     }
   }
 
+  // ----- mentorship (stage 5.5): each mentor has two or three mentees from their own department; one mentee has two mentors, and one
+  // mentor logs far fewer sessions than the cadence asks for. Its own random stream, drawn after everything else. -----
+  const mentorships: DemoMentorship[] = [];
+  {
+    const mr = rng(`mentorship:${seed}`);
+    const mpick = <T,>(xs: readonly T[]): T => xs[Math.floor(mr() * xs.length)]!;
+    const mbetween = (lo: number, hi: number): number => lo + Math.floor(mr() * (hi - lo + 1));
+    const SESSIONS: { type: DemoMentorship["activities"][number]["type"]; summary: string }[] = [
+      { type: "one_on_one", summary: "Weekly check-in: priorities, blockers and how the week went." },
+      { type: "feedback", summary: "Went through recent work and gave specific feedback." },
+      { type: "review", summary: "Reviewed a piece of work together before it shipped." },
+      { type: "unblock", summary: "Helped get past a blocker with another team." },
+      { type: "training", summary: "Walked through a technique the mentee wanted to learn." },
+      { type: "goal_setting", summary: "Reviewed the development goal and agreed the next step." },
+    ];
+    const mentors = people.filter((p) => p.role === "r_mentor");
+    const taken = new Set<string>();
+    mentors.forEach((mentor, mi) => {
+      // mentees with enough work on record to have scores in both quarters (a mentee with no data has no change to measure)
+      const scored = new Set(objectives.filter((o) => o.level === "individual").map((o) => o.ownerKey).filter((k) => tasks.filter((t) => t.assigneeKey === k && t.status === "completed").length >= 10));
+      const pool = people.filter((p) => p.deptKey === mentor.deptKey && p.key !== mentor.key && p.teamType === "member" && p.role === "r_employee" && !taken.has(p.key) && scored.has(p.key));
+      const menteesOf = [...pool].sort(() => mr() - 0.5).slice(0, mbetween(3, 4));
+      const sparse = mi === mentors.length - 1 && mentors.length > 1; // the last mentor logs little
+      for (const mentee of menteesOf) {
+        taken.add(mentee.key);
+        const start = -mbetween(150, 230);
+        const cadence = 14;
+        const activities: DemoMentorship["activities"] = [];
+        for (let d = start + mbetween(3, 10); d <= -2; d += cadence + mbetween(-3, 5)) {
+          if (mr() < (sparse ? 0.18 : 0.88)) {
+            const x = mpick(SESSIONS);
+            activities.push({ dayOffset: d, type: x.type, minutes: mpick([30, 45, 60]), summary: x.summary });
+          }
+        }
+        mentorships.push({ mentorKey: mentor.key, menteeKey: mentee.key, startOffset: start, cadenceDays: cadence, goals: "Grow in the role: take on harder work and get more independent.", activities });
+      }
+    });
+    // one mentee also has a second mentor (the credit is shared)
+    if (mentors.length > 1 && mentorships.length > 0) {
+      const first = mentorships[0]!;
+      const other = mentors.find((m) => m.key !== first.mentorKey);
+      if (other) mentorships.push({ mentorKey: other.key, menteeKey: first.menteeKey, startOffset: first.startOffset + 40, cadenceDays: 21, goals: "A second perspective on design and review habits.", activities: [-70, -49, -28, -9].map((d, i) => ({ dayOffset: d, type: i % 2 === 0 ? "review" as const : "feedback" as const, minutes: 45, summary: SESSIONS[i % 2 === 0 ? 2 : 1]!.summary })) });
+    }
+  }
+
   return {
     departments: DEPARTMENTS,
     teams: TEAMS,
@@ -542,6 +597,7 @@ export function buildDemoCompany(seed: string, today = "2026-02-14"): DemoCompan
     dailyUpdates,
     objectives,
     kpis,
+    mentorships,
   };
 }
 

@@ -90,7 +90,7 @@ export interface ScoreInputs {
   /** Direct values for a component (the what-if calculator, and tests): used instead of running its provider. */
   overrides?: Record<string, { value: number | null; state?: DataState; sampleSize?: number; coverage?: number }>;
   /** Sections other providers read (mentorship, departments, leadership...). Added by later stages as plain data. */
-  extra?: Record<string, unknown>;
+  extra?: { mentorship?: MentorshipInputs } & Record<string, unknown>;
 }
 
 // ---------- the result ----------
@@ -134,3 +134,23 @@ export interface ScoreResult {
   components: ComponentResult[];
   explanation: Explanation;
 }
+
+/** One mentorship assignment as the providers see it, for one person and one period (stage 5.5). Plain data: deltas are computed by the collector from stored scores. */
+export interface MentorshipLink {
+  assignmentId: string;
+  counterpart: { id: string; name: string };
+  /** Days the assignment was active inside the period (up to the reference day). */
+  overlapDays: number;
+  /** How many mentors the mentee had in the period (the credit is split between them). */
+  mentorCount: number;
+  baselineScore: number | null;
+  currentScore: number | null;
+  scoreDelta: number | null;
+  deliveryDelta: number | null;
+  qualityDelta: number | null;
+  /** Attainment (0 to 100) of the mentee's development objectives. */
+  goalAchievement: number | null;
+  activities: number;
+  cadenceDays: number;
+}
+export interface MentorshipInputs { asMentor: MentorshipLink[]; asMentee: MentorshipLink[] }

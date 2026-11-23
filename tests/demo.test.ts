@@ -582,6 +582,36 @@ describe("Demo scores (stage 5.2)", () => {
     expect(other.hiddenCount).toBe(all.cohortSize);
   });
 
+  it("the demo has mentors with mentees, activities and a measured effect; a real assignment involving a demo person stops the removal; removal takes the rest", async () => {
+    const { owner } = await setup();
+    const load = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(load.body.data.counts.mentorships).toBeGreaterThanOrEqual(5);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; status: string }[];
+    const cur = periods.find((p) => p.status === "open")!;
+    const e = (await get(t.app, `/api/mentorship/effectiveness?periodId=${cur.id}`, owner)).body.data;
+    expect(e.mentors.length).toBeGreaterThanOrEqual(2);
+    expect(e.mentors.every((m: { development: { state: string; value: number } }) => m.development.state === "ok")).toBe(true);
+    const acts = e.mentors.map((m: { activity: { value: number } }) => m.activity.value) as number[];
+    expect(Math.max(...acts) - Math.min(...acts)).toBeGreaterThan(20); // one mentor logs far less than the other
+    expect(e.mentors.some((m: { mentees: { mentorCount: number }[] }) => m.mentees.some((x) => x.mentorCount > 1))).toBe(true); // a shared mentee
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM scoring_models WHERE is_demo = 1 AND template_key = 'model_mentor'").n).toBe(1);
+    // a real assignment that involves a demo person
+    const real = await created("/api/employees", { name: "Real Mentor" }, owner);
+    const demoMentee = (await get(t.app, "/api/mentorship/assignments", owner)).body.data[0].mentee.id as string;
+    expect((await post(t.app, "/api/mentorship/assignments", { mentorId: real, menteeId: demoMentee }, owner)).status).toBe(201);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    expect((blocked.body.error.details.blockers as { kind: string; message: string }[]).find((b) => b.kind === "mentorship")!.message).toMatch(/1 of your own mentorship assignment involves a demo person/);
+    const row = one<{ id: string }>("SELECT id FROM mentorship_assignments WHERE is_demo = 0");
+    expect((await request(t.app).patch(`/api/mentorship/assignments/${row.id}`).set("Origin", ORIGIN).set("Cookie", owner).send({ status: "ended", endDate: new Date().toISOString().slice(0, 10) })).status).toBe(400); // ended on the day it started is refused: it must end after it started
+    t.db.prepare("UPDATE mentorship_assignments SET status = 'ended', end_date = date('now') WHERE id = ?").run(row.id);
+    const removed = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    for (const table of ["mentorship_activities", "mentorship_progress"]) expect(one<{ n: number }>(`SELECT COUNT(*) n FROM ${table}`).n, table).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM mentorship_assignments WHERE is_demo = 1").n).toBe(0);
+    expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
+  });
+
   it("removal takes every demo period, scorecard, run and component, even a real person's scorecard inside a demo period, and works with an archived real person", async () => {
     const { owner } = await setup();
     await post(t.app, "/api/demo/load", undefined, owner);

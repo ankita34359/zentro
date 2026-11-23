@@ -139,6 +139,8 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     expect((await post(t.app, "/api/performance/scorecards/recalculate", { periodId: periodA, subjectId: personA.membershipId }, ownerA)).status).toBe(200);
     const cardA = (t.db.prepare("SELECT id FROM performance_scorecards WHERE period_id = ?").get(periodA) as { id: string }).id;
     const scoreA = (t.db.prepare("SELECT id FROM performance_scores WHERE scorecard_id = ?").get(cardA) as { id: string }).id;
+    const mentorB = (await post(t.app, "/api/employees", { name: "Alpha secret mentee" }, ownerA)).body.data.id as string;
+    const mentoringA = ((await post(t.app, "/api/mentorship/assignments", { mentorId: personA.membershipId, menteeId: mentorB, goals: "Alpha secret goals" }, ownerA)).body.data as { id: string }).id;
     const comparisonA = ((await post(t.app, "/api/performance/comparisons", { name: "Alpha secret comparison", periodId: periodA }, ownerA)).body.data as { id: string }).id;
     const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
@@ -220,6 +222,11 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/performance/periods/:id/reopen": { params: { id: periodA } },
       "/api/performance/periods/:id/lock": { params: { id: periodA } },
       "/api/performance/trends": { params: {}, body: { subjectId: personA.membershipId } },
+      "/api/mentorship/assignments": { params: {}, body: { mentorId: personA.membershipId, menteeId: mentorB } },
+      "/api/mentorship/assignments/:id": { params: { id: mentoringA }, body: { goals: "Hacked by B" } },
+      "/api/mentorship/assignments/:id/activities": { params: { id: mentoringA }, body: { type: "feedback", summary: "Hacked by B" } },
+      "/api/mentorship/assignments/:id/progress": { params: { id: mentoringA }, body: { periodId: periodA, value: 3 } },
+      "/api/mentorship/effectiveness": { params: {}, body: { periodId: periodA } },
       "/api/performance/compare": { params: {}, body: { periodId: periodA } },
       "/api/performance/compare/difference": { params: {}, body: { periodId: periodA, a: personA.membershipId, b: personA.membershipId } },
       "/api/performance/comparisons": { params: {}, body: { name: "Hacked by B", periodId: periodA } },
@@ -271,6 +278,8 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, period_id, latest_score_id, status FROM performance_scorecards WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
       t.db.prepare("SELECT id, scorecard_id, run_number, total_score, inputs_hash FROM performance_scores WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
       t.db.prepare("SELECT id, name, period_id, cohort_size, results_json FROM performance_comparisons WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, mentor_membership_id, mentee_membership_id, status, goals, end_date FROM mentorship_assignments WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT COUNT(*) n FROM mentorship_activities WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
       t.db.prepare("SELECT COUNT(*) n FROM automation_events").get(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
@@ -288,13 +297,13 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     }
     // lists: nothing of A's appears
     // (a route that needs an id in its query, like the difference of two people, is covered by the id loop above: it cannot be asked without one)
-    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && !(r.takesEntityId && r.path.endsWith("/difference")) && (r.access.kind === "permission" || ["/api/organization", "/api/auth/me", "/api/my-work", "/api/notifications", "/api/preferences", "/api/daily-updates", "/api/overview"].includes(r.path)));
+    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && !(r.takesEntityId && ["/difference", "/effectiveness"].some((x) => r.path.endsWith(x))) && (r.access.kind === "permission" || ["/api/organization", "/api/auth/me", "/api/my-work", "/api/notifications", "/api/preferences", "/api/daily-updates", "/api/overview"].includes(r.path)));
     expect(lists.length).toBeGreaterThanOrEqual(12);
     for (const route of lists) {
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", modelA, periodA, cardA, scoreA, comparisonA, kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", modelA, periodA, cardA, scoreA, comparisonA, mentoringA, kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

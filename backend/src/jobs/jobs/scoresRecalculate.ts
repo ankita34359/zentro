@@ -6,7 +6,7 @@ import { todayIn } from "../../modules/tasks/dates.js";
 import { newId } from "../../lib/ids.js";
 import { Collector } from "../../modules/scoring/collector.js";
 import { ScorecardRepository, ScoringRepository } from "../../modules/scoring/repositories/scoring.js";
-import { runScore } from "../../modules/scoring/runner.js";
+import { runScore, scoringOrder } from "../../modules/scoring/runner.js";
 import type { JobDef } from "../registry.js";
 
 /**
@@ -37,7 +37,7 @@ export const scoresRecalculateJob: JobDef = {
           const collector = new Collector(tdb, { id: period.id, start: period.start_date, end: period.end_date, open: true }, today);
           summary.periods += 1;
           // a demo period scores the demo company only: the organization's own people are not pulled into it
-          for (const person of period.is_demo === 1 ? people.filter((x) => x.is_demo === 1) : people) {
+          for (const person of scoringOrder(period.is_demo === 1 ? people.filter((x) => x.is_demo === 1) : people, collector)) {
             summary.people += 1;
             const r = runScore({ cards, models, now: nowIso }, collector, period, person.id, person.display_name, "scheduled", { by: null, isDemo: period.is_demo === 1 });
             if (r?.created) added += 1;

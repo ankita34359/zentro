@@ -65,11 +65,11 @@ export function toModelDef(row: ModelRow, comps: ComponentRow[]): ModelDef {
 }
 
 /** Seeds the role templates for an organization that has none: all active, version 1, the Employee model the default. Idempotent. */
-export function seedTemplates(repo: ScoringRepository, createdBy: string, now: string, opts: { isDemo?: boolean; only?: string[] } = {}): ModelRow[] {
+export function seedTemplates(repo: ScoringRepository, createdBy: string, now: string, opts: { isDemo?: boolean; only?: string[]; designationId?: string } = {}): ModelRow[] {
   const out: ModelRow[] = [];
   for (const t of TEMPLATES.filter((x) => !opts.only || opts.only.includes(x.key))) {
     const id = newId();
-    repo.insertModel({ id, name: t.name, templateKey: t.key, version: 1, status: "active", roleFamilyId: null, designationId: null, isDefault: t.isDefault && !opts.isDemo, minWeightCoverage: 0.6, minConfidenceForFinal: 0.6, configJson: JSON.stringify({ bands: DEFAULT_BANDS }), supersedesId: null, createdBy, isDemo: opts.isDemo, now });
+    repo.insertModel({ id, name: opts.isDemo ? `${t.name} (demo)` : t.name, templateKey: t.key, version: 1, status: "active", roleFamilyId: null, designationId: opts.designationId ?? null, isDefault: t.isDefault && !opts.isDemo, minWeightCoverage: 0.6, minConfidenceForFinal: 0.6, configJson: JSON.stringify({ bands: DEFAULT_BANDS }), supersedesId: null, createdBy, isDemo: opts.isDemo, now });
     t.components.forEach((c, i) => repo.insertComponent({ id: newId(), modelId: id, key: c.key, label: c.label, weight: c.weight, providerKey: c.providerKey, minSample: c.minSample, configJson: JSON.stringify(c.config), sortOrder: i }));
     out.push(repo.model(id)!);
   }
