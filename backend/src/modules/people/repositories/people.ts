@@ -185,10 +185,17 @@ export class PeopleRepository {
     this.tdb.run("UPDATE reporting_relationships SET end_date = @endDate, reason = COALESCE(@reason, reason) WHERE organization_id = @organization_id AND id = @id", { id, endDate, reason });
   }
 
-  /** The person leaves: every open row of theirs ends on `endDate`, as subordinate and as manager. Returns how many rows ended. */
+  /**
+   * The person leaves: every open row of theirs ends on `endDate`, as subordinate and as manager, and so does the designation they
+   * hold (the history keeps it, ended; the cached "current designation" is cleared so nothing says they still hold it).
+   * Returns how many rows ended.
+   */
   endEverythingFor(membershipId: string, endDate: string): number {
     const p = { membershipId, endDate };
+    const designations = this.tdb.run("UPDATE designation_assignments SET end_date = CASE WHEN start_date > @endDate THEN start_date ELSE @endDate END WHERE organization_id = @organization_id AND membership_id = @membershipId AND end_date IS NULL", p).changes;
+    this.tdb.run("UPDATE organization_memberships SET designation_id = NULL WHERE organization_id = @organization_id AND id = @membershipId AND designation_id IS NOT NULL", p);
     return (
+      designations +
       this.tdb.run("UPDATE team_memberships SET end_date = CASE WHEN start_date > @endDate THEN start_date ELSE @endDate END WHERE organization_id = @organization_id AND membership_id = @membershipId AND end_date IS NULL", p).changes +
       this.tdb.run("UPDATE department_memberships SET end_date = CASE WHEN start_date > @endDate THEN start_date ELSE @endDate END WHERE organization_id = @organization_id AND membership_id = @membershipId AND end_date IS NULL", p).changes +
       this.tdb.run("UPDATE reporting_relationships SET end_date = CASE WHEN start_date > @endDate THEN start_date ELSE @endDate END WHERE organization_id = @organization_id AND (subordinate_membership_id = @membershipId OR manager_membership_id = @membershipId) AND end_date IS NULL", p).changes
