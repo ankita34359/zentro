@@ -457,3 +457,66 @@ describe("Demo KPIs (stages 3.3 and 3.4)", () => {
     expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
   });
 });
+
+describe("Archived people and demo data (bug fix)", () => {
+  /** A real person who holds a demo designation (the owner reported this) with a demo manager. */
+  async function realPersonWithDemoDesignation(owner: string) {
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const demoDesignation = ((await get(t.app, "/api/organization/structure", owner)).body.data.designations as { id: string; name: string; isDemo?: boolean }[]).find((d) => d.isDemo && d.name === "Account Executive")!;
+    const demoManager = (await personas(owner)).find((p) => p.designation === "Sales Manager")!;
+    const id = await created("/api/employees", { name: "Testing", designationId: demoDesignation.id, managerId: demoManager.id }, owner);
+    return { id, demoDesignation, demoManager };
+  }
+
+  it("archiving a person ends their open designation, team and department placements and reporting lines on that day; the history keeps them", async () => {
+    const { owner } = await setup();
+    const { id } = await realPersonWithDemoDesignation(owner);
+    expect((await post(t.app, `/api/employees/${id}/archive`, undefined, owner)).status).toBe(200);
+    const today = new Date().toISOString().slice(0, 10);
+    const h = (await get(t.app, `/api/employees/${id}/history`, owner)).body.data as { designations: { label: string; startDate: string; endDate: string | null }[]; managers: { endDate: string | null }[] };
+    expect(h.designations).toEqual([expect.objectContaining({ label: "Account Executive", startDate: today, endDate: today })]); // ended, not still "now"
+    expect(h.managers.every((m) => m.endDate !== null)).toBe(true);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM designation_assignments WHERE membership_id = ? AND end_date IS NULL", id).n).toBe(0);
+    expect(one<{ designation_id: string | null }>("SELECT designation_id FROM organization_memberships WHERE id = ?", id).designation_id).toBeNull(); // nothing says they still hold it
+  });
+
+  it("an archived real person who held a demo designation no longer stops Remove demo data (their history of it goes with the designation)", async () => {
+    const { owner } = await setup();
+    const { id } = await realPersonWithDemoDesignation(owner);
+    const line = (await get(t.app, `/api/employees/${id}/history`, owner)).body.data.managers[0] as { id: string };
+    expect((await request(t.app).patch(`/api/hierarchy/reporting/${line.id}`).set("Origin", ORIGIN).set("Cookie", owner).send({})).status).toBe(200); // the owner ends the line first, as in the report
+    expect((await post(t.app, `/api/employees/${id}/archive`, undefined, owner)).status).toBe(200);
+    const removed = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
+    expect(one<{ display_name: string; archived_at: string | null; designation_id: string | null }>("SELECT display_name, archived_at, designation_id FROM organization_memberships WHERE id = ?", id)).toMatchObject({ display_name: "Testing", designation_id: null }); // the real person is still there
+  });
+
+  it("an archived person archived BEFORE this fix (their designation still open) does not stop the removal either", async () => {
+    const { owner } = await setup();
+    const { id } = await realPersonWithDemoDesignation(owner);
+    await post(t.app, `/api/employees/${id}/archive`, undefined, owner);
+    // put the old shape back: archived, designation still open and cached
+    const row = one<{ designation_id: string }>("SELECT designation_id FROM designation_assignments WHERE membership_id = ?", id);
+    t.db.prepare("UPDATE designation_assignments SET end_date = NULL WHERE membership_id = ?").run(id);
+    t.db.prepare("UPDATE organization_memberships SET designation_id = ? WHERE id = ?").run(row.designation_id, id);
+    const removed = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM designations WHERE is_demo = 1").n).toBe(0);
+  });
+
+  it("a person who is NOT archived and holds a demo designation still stops the removal, and the message names them", async () => {
+    const { owner } = await setup();
+    const { id } = await realPersonWithDemoDesignation(owner);
+    await post(t.app, "/api/employees", { name: "Second Person", designationId: (await get(t.app, `/api/employees/${id}`, owner)).body.data.designation.id }, owner);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    const b = (blocked.body.error.details.blockers as { kind: string; count: number; message: string }[]).find((x) => x.kind === "designations")!;
+    expect(b.count).toBe(2);
+    expect(b.message).toBe("2 of your real people hold demo designations: Second Person, Testing. Give them another designation first.");
+    // one person: singular
+    await post(t.app, `/api/employees/${(await get(t.app, "/api/employees?search=Second", owner)).body.data.people[0].id}/archive`, undefined, owner);
+    const again = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect((again.body.error.details.blockers as { kind: string; message: string }[]).find((x) => x.kind === "designations")!.message).toBe("1 of your real people holds a demo designation: Testing. Give them another designation first.");
+  });
+});
