@@ -41,10 +41,10 @@ export function registerOkrRoutes(registry: RouteRegistry, deps: { permissions: 
     method: "get",
     path: "/api/objectives",
     access: { kind: "permission", key: "okr.view" },
-    summary: "Objectives you may see: ones in your `okr.view` scope, ones you own or created, and ones the organization has published. Each carries its attainment (a whole-number percent from the key results' actual values, or null when nothing is recorded: never 0 for no data). Query: `level`, `lifecycle`, `ownerId`, `teamId`, `departmentId`, `mine`, `search`, `includeArchived` (needs `okr.archive` over everyone)",
-    schema: { query: z.object({ level: z.enum(LEVELS).optional(), lifecycle: z.enum(LIFECYCLES).optional(), ownerId: uuid.optional(), teamId: uuid.optional(), departmentId: uuid.optional(), mine: flag.optional(), search: z.string().max(100).optional(), includeArchived: flag.optional() }).strict() },
+    summary: "Objectives you may see: ones in your `okr.view` scope, ones you own or created, and ones the organization has published. Each carries its attainment (a whole-number percent from the key results' actual values, or null when nothing is recorded: never 0 for no data). Query: `level`, `lifecycle`, `health` (on_track, at_risk, delayed, completed, not_started, no_data), `ownerId`, `teamId`, `departmentId`, `mine`, `search`, `includeArchived` (needs `okr.archive` over everyone)",
+    schema: { query: z.object({ level: z.enum(LEVELS).optional(), lifecycle: z.enum(LIFECYCLES).optional(), health: z.enum(["not_started", "on_track", "at_risk", "delayed", "completed", "no_data"]).optional(), ownerId: uuid.optional(), teamId: uuid.optional(), departmentId: uuid.optional(), mine: flag.optional(), search: z.string().max(100).optional(), includeArchived: flag.optional() }).strict() },
     handler: (_req, res, v) => {
-      const q = v.query as { level?: string; lifecycle?: string; ownerId?: string; teamId?: string; departmentId?: string; mine?: string; search?: string; includeArchived?: string };
+      const q = v.query as { level?: string; lifecycle?: string; health?: string; ownerId?: string; teamId?: string; departmentId?: string; mine?: string; search?: string; includeArchived?: string };
       sendData(res, call(res, (a, r, c) => okr.list(a, r, c, { ...q, mine: q.mine === "true", includeArchived: q.includeArchived === "true" })));
     },
   });

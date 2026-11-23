@@ -210,24 +210,31 @@ Structure endpoints (see the table in section 4): departments, teams, role famil
 | PATCH | `/api/key-results/:id` | `okr.edit` | Changing target creates a history entry |
 | POST | `/api/key-results/:id/progress` | `okr.update_progress` (scope) | `{value, note?, evidenceIds?}`; appends history, recomputes progress and objective health, may raise events |
 | GET | `/api/objectives/:id/history` | `okr.view` | Progress history incl. supersedes |
-| GET / POST / DELETE | `/api/objectives/:id/relationships` | `okr.view` / `okr.assign` | parent/child/conflict/duplicate/dependency; cycle check |
-| GET / POST | `/api/objectives/:id/assignments` | `okr.view` / `okr.assign` | |
-| GET | `/api/objectives/tree` | `okr.view` | `?rootId&depth` alignment tree with weights and attainment |
-| GET | `/api/objectives/alignment-gaps` | `okr.view` | Deterministic orphan/unmeasurable/unaligned-work report |
+| GET | `/api/objectives/:id/alignment` **3.2** | `okr.view` | Its parent (with weight), its children (only those the caller may see; `hiddenChildren` counts the rest), who else works on it, and `can.assign` |
+| PUT / DELETE | `/api/objectives/:id/parent` **3.2** | `okr.assign` over the objective | `{parentId, weight?}`: a parent must sit at a higher level (400 `wrong_level`), no loops (409 `alignment_loop`), an earlier parent is ended (kept). DELETE takes it out of the alignment. Audited |
+| POST / DELETE | `/api/objectives/:id/assignments[/:aid]` **3.2** | `okr.assign` over the objective and the assignee | `{assigneeId \| teamId \| departmentId, role?: contributor\|reviewer}`; assignees can then see the objective. DELETE ends it (row kept). 409 `already_assigned`, `already_ended`. Audited |
+| GET | `/api/objectives/tree` **3.2** | `okr.view` | `?rootId&includeClosed`: company → department → team → personal, each node with health, attainment, weight among siblings and its contribution (weight share × attainment); objectives the caller cannot see are never named |
+| GET | `/api/objectives/alignment-gaps` **3.2** | `okr.view` | `unaligned`, `notBrokenDown`, `unmeasurable`, `noData`, `behindPace`, `overdue`, and `unalignedTasks` (the caller's own visible open tasks that support no objective). Deterministic, each item says why it is listed |
+
+Objectives also carry `health` (not_started, on_track, at_risk, delayed, completed, no_data; null when cancelled) and `healthReason` in plain words with the numbers used, computed by `okr/health.ts` (docs/scoring-architecture.md section 9: on track at a progress-to-time ratio of at least 0.90, at risk from 0.60, delayed below it or past the end). `GET /api/objectives` also takes `?health=`. The hourly job `okr.health` recomputes every objective; a move to at risk or delayed tells the owner and the creator once per status (`objective.at_risk`).
 
 ## 6. KPIs
 
 | Method | Path | Permission | Notes |
 | --- | --- | --- | --- |
-| GET / POST | `/api/kpis` | `kpi.view` / `kpi.configure` | |
-| GET / PATCH | `/api/kpis/:id` | `kpi.view` / `kpi.configure` | |
-| POST | `/api/kpis/:id/archive` | `kpi.configure` | |
-| GET / POST | `/api/kpis/:id/assignments` | `kpi.view` / `kpi.assign` | To person, team, department, designation or role family |
-| PATCH / DELETE | `/api/kpis/:id/assignments/:aid` | `kpi.assign` | End-dates rather than deleting |
-| GET / PUT | `/api/kpis/:id/thresholds` | `kpi.view` / `kpi.configure` | |
-| POST | `/api/kpis/:id/measurements` | `kpi.record` (scope) | `{subject, periodStart, periodEnd, value, source?, supersedes?}`; **never overwrites**; evaluates thresholds |
-| GET | `/api/kpis/:id/history` | `kpi.view` (scope) | `?subject&from&to`; shows superseded rows on request; reports coverage and missing periods |
-| GET | `/api/kpis/overview` | `kpi.view` | KPI health by status, missing-data counts |
+| GET | `/api/kpis` **3.3** | `kpi.view` | Definitions (everyone with `kpi.view` sees them all); each has `assignmentCount`, the active assignments the caller may see. `?category&frequency&search&assignedToMe&includeArchived` |
+| POST | `/api/kpis` **3.3** | `kpi.configure` (over everyone) | `{name, key?, description?, category?, unit?, valueType?, direction?: higher_is_better\|lower_is_better\|target_range, frequency?: daily\|weekly\|monthly\|quarterly\|annual, aggregation?: sum\|avg\|last\|min\|max, defaultTarget?, defaultTargetMax?}`; the key is made from the name (409 `key_taken`); a range needs both ends. Audited |
+| GET / PATCH | `/api/kpis/:id` **3.3** | `kpi.view` / `kpi.configure` | Detail with the assignments the caller may see (target, weight, dates, how many people each covers today), thresholds and `can`. Audited by field name |
+| POST | `/api/kpis/:id/archive` **3.3** | `kpi.configure` | 409 `has_active_assignments`, `already_archived` |
+| POST | `/api/kpis/:id/assignments` **3.3** | `kpi.assign` over the subject | `{assigneeId \| teamId \| departmentId \| designationId \| roleFamilyId, targetValue?, targetMax?, weight?, effectiveFrom?, effectiveTo?}`. A designation or role family needs it over everyone and covers whoever holds it at calculation time. `effectiveTo` is the first day it no longer applies. 409 `already_assigned` |
+| PATCH / DELETE | `/api/kpis/:id/assignments/:aid` **3.3** | `kpi.assign` over the subject | Change target, weight or end date; DELETE ends it today (kept). 409 `already_ended` |
+| GET / PUT | `/api/kpis/:id/thresholds` **3.3** | `kpi.view` / `kpi.configure` | `{thresholds: [{level: excellent\|warning\|critical, comparator: lt\|lte\|gt\|gte, basis?: absolute\|percent_of_target, value, notify?}]}` at most one per level; the earlier list is kept in the audit entry |
+| GET | `/api/kpis/overview` **3.4** | `kpi.view` | Series (one KPI for one person, team, department or the organization) the caller may see, counted by status (no_data, ok, excellent, warning, critical), missing periods, coverage per KPI, and an `attention` list |
+| GET | `/api/kpis/:id/subjects` **3.4** | `kpi.view` | Who has values or a target for this KPI, within the caller's reach, with status, missing periods and `canRecord` |
+| GET | `/api/kpis/:id/history` **3.4** | `kpi.view` over the subject | `?subject=person:<id>\|team:<id>\|department:<id>\|organization&from&to`. Period by period: `recorded`, `missing` (ended with no value: never zero), `open` or `not_expected`, each with its current value, attainment, threshold level and every row (corrections stay visible). Threshold lines in the KPI's unit, coverage, missing count. A subject the caller may not see: 404 |
+| POST | `/api/kpis/:id/measurements` **3.4** | `kpi.record` over the subject | `{subject: {type, id?}, periodStart, value, valueStatus?, note?, supersedes?}`. `periodStart` is the first day of a period of the KPI's frequency (400 `invalid_period`, `future_period`). **Never overwrites**: a second value for a period is 409 `period_recorded` unless `supersedes` names the current row, and a correction needs a `note` (400 `reason_required`; 409 `not_current`). Evaluates the thresholds, writes `kpi.measurement_recorded`, tells the right people once about a warning or critical value, audited |
+
+The hourly job `kpi.thresholds` looks at every series again and flags a period that ended with no value (`kpi.measurement_missed`, notice type `kpi.missing`). Notices and events carry a dedupe key (KPI, subject, period, level), so nothing repeats.
 
 ## 7. Tasks, daily work and evidence
 

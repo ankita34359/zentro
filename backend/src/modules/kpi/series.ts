@@ -19,7 +19,7 @@ export function currentRows(rows: readonly MeasurementRow[]): MeasurementRow[] {
   return rows.filter((r) => !replaced.has(r.id));
 }
 
-export interface Target { assignmentId: string; targetValue: number; targetMax: number | null; weight: number }
+export interface Target { /** null for an organization-level series, which uses the KPI's own default target. */ assignmentId: string | null; targetValue: number; targetMax: number | null; weight: number }
 export interface Series {
   kpi: KpiRow;
   subject: SubjectKey;
@@ -71,7 +71,7 @@ export function buildSeries(input: SeriesInput): Series[] {
     for (const [k, key] of subjects) {
       const t = targets.get(k);
       const mine = (bySubject.get(k) ?? []).sort((x, y) => x.period_start.localeCompare(y.period_start));
-      const target: Target | null = t ? { assignmentId: t.a.id, targetValue: t.a.target_value, targetMax: t.a.target_max, weight: t.a.weight } : null;
+      const target: Target | null = t ? { assignmentId: t.a.id, targetValue: t.a.target_value, targetMax: t.a.target_max, weight: t.a.weight } : key.kind === "organization" && kpi.default_target !== null ? { assignmentId: null, targetValue: kpi.default_target, targetMax: kpi.default_target_max, weight: 1 } : null;
       const have = new Set(mine.map((r) => r.period_start));
       const expectedPeriods = t ? completedPeriods(freq, input.today, LOOKBACK[freq], t.a.effective_from) : [];
       const missing = expectedPeriods.filter((p) => !have.has(p));
@@ -122,7 +122,7 @@ export function applySeriesAlerts(tdb: TenantDb, input: SeriesInput, series: rea
         created += deliverNotification(notes, { recipients, type: "kpi.threshold", title: `${s.status === "critical" ? "Critical" : "Warning"}: ${s.kpi.name}${s.subject.kind === "person" ? ` (${who})` : ` for ${who}`}`, body: `${s.latest.label}: ${s.latest.value}${unit}${pct}.`, severity: s.status === "critical" ? "critical" : "warning", entityType: "kpi", entityId: s.kpi.id, dedupeKey: key }, nowIso);
       }
     }
-    if (opts.missed && s.target) {
+    if (opts.missed && s.target && s.target.assignmentId !== null) {
       const last = completedPeriods(s.kpi.frequency as Frequency, input.today, 1, input.assignments.find((a) => a.id === s.target!.assignmentId)?.effective_from)[0];
       if (last && s.missing.includes(last) && recipients.length > 0) {
         const key = `kpi.missed:${s.kpi.id}:${subj}:${last}`;

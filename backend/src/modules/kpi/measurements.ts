@@ -202,7 +202,7 @@ export class MeasurementService {
     const currentIds = new Set(currentRows(all).map((r) => r.id));
     const series = this.seriesFor(w.input, kpiId, subject);
     const target = series?.target ?? null;
-    const asg = target ? w.input.assignments.find((a) => a.id === target.assignmentId) : undefined;
+    const asg = target?.assignmentId ? w.input.assignments.find((a) => a.id === target.assignmentId) : undefined;
     const thresholds = w.input.thresholds.filter((t) => t.kpi_id === kpiId);
     const typed: Threshold[] = thresholds.map((t) => ({ level: t.level as Threshold["level"], comparator: t.comparator as Threshold["comparator"], basis: t.basis as Threshold["basis"], value: t.value }));
     const defaultFrom = completedPeriods(freq, w.today, LOOKBACK[freq])[0] ?? periodStartOf(freq, w.today);

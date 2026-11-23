@@ -60,6 +60,9 @@ describe("alignment and health (stage 3.2)", () => {
     expect(behind.healthReason).toMatch(/Well behind pace: progress 10% vs 50% expected/);
     const mid = (await post(t.app, `/api/key-results/${o.keyResults[0].id}/progress`, { value: 40 }, owner)).body.data;
     expect(mid.health).toBe("at_risk");
+    expect(((await get(t.app, "/api/objectives?health=at_risk", owner)).body.data as { title: string }[]).map((x) => x.title)).toEqual(["Grow"]);
+    expect((await get(t.app, "/api/objectives?health=on_track", owner)).body.data).toEqual([]);
+    expect((await get(t.app, "/api/objectives?health=bogus", owner)).status).toBe(400);
     const good = (await post(t.app, `/api/key-results/${o.keyResults[0].id}/progress`, { value: 60 }, owner)).body.data;
     expect(good.health).toBe("on_track");
   });

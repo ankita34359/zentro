@@ -156,6 +156,22 @@ describe("Overview (stage 6.1)", () => {
     expect(screen.queryByRole("img", { name: /Tasks completed per day/ })).toBeNull();
   });
 
+  it("shows company objectives with their health and the KPI health card with who needs attention (stage 3.5)", async () => {
+    setMe(withCaps(ADMIN));
+    stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({
+      objectives: { total: 2, items: [{ id: "o1", title: "Reach $12M", attainmentPct: 61, dataState: "ok", elapsedPct: 70, keyResultCount: 3, health: "at_risk" }, { id: "o2", title: "Easiest to adopt", attainmentPct: null, dataState: "none", elapsedPct: 40, keyResultCount: 2, health: "no_data" }] },
+      kpis: { totals: { series: 14, byStatus: { critical: 1, warning: 2, ok: 9, no_data: 2 }, missingPeriods: 6, kpis: 5 }, attention: [{ kpiId: "k9", kpiName: "Change failure rate", subject: { name: "Platform" }, status: "critical", label: "Nov 2026: 12.1 %", missing: 0 }] },
+    })) : json(HEALTH_OK)));
+    renderApp("/overview");
+    const objectives = await screen.findByRole("list", { name: "Company objectives" });
+    expect(within(objectives).getByText("At risk")).toBeTruthy();
+    expect(within(objectives).getByText("No data yet")).toBeTruthy(); // never 0%
+    const kpis = await screen.findByRole("list", { name: "KPIs needing attention" });
+    expect(within(kpis).getByText(/Change failure rate/)).toBeTruthy();
+    expect(within(kpis).getByText("Critical")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "KPI series by status" })).getByText(/6 periods missing/)).toBeTruthy();
+  });
+
   it("an employee sees only their own work: no team, no organization widgets, and no checklist once everything is done", async () => {
     setMe(withCaps({ "task.view": ["own"] }));
     stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({ preset: "personal", organization: null, flags: { demoLoaded: true, canManageDemo: false, canSetUp: false }, checklist: OVERVIEW().checklist.map((c) => ({ ...c, done: true })) })) : json(HEALTH_OK)));

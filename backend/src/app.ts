@@ -114,9 +114,10 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerNotificationRoutes(registry, { notifications });
   registerAlignmentRoutes(registry, { permissions, alignment: new AlignmentService({ store, auth, audit, okr: okrService }), tasks: taskService });
   registerOkrRoutes(registry, { permissions, okr: okrService });
-  registerMeasurementRoutes(registry, { permissions, measurements: new MeasurementService({ store, auth, audit, events }) });
+  const measurementService = new MeasurementService({ store, auth, audit, events });
+  registerMeasurementRoutes(registry, { permissions, measurements: measurementService });
   registerKpiRoutes(registry, { permissions, kpis: new KpiService({ store, auth, audit }) });
-  registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService }) });
+  registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService, measurements: measurementService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);

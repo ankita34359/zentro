@@ -68,7 +68,7 @@ describe("Load demo data", () => {
     expect(flagged.objectives).toBe(c.objectives);
     expect(flagged.key_results).toBe(c.keyResults);
     expect(code(await post(t.app, "/api/demo/load", undefined, owner))).toBe("demo_loaded");
-    expect((await audit(owner))[0]!.summary).toMatch(/^Loaded demo data: \d+ people, 6 departments, 12 teams, \d+ tasks, \d+ objectives$/);
+    expect((await audit(owner))[0]!.summary).toMatch(/^Loaded demo data: \d+ people, 6 departments, 12 teams, \d+ tasks, \d+ objectives, \d+ KPIs$/);
     // the company is real data the rest of the app reads
     const dirs = (await get(t.app, "/api/employees?limit=500", owner)).body.data;
     expect(dirs.total).toBe(c.people! + 1);
@@ -392,5 +392,68 @@ describe("Demo alignment and health (stage 3.2)", () => {
     const demoTeam = (await get(t.app, "/api/organization/structure", owner)).body.data.teams.find((x: { isDemo?: boolean }) => x.isDemo).id as string;
     expect((await post(t.app, `/api/objectives/${real}/assignments`, { teamId: demoTeam }, owner)).status).toBe(201);
     expect((await post(t.app, "/api/demo/remove", undefined, owner)).body.error.details.blockers.map((b: { kind: string }) => b.kind)).toContain("objective_assignments");
+  });
+});
+
+describe("Demo KPIs (stages 3.3 and 3.4)", () => {
+  it("the demo company has KPIs assigned to a role family, teams, a department and the organization, with months of values, gaps, a correction and alerts already raised", async () => {
+    const { owner } = await setup();
+    const load = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(load.body.data.counts.kpis).toBeGreaterThanOrEqual(9);
+    const kpis = (await get(t.app, "/api/kpis", owner)).body.data as { id: string; name: string; isDemo: boolean; assignmentCount: number }[];
+    expect(kpis.every((k) => k.isDemo)).toBe(true);
+    const leads = kpis.find((k) => k.name === "Qualified leads")!;
+    const detail = (await get(t.app, `/api/kpis/${leads.id}`, owner)).body.data;
+    expect(detail.assignments[0]).toMatchObject({ subject: { kind: "role_family", name: "Sales" }, targetValue: 40 });
+    expect(detail.assignments[0].appliesTo).toBeGreaterThan(5);
+    expect(detail.thresholds.map((x: { level: string }) => x.level)).toEqual(["critical", "warning"]);
+    // the first seller has a corrected value: both rows stay
+    const subjects = (await get(t.app, `/api/kpis/${leads.id}/subjects`, owner)).body.data as { subject: { kind: string; id: string }; missing: number }[];
+    expect(subjects.length).toBeGreaterThan(5);
+    expect(subjects.some((s) => s.missing > 0)).toBe(true);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpi_measurements WHERE kpi_id = ? AND supersedes_measurement_id IS NOT NULL", leads.id).n).toBe(1);
+    // organization-level KPIs use the KPI's own target
+    const arr = kpis.find((k) => k.name === "Annual recurring revenue")!;
+    const h = (await get(t.app, `/api/kpis/${arr.id}/history?subject=organization`, owner)).body.data;
+    expect(h.target).toMatchObject({ targetValue: 12 });
+    expect(h.periods.filter((p: { state: string }) => p.state === "recorded").length).toBe(6);
+    // the overview shows the platform team's failing change-failure rate as critical, and the missing months
+    const ov = (await get(t.app, "/api/kpis/overview", owner)).body.data;
+    expect(ov.totals.byStatus.critical).toBeGreaterThanOrEqual(1);
+    expect(ov.totals.missingPeriods).toBeGreaterThan(0);
+    expect(ov.attention.some((a: { kpiName: string; status: string }) => a.kpiName === "Change failure rate" && a.status === "critical")).toBe(true);
+    // alerts were raised once at load: the first hourly pass adds none
+    const before = one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type IN ('kpi.threshold', 'kpi.measurement_missed')").n;
+    expect(before).toBeGreaterThan(0);
+    t.db.prepare("DELETE FROM scheduled_job_runs WHERE job_name = 'kpi.thresholds'").run();
+    await t.tick.run();
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type IN ('kpi.threshold', 'kpi.measurement_missed')").n).toBe(before);
+  });
+
+  it("a demo seller sees only their own series; removal leaves no KPI row of any kind, and a real KPI assigned to a demo team blocks it", async () => {
+    const { owner } = await setup();
+    const real = await created("/api/kpis", { name: "My real KPI", defaultTarget: 10 }, owner);
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const ps = await personas(owner);
+    const seller = ps.find((p) => p.designation === "Account Executive")!;
+    const as = await asCookie(owner, seller.id);
+    const ov = (await get(t.app, "/api/kpis/overview", as)).body.data;
+    const all = (await get(t.app, "/api/kpis/overview", owner)).body.data;
+    expect(ov.totals.series).toBeGreaterThan(0);
+    expect(ov.totals.series).toBeLessThan(all.totals.series / 2); // their own series, their teammates' and their team's: never the whole company's
+    expect(JSON.stringify(ov)).not.toContain("Annual recurring revenue"); // the organization total is not theirs
+    // a real KPI given to a demo team stops the removal
+    const demoTeam = (await get(t.app, "/api/organization/structure", owner)).body.data.teams.find((x: { isDemo?: boolean }) => x.isDemo).id as string;
+    expect((await post(t.app, `/api/kpis/${real}/assignments`, { teamId: demoTeam }, owner)).status).toBe(201);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    expect((blocked.body.error.details.blockers as { kind: string }[]).map((b) => b.kind)).toContain("kpi_assignments");
+    const aid = (await get(t.app, `/api/kpis/${real}`, owner)).body.data.assignments[0].id as string;
+    await request(t.app).delete(`/api/kpis/${real}/assignments/${aid}`).set("Origin", ORIGIN).set("Cookie", owner);
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    for (const table of ["kpi_measurements", "kpi_thresholds"]) expect(one<{ n: number }>(`SELECT COUNT(*) n FROM ${table}`).n, table).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpis").n).toBe(1); // only the real one
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpi_assignments").n).toBe(0); // the real assignment to the (now gone) demo team was ended and went with it
+    expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
   });
 });

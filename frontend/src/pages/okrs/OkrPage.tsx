@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { problemText } from "@/lib/authForm";
-import { createObjective, LEVEL_LABEL, listObjectives, type KeyResultInput } from "@/services/okr";
+import { createObjective, HEALTH_LABEL, LEVEL_LABEL, listObjectives, type KeyResultInput } from "@/services/okr";
 import { listPeople } from "@/services/people";
 import { getStructure } from "@/services/structure";
 import { ObjectiveDrawer } from "./ObjectiveDrawer";
@@ -34,9 +34,10 @@ export default function OkrPage() {
   const [adding, setAdding] = useState(false);
   const [level, setLevel] = useState("");
   const [lifecycle, setLifecycle] = useState("");
+  const [health, setHealth] = useState("");
   const [mine, setMine] = useState(false);
   const [search, setSearch] = useState("");
-  const filters = { level: level || undefined, lifecycle: lifecycle || undefined, mine, search: search.trim() || undefined };
+  const filters = { level: level || undefined, lifecycle: lifecycle || undefined, health: health || undefined, mine, search: search.trim() || undefined };
   const q = useQuery({ queryKey: ["objectives", filters], queryFn: () => listObjectives(filters), retry: false, placeholderData: (p) => p });
   const view = params.get("view") === "tree" ? "tree" : params.get("view") === "gaps" ? "gaps" : "list";
   const openId = params.get("objective");
@@ -48,7 +49,7 @@ export default function OkrPage() {
   const open = (id: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("objective", id); return n; });
   const close = () => setParams((p) => { const n = new URLSearchParams(p); n.delete("objective"); return n; }, { replace: true });
   const canCreate = can("okr.create");
-  const filtered = Boolean(filters.level || filters.lifecycle || mine || filters.search);
+  const filtered = Boolean(filters.level || filters.lifecycle || filters.health || mine || filters.search);
 
   return (
     <>
@@ -67,7 +68,7 @@ export default function OkrPage() {
       {view === "tree" && <AlignmentTree onOpen={open} />}
       {view === "gaps" && <GapsReport onOpen={open} />}
       {view === "list" && <section aria-label="Objectives" className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <input aria-label="Search objectives" type="search" placeholder="Search by title" value={search} onChange={(e) => setSearch(e.target.value)} className={selectCls} />
           <select aria-label="Level" value={level} onChange={(e) => setLevel(e.target.value)} className={selectCls}>
             <option value="">Any level</option>
@@ -79,6 +80,10 @@ export default function OkrPage() {
             <option value="active">Active</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
+          </select>
+          <select aria-label="Health" value={health} onChange={(e) => setHealth(e.target.value)} className={selectCls}>
+            <option value="">Any health</option>
+            {Object.entries(HEALTH_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           <label className="flex items-center gap-2 text-label"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only objectives I own</label>
         </div>

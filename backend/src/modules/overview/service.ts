@@ -4,6 +4,7 @@ import type { AuthContext, AuthService } from "../auth/service.js";
 import type { Capabilities } from "../permissions/service.js";
 import { addDays, todayIn } from "../tasks/dates.js";
 import type { OkrService, ObjectiveSummary } from "../okr/service.js";
+import type { MeasurementService, OverviewView as KpiOverviewView } from "../kpi/measurements.js";
 import type { TaskService } from "../tasks/service.js";
 import type { AssignmentRow, TaskRow } from "../tasks/repositories/tasks.js";
 
@@ -38,7 +39,9 @@ export interface Overview {
     departmentLoad: { id: string; name: string; people: number; open: number; overdue: number }[];
   };
   /** Active company objectives the caller may see, with how far they have really come (null = no data yet). For people with `okr.view`. */
-  objectives: null | { items: Pick<ObjectiveSummary, "id" | "title" | "attainmentPct" | "dataState" | "elapsedPct" | "keyResultCount">[]; total: number };
+  objectives: null | { items: Pick<ObjectiveSummary, "id" | "title" | "attainmentPct" | "dataState" | "elapsedPct" | "keyResultCount" | "health">[]; total: number };
+  /** KPI health across the series the caller may see (people with `kpi.view`). */
+  kpis: null | Pick<KpiOverviewView, "totals" | "attention">;
   checklist: ChecklistItem[];
   flags: { demoLoaded: boolean; canManageDemo: boolean; canSetUp: boolean };
 }
@@ -49,7 +52,7 @@ export interface Overview {
  * widget; someone who may see everyone gets the organization widgets.
  */
 export class OverviewService {
-  constructor(private readonly o: { store: AuthStore; auth: AuthService; tasks: TaskService; okr: OkrService }) {}
+  constructor(private readonly o: { store: AuthStore; auth: AuthService; tasks: TaskService; okr: OkrService; measurements: MeasurementService }) {}
 
   get(auth: AuthContext, requestId: string, caps: Capabilities): Overview {
     if (!auth.organizationId || !auth.membershipId) throw new HttpError(403, "no_organization", "Join or create an organization first.");
@@ -140,7 +143,9 @@ export class OverviewService {
     }
 
     const okrRepo = this.o.store.okr(tdb);
-    const objectives = caps.has("okr.view") ? { items: this.o.okr.topObjectives(ctx, caps, 5).map((o) => ({ id: o.id, title: o.title, attainmentPct: o.attainmentPct, dataState: o.dataState, elapsedPct: o.elapsedPct, keyResultCount: o.keyResultCount })), total: okrRepo.objectives().filter((o) => o.level === "company" && o.lifecycle === "active").length } : null;
+    const objectives = caps.has("okr.view") ? { items: this.o.okr.topObjectives(ctx, caps, 5).map((o) => ({ id: o.id, title: o.title, attainmentPct: o.attainmentPct, dataState: o.dataState, elapsedPct: o.elapsedPct, keyResultCount: o.keyResultCount, health: o.health })), total: okrRepo.objectives().filter((o) => o.level === "company" && o.lifecycle === "active").length } : null;
+    const kpiView = caps.has("kpi.view") ? this.o.measurements.overview(auth, requestId, caps) : null;
+    const kpisDefined = this.o.store.kpi(tdb).kpis().length > 0;
     const reportingLines = people.reportingRows({ asOf: today }).length;
     const first = work.suggested[0];
     const mineOpenUnaligned = tasks.filter((t) => open(t.status) && t.objective_id === null && doers(t).includes(me)).length;
@@ -160,12 +165,13 @@ export class OverviewService {
       team,
       organization,
       objectives,
+      kpis: kpiView ? { totals: kpiView.totals, attention: kpiView.attention.slice(0, 5) } : null,
       checklist: [
         { key: "departments", label: "Create departments", to: "/settings/structure", done: depts.length > 0, stage: null },
         { key: "people", label: "Add or invite people", to: "/organization/people", done: live.length > 1, stage: null },
         { key: "reporting", label: "Set reporting lines", to: "/organization", done: reportingLines > 0, stage: null },
         { key: "objective", label: "Create a company objective", to: "/okrs", done: okrRepo.objectives().some((o) => o.level === "company"), stage: null },
-        { key: "kpi", label: "Define KPIs", to: "/kpis", done: false, stage: "3.3" },
+        { key: "kpi", label: "Define KPIs", to: "/kpis", done: kpisDefined, stage: null },
         { key: "tasks", label: "Assign tasks", to: "/my-work", done: [...assigns.values()].some((a) => a.length > 0), stage: null },
       ],
       flags: { demoLoaded: demo.loadedBatch() !== undefined, canManageDemo: caps.scope("demo.manage").all, canSetUp: caps.scope("org.manage").all || caps.scope("people.manage").all },

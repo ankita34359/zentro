@@ -19,7 +19,8 @@ import { ProgressRing } from "@/motion/ProgressRing";
 import { Stagger, StaggerItem } from "@/motion/Stagger";
 import { NAV_ITEMS } from "@/routes/navigation";
 import { Metric } from "@/components/common/Metric";
-import { Attainment } from "@/pages/okrs/okrUi";
+import { Attainment, HealthBadge } from "@/pages/okrs/okrUi";
+import { StatusBadge as KpiStatusBadge } from "@/pages/kpis/kpiUi";
 
 /** Shown before the server's numbers arrive (and when they cannot be loaded): nothing is claimed as done. */
 const DEFAULT_STEPS: ChecklistItem[] = [
@@ -194,7 +195,7 @@ function ObjectivesCard({ o, unaligned }: { o: NonNullable<Overview["objectives"
           <ul aria-label="Company objectives" className="grid gap-4 lg:grid-cols-2">
             {o.items.map((i) => (
               <li key={i.id} className="space-y-1.5">
-                <Link to={`/okrs?objective=${i.id}`} className="text-label font-medium hover:text-primary-ink">{i.title}</Link>
+                <span className="flex flex-wrap items-center gap-2"><Link to={`/okrs?objective=${i.id}`} className="text-label font-medium hover:text-primary-ink">{i.title}</Link><HealthBadge health={(i.health as never) ?? null} /></span>
                 <Attainment pct={i.attainmentPct} dataState={i.dataState} elapsedPct={i.elapsedPct} label={`Progress of ${i.title}`} />
               </li>
             ))}
@@ -205,6 +206,40 @@ function ObjectivesCard({ o, unaligned }: { o: NonNullable<Overview["objectives"
             {unaligned} of your open {unaligned === 1 ? "task supports" : "tasks support"} no objective. <Link to="/my-work/tasks" className="font-medium text-primary-ink underline">See your tasks</Link>
           </p>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function KpiCard({ k }: { k: NonNullable<Overview["kpis"]> }) {
+  const order = ["critical", "warning", "ok", "excellent", "no_data"] as const;
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>KPI health</CardTitle>
+        <CardDescription>The latest value of each KPI you can see, against its thresholds.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ul aria-label="KPI series by status" className="flex flex-wrap gap-x-5 gap-y-2 text-label">
+          {order.filter((s) => (k.totals.byStatus[s] ?? 0) > 0).map((s) => (
+            <li key={s} className="flex items-center gap-2"><KpiStatusBadge status={s} /> <span className="tabular-nums">{k.totals.byStatus[s]}</span></li>
+          ))}
+          {k.totals.missingPeriods > 0 && <li className="font-medium text-off-track-ink">{k.totals.missingPeriods} {k.totals.missingPeriods === 1 ? "period" : "periods"} missing</li>}
+        </ul>
+        {k.attention.length > 0 && (
+          <ul aria-label="KPIs needing attention" className="divide-y rounded-lg border">
+            {k.attention.map((a) => (
+              <li key={`${a.kpiId}-${a.subject.name}`}>
+                <Link to={`/kpis?kpi=${a.kpiId}`} className="flex flex-wrap items-center gap-2 px-3 py-2 text-label hover:bg-muted/50">
+                  <span className="min-w-0 flex-1 font-medium">{a.kpiName} <span className="font-normal text-muted-foreground">· {a.subject.name}</span></span>
+                  <KpiStatusBadge status={a.status} />
+                  <span className="text-muted-foreground">{a.label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Link to="/kpis?view=overview" className="inline-block text-label font-medium text-primary-ink underline">Open the KPI overview</Link>
       </CardContent>
     </Card>
   );
@@ -325,6 +360,7 @@ export default function OverviewPage() {
             <StaggerItem className={o.team ? "" : "lg:col-span-2"}><YourWork o={o} /></StaggerItem>
             {o.team && <StaggerItem className="lg:col-span-2"><TeamCard t={o.team} /></StaggerItem>}
             {o.objectives && <StaggerItem className="lg:col-span-3"><ObjectivesCard o={o.objectives} unaligned={o.personal.unalignedOpen} /></StaggerItem>}
+            {o.kpis && o.kpis.totals.series > 0 && <StaggerItem className="lg:col-span-3"><KpiCard k={o.kpis} /></StaggerItem>}
             {o.organization && <OrganizationCards org={o.organization} />}
           </>
         )}

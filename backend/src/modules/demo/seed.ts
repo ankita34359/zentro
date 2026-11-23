@@ -86,6 +86,24 @@ export interface DemoObjective {
   /** Teams and departments that also work on it. */
   contributors: { kind: "team" | "department"; key: string; role: "contributor" | "reviewer" }[];
 }
+export interface DemoKpi {
+  key: string;
+  name: string;
+  description: string;
+  category: "delivery" | "quality" | "impact" | "financial" | "growth" | "people" | "health";
+  unit: string | null;
+  frequency: "weekly" | "monthly" | "quarterly";
+  direction: "higher_is_better" | "lower_is_better";
+  aggregation: "sum" | "avg" | "last";
+  defaultTarget: number;
+  /** Warning and critical, as a percentage of the target (below it for "higher is better", above it for "lower is better"). */
+  warnPct: number;
+  critPct: number;
+  /** Who has it: a role family, a designation, a team, a department or one person (a key from this file). */
+  assignments: { kind: "role_family" | "designation" | "team" | "department"; key: string; target?: number }[];
+  /** One entry per subject with values. `values` line up with the LAST n completed periods, oldest first; null = nothing was recorded (a gap). */
+  series: { subject: { kind: "person" | "team" | "department" | "organization"; key: string | null }; values: (number | null)[]; correction?: { index: number; value: number; note: string } }[];
+}
 export interface DemoDailyUpdate { personKey: string; dayOffset: number; summary: string; blockers: string | null }
 export interface DemoCompany {
   departments: DemoDepartment[];
@@ -96,6 +114,7 @@ export interface DemoCompany {
   tasks: DemoTask[];
   dailyUpdates: DemoDailyUpdate[];
   objectives: DemoObjective[];
+  kpis: DemoKpi[];
 }
 
 /** Small deterministic generator (mulberry32). */
@@ -414,6 +433,45 @@ export function buildDemoCompany(seed: string): DemoCompany {
     }
   });
 
+  // ----- KPIs with a believable history (stages 3.3 and 3.4). Drawn after everything above, so earlier versions of the seed do not change. -----
+  const kpis: DemoKpi[] = [];
+  const factor = (lo: number, hi: number): number => lo + rand() * (hi - lo);
+  /** `n` values around the target, drifting a little, with an optional share of gaps. Lower-is-better values are the target divided by the factor. */
+  const series = (n: number, target: number, lower: boolean, gapChance: number, level: number): (number | null)[] => {
+    let drift = level;
+    return Array.from({ length: n }, () => {
+      drift = Math.min(1.3, Math.max(0.35, drift + factor(-0.12, 0.14)));
+      if (rand() < gapChance) return null;
+      const f = drift;
+      const v = lower ? target / f : target * f;
+      return Math.round(v * 10) / 10;
+    });
+  };
+  const salesPeople = people.filter((p) => p.designation === "Account Executive" || p.designation === "Sales Development Rep");
+  const engineers = people.filter((p) => p.designation === "Software Engineer");
+  const addKpi = (k: Omit<DemoKpi, "key">): DemoKpi => {
+    const full: DemoKpi = { ...k, key: `k${kpis.length + 1}` };
+    kpis.push(full);
+    return full;
+  };
+  const leadsKpi = addKpi({ name: "Qualified leads", description: "Leads that passed qualification this month.", category: "growth", unit: "leads", frequency: "monthly", direction: "higher_is_better", aggregation: "sum", defaultTarget: 40, warnPct: 80, critPct: 55, assignments: [{ kind: "role_family", key: "sales" }], series: salesPeople.map((p, i) => ({ subject: { kind: "person" as const, key: p.key }, values: series(6, p.designation === "Account Executive" ? 40 : 40, false, i % 4 === 3 ? 0.4 : 0.1, factor(0.7, 1.1)) })) });
+  const firstSeller = leadsKpi.series[0];
+  if (firstSeller) {
+    firstSeller.values[2] = firstSeller.values[2] ?? 39;
+    firstSeller.correction = { index: 2, value: 37, note: "Two leads were counted twice" };
+  }
+  const secondSeller = leadsKpi.series[1];
+  if (secondSeller) secondSeller.values[5] = null; // the most recent month is missing for one seller, so the gaps show on the first look
+  addKpi({ name: "Win rate", description: "Share of qualified deals that were won.", category: "growth", unit: "%", frequency: "monthly", direction: "higher_is_better", aggregation: "avg", defaultTarget: 25, warnPct: 80, critPct: 60, assignments: [{ kind: "team", key: "field" }, { kind: "team", key: "inside", target: 22 }], series: [{ subject: { kind: "team", key: "field" }, values: series(6, 25, false, 0, 0.9) }, { subject: { kind: "team", key: "inside" }, values: series(6, 22, false, 0, 0.8) }] });
+  addKpi({ name: "First response time", description: "Median minutes until a customer gets a first answer.", category: "quality", unit: "min", frequency: "monthly", direction: "lower_is_better", aggregation: "avg", defaultTarget: 60, warnPct: 125, critPct: 200, assignments: [{ kind: "team", key: "support" }], series: [{ subject: { kind: "team", key: "support" }, values: [190, 150, 128, 104, 91, 78] }] });
+  addKpi({ name: "Customer satisfaction (CSAT)", description: "Average satisfaction score from customer surveys.", category: "quality", unit: "points", frequency: "quarterly", direction: "higher_is_better", aggregation: "avg", defaultTarget: 90, warnPct: 92, critPct: 85, assignments: [{ kind: "department", key: "cs" }], series: [{ subject: { kind: "department", key: "cs" }, values: [81, 83, 86, 88] }] });
+  addKpi({ name: "Deployments per week", description: "Production deployments completed in the week.", category: "delivery", unit: "deploys", frequency: "weekly", direction: "higher_is_better", aggregation: "sum", defaultTarget: 12, warnPct: 75, critPct: 50, assignments: [{ kind: "team", key: "platform" }], series: [{ subject: { kind: "team", key: "platform" }, values: series(8, 12, false, 0.12, 0.85) }] });
+  addKpi({ name: "Change failure rate", description: "Share of deployments that needed a fix or a rollback.", category: "quality", unit: "%", frequency: "monthly", direction: "lower_is_better", aggregation: "avg", defaultTarget: 5, warnPct: 140, critPct: 220, assignments: [{ kind: "team", key: "platform" }, { kind: "team", key: "mobile", target: 6 }], series: [{ subject: { kind: "team", key: "platform" }, values: [4.1, 4.6, 5.2, 7.8, 9.4, 12.1] }, { subject: { kind: "team", key: "mobile" }, values: series(6, 6, true, 0, 0.95) }] });
+  addKpi({ name: "Sprint predictability", description: "Share of planned work an engineer finished in the month.", category: "delivery", unit: "%", frequency: "monthly", direction: "higher_is_better", aggregation: "avg", defaultTarget: 85, warnPct: 85, critPct: 65, assignments: [{ kind: "designation", key: "Software Engineer" }], series: engineers.map((p, i) => ({ subject: { kind: "person" as const, key: p.key }, values: series(6, 85, false, i % 3 === 2 ? 0.3 : 0.05, factor(0.8, 1.05)) })) });
+  addKpi({ name: "Time to hire", description: "Average days from opening a role to an accepted offer.", category: "people", unit: "days", frequency: "quarterly", direction: "lower_is_better", aggregation: "avg", defaultTarget: 35, warnPct: 125, critPct: 170, assignments: [{ kind: "department", key: "ops" }], series: [{ subject: { kind: "department", key: "ops" }, values: [52, 47, 41, 38] }] });
+  addKpi({ name: "Annual recurring revenue", description: "Recurring revenue at the end of the month, in millions.", category: "financial", unit: "$M", frequency: "monthly", direction: "higher_is_better", aggregation: "last", defaultTarget: 12, warnPct: 75, critPct: 55, assignments: [], series: [{ subject: { kind: "organization", key: null }, values: [8.1, 8.4, 8.9, 9.6, 10.1, 10.4] }] });
+  addKpi({ name: "Employee net promoter score", description: "Would people recommend working here (survey, −100 to 100).", category: "people", unit: "points", frequency: "quarterly", direction: "higher_is_better", aggregation: "last", defaultTarget: 50, warnPct: 70, critPct: 40, assignments: [], series: [{ subject: { kind: "organization", key: null }, values: [22, 26, 31, 36] }] });
+
   return {
     departments: DEPARTMENTS,
     teams: TEAMS,
@@ -423,6 +481,7 @@ export function buildDemoCompany(seed: string): DemoCompany {
     tasks,
     dailyUpdates,
     objectives,
+    kpis,
   };
 }
 

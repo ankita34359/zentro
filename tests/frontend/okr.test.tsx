@@ -142,4 +142,13 @@ describe("OKRs & Goals page (stage 3.1)", () => {
     expect(within(await screen.findByRole("region", { name: "Cannot be measured" })).getByText("None")).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "Work with no objective" })).getByText("3")).toBeTruthy();
   });
+
+  it("the Health filter asks the server for that health only", async () => {
+    setMe(withCaps(ALL));
+    const f = server();
+    renderApp("/okrs");
+    await screen.findByRole("list", { name: "Objective list" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Health" }), "at_risk");
+    await waitFor(() => expect(f.mock.calls.some((c) => String(c[0]).includes("/api/objectives?") && String(c[0]).includes("health=at_risk"))).toBe(true));
+  });
 });

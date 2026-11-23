@@ -91,6 +91,18 @@ export class DemoRepository {
   insertObjectiveAssignment(r: { id: string; objectiveId: string; teamId: string | null; departmentId: string | null; role: string; startDate: string; by: string; now: string }): void {
     this.tdb.run("INSERT INTO objective_assignments (id, organization_id, objective_id, assignee_team_id, assignee_department_id, role, start_date, assigned_by_membership_id, created_at) VALUES (@id, @organization_id, @objectiveId, @teamId, @departmentId, @role, @startDate, @by, @now)", r);
   }
+  insertKpi(r: { id: string; key: string; name: string; description: string; category: string; unit: string | null; frequency: string; direction: string; aggregation: string; defaultTarget: number; createdBy: string; now: string }): void {
+    this.tdb.run("INSERT INTO kpis (id, organization_id, key, name, description, category, unit, value_type, direction, frequency, aggregation, default_target, created_by_membership_id, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @key, @name, @description, @category, @unit, 'number', @direction, @frequency, @aggregation, @defaultTarget, @createdBy, 1, @now, @now)", r);
+  }
+  insertKpiAssignment(r: { id: string; kpiId: string; teamId: string | null; departmentId: string | null; designationId: string | null; roleFamilyId: string | null; targetValue: number; effectiveFrom: string; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO kpi_assignments (id, organization_id, kpi_id, team_id, department_id, designation_id, role_family_id, target_value, weight, effective_from, assigned_by_membership_id, created_at) VALUES (@id, @organization_id, @kpiId, @teamId, @departmentId, @designationId, @roleFamilyId, @targetValue, 1, @effectiveFrom, @by, @now)", r);
+  }
+  insertKpiThreshold(r: { id: string; kpiId: string; level: string; comparator: string; value: number; now: string }): void {
+    this.tdb.run("INSERT INTO kpi_thresholds (id, organization_id, kpi_id, level, comparator, basis, value, notify, created_at) VALUES (@id, @organization_id, @kpiId, @level, @comparator, 'percent_of_target', @value, 1, @now)", r);
+  }
+  insertKpiMeasurement(r: { id: string; kpiId: string; membershipId: string | null; teamId: string | null; departmentId: string | null; periodStart: string; periodEnd: string; value: number; by: string; note: string | null; supersedesId: string | null; now: string }): void {
+    this.tdb.run("INSERT INTO kpi_measurements (id, organization_id, kpi_id, subject_membership_id, subject_team_id, subject_department_id, period_start, period_end, value, value_status, recorded_at, recorded_by_membership_id, source, note, supersedes_measurement_id) VALUES (@id, @organization_id, @kpiId, @membershipId, @teamId, @departmentId, @periodStart, @periodEnd, @value, 'recorded', @now, @by, 'demo', @note, @supersedesId)", r);
+  }
   insertKeyResult(r: { id: string; objectiveId: string; title: string; unit: string | null; direction: string; method: string; start: number; target: number; current: number | null; currentAsOf: string | null; weight: number; ownerId: string; now: string }): void {
     this.tdb.run(
       "INSERT INTO key_results (id, organization_id, objective_id, title, description, measurement_type, unit, direction, progress_method, start_value, target_value, current_value, current_as_of, weight, owner_membership_id, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @objectiveId, @title, '', 'number', @unit, @direction, @method, @start, @target, @current, @currentAsOf, @weight, @ownerId, 1, @now, @now)",
@@ -158,6 +170,7 @@ export class DemoRepository {
       tasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = @organization_id AND is_demo = 1"),
       objectives: one("SELECT COUNT(*) AS n FROM objectives WHERE organization_id = @organization_id AND is_demo = 1"),
       keyResults: one("SELECT COUNT(*) AS n FROM key_results WHERE organization_id = @organization_id AND is_demo = 1"),
+      kpis: one("SELECT COUNT(*) AS n FROM kpis WHERE organization_id = @organization_id AND is_demo = 1"),
     };
   }
 

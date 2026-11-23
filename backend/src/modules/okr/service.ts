@@ -238,7 +238,7 @@ export class OkrService {
     refreshObjectiveHealth(w.tdb, o, w.okr.keyResults().filter((k) => k.objective_id === id), w.today, this.now(), w.okr);
   }
 
-  list(auth: AuthContext, requestId: string, caps: Capabilities, q: { level?: string; lifecycle?: string; ownerId?: string; teamId?: string; departmentId?: string; mine?: boolean; search?: string; includeArchived?: boolean }): ObjectiveSummary[] {
+  list(auth: AuthContext, requestId: string, caps: Capabilities, q: { level?: string; lifecycle?: string; health?: string; ownerId?: string; teamId?: string; departmentId?: string; mine?: boolean; search?: string; includeArchived?: boolean }): ObjectiveSummary[] {
     const ctx = this.ctx(auth, requestId);
     const w = this.world(ctx);
     const me = ctx.membershipId;
@@ -248,7 +248,8 @@ export class OkrService {
       .objectives(includeArchived)
       .filter((o) => this.canSee(w, caps, o, me))
       .filter((o) => (!q.level || o.level === q.level) && (!q.lifecycle || o.lifecycle === q.lifecycle) && (!q.ownerId || o.owner_membership_id === q.ownerId) && (!q.teamId || o.team_id === q.teamId) && (!q.departmentId || o.department_id === q.departmentId) && (!q.mine || o.owner_membership_id === me) && (!needle || o.title.toLowerCase().includes(needle)))
-      .map((o) => this.summary(w, o));
+      .map((o) => this.summary(w, o))
+      .filter((o) => !q.health || o.health === q.health);
   }
 
   detail(auth: AuthContext, requestId: string, caps: Capabilities, id: string): ObjectiveDetail {

@@ -63,7 +63,7 @@ export interface Linkable { id: string; title: string; level: string; keyResults
 export interface KeyResultInput { title: string; measurementType?: string; unit?: string | null; direction?: "increase" | "decrease"; method?: "linear" | "binary" | "manual"; startValue?: number; targetValue: number; weight?: number; ownerId?: string | null; dueDate?: string | null }
 export interface NewObjective { level: string; title: string; description?: string; objectiveType?: string; startDate: string; endDate: string; priority?: string; departmentId?: string | null; teamId?: string | null; ownerId?: string | null; lifecycle?: "draft" | "active"; keyResults?: KeyResultInput[] }
 
-export type ObjectiveQuery = { level?: string; lifecycle?: string; mine?: boolean; search?: string };
+export type ObjectiveQuery = { level?: string; lifecycle?: string; health?: string; mine?: boolean; search?: string };
 const qs = (o: Record<string, string | boolean | undefined>): string => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(o)) if (v !== undefined && v !== "" && v !== false) p.set(k, String(v));
