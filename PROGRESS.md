@@ -51,7 +51,7 @@ The owner stopped the queue after batch D. Nothing else is being built or deploy
 - 4.3 Evidence: needs a decision on where evidence files live and how large they may be (the milestone says "small file upload stored in the database (capped)": the cap and the confidentiality levels need confirming).
 - Anything that uses viaSocket (stage 8 integrations and automations) or AI (stages 9.x): needs the owner's keys and decisions; no secret was requested or touched.
 
-**Left, in milestone order, nothing started:** 3.2 Alignment and health (parent/child objectives, health, alignment gaps) · 3.3 KPI definitions · 3.4 KPI measurements and trends · 4.6 Task demo seed and checkpoint (the demo already carries tasks, objectives and links, so this is mostly a review) · 5.x Scoring and performance · 6.2 to 6.5 Dashboards · 7.x Reports and review cycles · 8.x Automation and integrations (blocked above) · 9.x AI (blocked above) · the final milestones. Not built yet inside finished stages: objective health (an objective shows attainment and elapsed time only), KPI links on tasks (arrive with 3.3).
+**Left, in milestone order, nothing started (3.2 to 3.5 were built in batch E, see above):** 4.6 Task demo seed and checkpoint (the demo already carries tasks, objectives and links, so this is mostly a review) · 5.x Scoring and performance · 6.2 to 6.5 Dashboards · 7.x Reports and review cycles · 8.x Automation and integrations (blocked above) · 9.x AI (blocked above) · the final milestones. Not built yet inside finished stages: KPI links on tasks and key results fed by a KPI (they need the scoring stage to be useful).
 
 **Known notes for the owner's click test:** the empty-organization Overview offers the demo; objectives show "No data yet" (never 0%) until a value is recorded; a task cannot be completed while it waits for another; a reviewer cannot rate their own work.
 
@@ -131,7 +131,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 **M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[x]` 2.3 RBAC engine (live on `5422c57`, checked by the owner; includes Delete my account and the restore-at-start-up setting) · `[x]` 2.4 Roles UI (live on `31fb6ff`, checked by the owner; the last-administrator refusal was not clicked on live, to avoid risking the Owner account, and is covered by the automated tests and the browser test) · `[x]` 2.5 Organization structure (live on `cb85ef4`, checked by the owner) · `[x]` 2.6 People and reporting (batch A, live on `0e08839`) · `[x]` 2.7 Organization chart (batch A, live on `0e08839`) · `[x]` 2.8 Demo data framework (batch C, live on `4ce15e0`)
 
-**M3 OKR and KPI** · `[x]` 3.1 Objectives and key results (batch D, live on `3255440`) · `[ ]` 3.2 Alignment and health · `[ ]` 3.3 KPI definitions · `[ ]` 3.4 KPI measurements and trends · `[ ]` 3.5 OKR/KPI polish
+**M3 OKR and KPI** · `[x]` 3.1 Objectives and key results (batch D, live on `3255440`) · `[x]` 3.2 Alignment and health (batch E) · `[x]` 3.3 KPI definitions (batch E) · `[x]` 3.4 KPI measurements and trends (batch E) · `[x]` 3.5 OKR/KPI polish (batch E)
 
 **M4 Tasks and evidence** · `[x]` 4.1 Tasks core (batch B, live on `7372282`) · `[x]` 4.2 Links, dependencies, outcomes (batch D, live on `3255440`) · `[ ]` 4.3 Evidence · `[x]` 4.4 My Work dashboard (batch B, live on `7372282`) · `[x]` 4.5 Notifications and overdue job (batch B, live on `7372282`) · `[ ]` 4.6 Task demo seed and checkpoint
 
