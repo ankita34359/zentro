@@ -12,9 +12,10 @@ export interface PersonRow {
   start_date: string | null;
   end_date: string | null;
   archived_at: string | null;
+  is_demo: number;
   created_at: string;
 }
-const PERSON_COLS = "id, user_id, display_name, work_email, status, designation_id, employee_code, employment_type, start_date, end_date, archived_at, created_at";
+const PERSON_COLS = "id, user_id, display_name, work_email, status, designation_id, employee_code, employment_type, start_date, end_date, archived_at, is_demo, created_at";
 
 export interface DesignationAssignmentRow { id: string; membership_id: string; designation_id: string; start_date: string; end_date: string | null; reason: string | null }
 export interface DeptMemberRow { id: string; department_id: string; membership_id: string; membership_type: string; start_date: string; end_date: string | null }

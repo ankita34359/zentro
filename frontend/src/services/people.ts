@@ -9,6 +9,7 @@ export interface PersonSummary {
   status: string;
   hasLogin: boolean;
   archived: boolean;
+  isDemo?: boolean;
   designation: Ref | null;
   departments: Placed[];
   teams: Placed[];
@@ -37,6 +38,7 @@ export interface TreeNode {
   childCount: number;
   children: TreeNode[] | null;
   detail?: string | null;
+  isDemo?: boolean;
 }
 export interface Tree { view: string; asOf: string; nodes: TreeNode[]; partial: boolean }
 

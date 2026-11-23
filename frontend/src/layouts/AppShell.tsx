@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import { Brand } from "@/components/common/Brand";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
+import { DemoBanner } from "@/components/common/DemoBanner";
 import { NotificationBell } from "@/components/common/NotificationBell";
 import { StatusPill } from "@/components/common/StatusPill";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
@@ -87,6 +88,7 @@ export function AppShell() {
       )}
 
       <div className="lg:pl-[var(--sidebar-width)]">
+        <DemoBanner />
         <header className="sticky top-0 z-20 flex h-[var(--header-height)] items-center gap-2 border-b border-border/70 bg-header px-4 backdrop-blur-md backdrop-saturate-150 sm:px-6">
           <Button
             ref={menuButtonRef}

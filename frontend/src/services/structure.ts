@@ -1,9 +1,9 @@
 import { api } from "@/services/api";
 
-export interface DepartmentItem { id: string; parentId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null }
-export interface TeamItem { id: string; departmentId: string; parentTeamId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null }
-export interface RoleFamilyItem { id: string; name: string; description: string; archived: boolean; archivedAt: string | null }
-export interface DesignationItem { id: string; roleFamilyId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null }
+export interface DepartmentItem { id: string; parentId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo?: boolean }
+export interface TeamItem { id: string; departmentId: string; parentTeamId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo?: boolean }
+export interface RoleFamilyItem { id: string; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo?: boolean }
+export interface DesignationItem { id: string; roleFamilyId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo?: boolean }
 export interface Structure {
   departments: DepartmentItem[];
   teams: TeamItem[];

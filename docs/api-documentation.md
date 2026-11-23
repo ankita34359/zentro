@@ -340,10 +340,13 @@ Structure endpoints (see the table in section 4): departments, teams, role famil
 | GET | `/api/audit-logs` **2.4** | `audit.view` | `?actorId&entityType&entityId&action&from&to&limit&cursor`, newest first, read only, paged (`meta.page.nextCursor`) |
 | GET | `/api/system/status` | `system.view` | Version, migrations, last tick, job table, outbox backlog, AI/viaSocket configured flags |
 | POST | `/api/export` / GET `/api/export/:id/download` | `data.export` | Per-table JSON bundle; async |
-| GET | `/api/demo/status` | `demo.manage` | |
-| POST | `/api/demo/load` | `demo.manage` | One transaction; refuses if already loaded |
-| POST | `/api/demo/remove` | `demo.manage` | Refuses and lists blockers if real rows reference demo rows |
-| POST | `/api/demo/view-as/:membershipId` / `/stop` | `demo.manage` | Read-only session as an `is_demo` person; audited |
+| GET | `/api/demo/status` **2.8** | `demo.manage` | `{loaded, loadedAt, counts, realPeople}` |
+| POST | `/api/demo/load` **2.8** | `demo.manage` | One transaction: about 64 fictional people (each a `users` row with no password and an address ending `@demo.invalid`), 6 departments, 12 teams (one a sub-team), designations, reporting lines, heads and leads, role assignments (CEO and Senior Management organization-wide, Department Head for one department, Team Lead for one team, Manager, Mentor, Employee), about 150 tasks with a believable history, daily updates and a few notifications; all flagged `is_demo`. 409 `demo_loaded`. Audited |
+| POST | `/api/demo/remove` **2.8** | `demo.manage` | Deletes exactly the demo rows and what hangs off them, in one transaction. 409 `demo_blocked` with `details.blockers` (kind, count, plain message) when the organization's own rows still point at demo rows: a real task assigned to or created by a demo person or in a demo team, an open reporting line between a real and a demo person, a real person still in a demo team or department, a role limited to a demo department or team, a real person holding a demo designation. Nothing changes then. 409 `demo_not_loaded`. Audited |
+| GET | `/api/demo/personas` **2.8** | `demo.manage` | The demo people to view as, with `group` (leadership, heads, managers, employees) taken from where they sit in the tree |
+| POST | `/api/demo/view-as/:membershipId` **2.8** | `demo.manage` | A read-only session as a demo person, one hour at most. The administrator's own cookie is kept aside (`zentro_admin_session`) and the session cookie is replaced. Every write answers 403 `read_only_session` except stopping. A real person or another organization's person is 404. Returns `{viewingAs, me}`; `me.viewingAs` is set. Audited (`demo.view_as`) |
+| POST | `/api/demo/stop-viewing` **2.8** | baseline | Ends the demo session (revoked), restores the administrator's own cookie and returns their `me`; 409 `not_viewing` for anyone else. Audited (`demo.view_as_stop`) |
+| GET | `/api/overview` **6.1** | baseline (the page adapts to the caller's permissions) | `{today, preset: personal\|team\|executive, personal, team, organization, checklist, flags}`. `personal` always (own tasks and unread notifications); `team` when the caller's `task.view` scope reaches other people; `organization` only when both `task.view` and `org.view` reach everyone; `checklist` ticks from real rows; `flags.canSetUp`, `demoLoaded`, `canManageDemo`. A person with no role gets their own (empty) numbers only |
 
 ## 13. Scheduled and health routes
 

@@ -107,6 +107,7 @@ function Row({ p, onOpen }: { p: PersonSummary; onOpen: () => void }) {
           <span className="min-w-0">
             <span className="block truncate text-body font-medium">{p.displayName}</span>
             <span className="flex flex-wrap gap-1">
+              {p.isDemo && <Badge variant="dashed">Demo data</Badge>}
               {p.archived && <Badge variant="atRisk">Archived</Badge>}
               {p.status === "invited" && <Badge variant="dashed">Invited</Badge>}
               {!p.hasLogin && p.status === "active" && !p.archived && <Badge variant="dashed">No login</Badge>}

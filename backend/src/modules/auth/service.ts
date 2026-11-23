@@ -21,6 +21,8 @@ export interface AuthContext {
   sessionId: string; // the row id (hash)
   organizationId: string | null;
   membershipId: string | null;
+  /** Set while an administrator views as a demo person (stage 2.8): the session is read only. */
+  impersonatedByUserId?: string | null;
 }
 
 export interface MeData {
@@ -34,6 +36,8 @@ export interface MeData {
   /** Rights everyone has whatever their roles (docs/permission-model.md section 2.1). */
   baseline: string[];
   needsOnboarding: boolean;
+  /** Present while an administrator views as a demo person: the banner says so and the session is read only. */
+  viewingAs?: { personName: string; adminName: string | null } | null;
 }
 
 const GENERIC_REGISTRATION = "Registration is not available with those details. Check the registration code and try again.";
@@ -159,6 +163,23 @@ export class AuthService {
     return { sessionSecret: secret, absoluteExpiresAt: absolute };
   }
 
+  /** A short, read-only session for a demo person, opened by an administrator (stage 2.8). One hour at most. */
+  openImpersonation(demoUserId: string, organizationId: string, adminUserId: string): { sessionSecret: string; sessionRowId: string; absoluteExpiresAt: number } {
+    const t = this.now();
+    const secret = newSessionSecret();
+    const id = sessionRowId(secret);
+    const absolute = t + 60 * 60_000;
+    this.sessions.insert({ id, userId: demoUserId, organizationId, now: this.iso(t), expiresAt: this.iso(absolute), absoluteExpiresAt: this.iso(absolute), impersonatedBy: adminUserId });
+    return { sessionSecret: secret, sessionRowId: id, absoluteExpiresAt: absolute };
+  }
+
+  /** The login a session row belongs to (the route needs it to sign the cookie). */
+  sessionUserId(sessionRowIdValue: string): string {
+    const s = this.sessions.find(sessionRowIdValue);
+    if (!s) throw unauthenticated();
+    return s.user_id;
+  }
+
   logout(auth: AuthContext): void {
     this.sessions.revoke(auth.sessionId, this.iso());
   }
@@ -193,7 +214,7 @@ export class AuthService {
       if (m) membershipId = m.id;
       else organizationId = null;
     }
-    return { userId, sessionId: id, organizationId, membershipId };
+    return { userId, sessionId: id, organizationId, membershipId, impersonatedByUserId: s.impersonated_by_user_id ?? null };
   }
 
   tenantFor(organizationId: string, userId: string, sessionId: string): TenantDb {
@@ -223,7 +244,7 @@ export class AuthService {
       if (m) membershipId = m.id;
       else organizationId = null;
     }
-    return { userId, sessionId: sessionRowIdValue, organizationId, membershipId };
+    return { userId, sessionId: sessionRowIdValue, organizationId, membershipId, impersonatedByUserId: s?.impersonated_by_user_id ?? null };
   }
 
   // ---------- me ----------
@@ -253,6 +274,7 @@ export class AuthService {
       capabilities,
       baseline: BASELINE_RIGHTS.map((b) => b.key),
       needsOnboarding: !organization,
+      viewingAs: auth.impersonatedByUserId ? { personName: membership?.displayName ?? user.name, adminName: this.users.findById(auth.impersonatedByUserId)?.name ?? null } : null,
     };
   }
 

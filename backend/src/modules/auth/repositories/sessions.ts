@@ -8,23 +8,25 @@ export interface SessionRow {
   expires_at: string;
   absolute_expires_at: string;
   revoked_at: string | null;
+  /** Set when an administrator is viewing as a demo person: the administrator's login. The session is read only. */
+  impersonated_by_user_id: string | null;
 }
 
 /** Global table. The row id is the SHA-256 of the random session id carried in the cookie's JWT. */
 export class SessionsRepository {
   constructor(private readonly db: Database.Database) {}
 
-  insert(s: { id: string; userId: string; organizationId: string | null; now: string; expiresAt: string; absoluteExpiresAt: string }): void {
+  insert(s: { id: string; userId: string; organizationId: string | null; now: string; expiresAt: string; absoluteExpiresAt: string; impersonatedBy?: string | null }): void {
     this.db
       .prepare(
-        "INSERT INTO sessions (id, user_id, active_organization_id, created_at, last_seen_at, expires_at, absolute_expires_at) VALUES (@id, @userId, @organizationId, @now, @now, @expiresAt, @absoluteExpiresAt)",
+        "INSERT INTO sessions (id, user_id, active_organization_id, created_at, last_seen_at, expires_at, absolute_expires_at, impersonated_by_user_id) VALUES (@id, @userId, @organizationId, @now, @now, @expiresAt, @absoluteExpiresAt, @impersonatedBy)",
       )
-      .run(s);
+      .run({ ...s, impersonatedBy: s.impersonatedBy ?? null });
   }
 
   find(id: string): SessionRow | undefined {
     return this.db
-      .prepare("SELECT id, user_id, active_organization_id, last_seen_at, expires_at, absolute_expires_at, revoked_at FROM sessions WHERE id = @id")
+      .prepare("SELECT id, user_id, active_organization_id, last_seen_at, expires_at, absolute_expires_at, revoked_at, impersonated_by_user_id FROM sessions WHERE id = @id")
       .get({ id }) as SessionRow | undefined;
   }
 
@@ -57,5 +59,10 @@ export class SessionsRepository {
   /** Housekeeping: rows past their absolute expiry (and long-revoked ones) are of no use. */
   purgeExpired(before: string): number {
     return this.db.prepare("DELETE FROM sessions WHERE absolute_expires_at < @before").run({ before }).changes;
+  }
+
+  /** Demo removal: the demo people's sessions go with them. */
+  deleteForUsers(userIds: string[]): void {
+    for (const userId of userIds) this.db.prepare("DELETE FROM sessions WHERE user_id = @userId").run({ userId });
   }
 }

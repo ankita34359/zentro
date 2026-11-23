@@ -15,6 +15,7 @@ import {
   AcceptInvitePage,
   AuditPage,
   StructurePage,
+  DemoPage,
   DesignPage,
   ForgotPasswordPage,
   LoginPage,
@@ -82,6 +83,9 @@ export function AppRoutes() {
           </Route>
           <Route element={<RequireCapability any={["org.view"]} />}>
             <Route path="/settings/structure" element={<StructurePage />} />
+          </Route>
+          <Route element={<RequireCapability any={["demo.manage"]} />}>
+            <Route path="/settings/demo" element={<DemoPage />} />
           </Route>
           <Route element={<RequireCapability any={["audit.view"]} />}>
             <Route path="/settings/audit" element={<AuditPage />} />

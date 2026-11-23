@@ -143,5 +143,18 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   },
 ];
 
+/** The template keys, for the few places that must name one (the demo seed). Everything else treats roles as data. */
+export const TEMPLATE_KEYS = {
+  owner: "owner",
+  ceo: "ceo",
+  seniorManagement: "senior_management",
+  departmentHead: "department_head",
+  manager: "manager",
+  teamLead: "team_lead",
+  mentor: "mentor",
+  employee: "employee",
+  intern: "intern",
+} as const;
+
 /** The template the person who creates an organization is assigned (organization-wide). */
 export const CREATOR_ROLE_KEY = "owner";

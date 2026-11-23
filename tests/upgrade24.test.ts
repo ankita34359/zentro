@@ -79,7 +79,7 @@ describe("upgrading a stage 2.3 database to 2.4 (migration 0006)", () => {
     expect(hasColumn(db, "roles", "is_protected")).toBe(false);
 
     const result = migrate(db, migrationsDir);
-    expect(result.applied).toEqual(["0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql"]);
+    expect(result.applied).toEqual(["0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql", "0010_demo_data.sql"]);
     expect(result.backupFile).toMatch(/pre-0006-.*\.db$/);
     expect(fs.existsSync(result.backupFile!)).toBe(true);
     expect(db.prepare("SELECT key, is_protected FROM roles ORDER BY key").all()).toEqual([{ key: "employee", is_protected: 0 }, { key: "owner", is_protected: 1 }]);
@@ -138,7 +138,7 @@ describe("upgrading a stage 2.3 database to 2.4 (migration 0006)", () => {
     safety.close();
 
     const again = migrate(reopened, migrationsDir);
-    expect(again.applied).toEqual(["0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql"]);
+    expect(again.applied).toEqual(["0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql", "0010_demo_data.sql"]);
     const second = appOn(reopened);
     const login2 = await post(second.app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD });
     expect(login2.status).toBe(200);
@@ -155,7 +155,7 @@ describe("upgrading a stage 2.3 database to 2.4 (migration 0006)", () => {
     migrate(db, migrationsDir);
     const older = migrate(db, upTo(5)); // what the 2.3 build does when it starts on this database
     expect(older.applied).toEqual([]);
-    expect(older.unknownApplied).toEqual(["0006", "0007", "0008", "0009"]);
+    expect(older.unknownApplied).toEqual(["0006", "0007", "0008", "0009", "0010"]);
     // the 2.3 code inserts roles without the new column: the default applies
     db.prepare("INSERT INTO roles (id, organization_id, key, name, description, kind, created_at, updated_at) VALUES ('33333333-3333-4333-8333-333333333333', ?, 'x', 'X', '', 'template', ?, ?)").run(ORG, NOW, NOW);
     expect(db.prepare("SELECT is_protected FROM roles WHERE key = 'x'").get()).toEqual({ is_protected: 0 });

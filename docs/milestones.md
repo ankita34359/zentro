@@ -53,7 +53,7 @@ The blueprint (this document set) is Milestone 0. Stage 1.1 comes first because 
 | 2.5 | Organization structure (built; owner decisions: keep the 2.5/2.6 split, department heads and team leads wait for 2.6, free depth with a cap of 8 levels) | Departments, teams, sub-teams, designations, role families, archive/rename, organization settings | Build a department → team → sub-team tree; rename; archive with confirmation; create a designation "Mentor" in a role family | | M |
 | 2.6 | People and reporting (built in batch A; owner decisions: people without a login are directory people, a new primary manager ends the old one on the start day, a new head or lead replaces the old one who stays as a member, department/team role scopes enabled here) | Employees (memberships), department/team membership with dates, reporting relationships (several managers, history), designation history, move a person, profile drawer | Add six people, give one two managers, move one to another team on a date, open the history tab | | L |
 | 2.7 | Organization chart (built in batch A; a vertical ARIA tree for every screen size, no heavy dependency) | Hierarchy tree API with depth, `OrgChart` (expand/collapse, reporting vs department view, profile panel, keyboard access, list fallback) | Expand from the top person down to an employee; switch views; open a profile; resize to phone width | | M |
-| 2.8 | Demo data framework | Admin **Load demo data / Remove demo data**, `demo_data_batches`, fictional company structure (about 60 people), "Demo data" badges, **View as demo persona** (if approved) | Load demo data: the chart fills; view as an employee, then as the CEO; remove demo data: back to empty states with your real data intact | Decide on view-as (open question) | L |
+| 2.8 | Demo data framework (built in batch C; owner decision: view as demo person = yes) | Admin **Load demo data / Remove demo data**, `demo_data_batches`, fictional company structure (about 60 people), "Demo data" badges, **View as demo persona** (if approved) | Load demo data: the chart fills; view as an employee, then as the CEO; remove demo data: back to empty states with your real data intact | Decide on view-as (open question) | L |
 
 ## 4. Milestone 3: OKR and KPI engine
 
@@ -91,7 +91,7 @@ The blueprint (this document set) is Milestone 0. Stage 1.1 comes first because 
 
 | ID | Stage | Delivers | Live check | Needs from you | Size |
 | --- | --- | --- | --- | --- | --- |
-| 6.1 | Overview dashboard | Capability-adaptive widgets, getting-started checklist | View as employee, manager, department head, CEO: different widgets, all from real rows | | M |
+| 6.1 | Overview dashboard (built in batch C) | Capability-adaptive widgets, getting-started checklist | View as employee, manager, department head, CEO: different widgets, all from real rows | | M |
 | 6.2 | Team Performance | Team page and manager/department views | Open a team: objectives, KPIs, task distribution, members, mentorship | | M |
 | 6.3 | Performance Intelligence page | Scorecards, compare, trends, evidence tabs with charts | Walk the tabs with demo data; chart gaps for missing data; "view as table" | | M |
 | 6.4 | Leadership dashboard | Company performance, strategic objectives, department contribution, executive KPIs, risks, drill-down, waterfall | Click Company → Department → Team → Individual | | L |

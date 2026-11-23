@@ -54,4 +54,16 @@ export class UsersRepository {
   touchLogin(userId: string, now: string): void {
     this.db.prepare("UPDATE users SET last_login_at = @now WHERE id = @userId").run({ userId, now });
   }
+
+  /** A demo person's login: no password (it can never sign in), an address that cannot receive mail. */
+  insertDemo(u: { id: string; email: string; name: string; now: string }): boolean {
+    return this.db.prepare("INSERT OR IGNORE INTO users (id, email, password_hash, name, is_demo, created_at, updated_at) VALUES (@id, @email, NULL, @name, 1, @now, @now)").run(u).changes === 1;
+  }
+
+  /** Demo removal: only logins flagged `is_demo`, and only the ids given. */
+  deleteDemo(userIds: string[]): number {
+    let n = 0;
+    for (const userId of userIds) n += this.db.prepare("DELETE FROM users WHERE id = @userId AND is_demo = 1").run({ userId }).changes;
+    return n;
+  }
 }

@@ -10,10 +10,10 @@ import type { DepartmentRow, DesignationRow, Kind, RoleFamilyRow, StructureRepos
 /** Departments and teams may nest this many levels (a top-level department is level 1). Free depth below the cap. */
 export const MAX_DEPTH = 8;
 
-export interface DepartmentView { id: string; parentId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null }
-export interface TeamView { id: string; departmentId: string; parentTeamId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null }
-export interface RoleFamilyView { id: string; name: string; description: string; archived: boolean; archivedAt: string | null }
-export interface DesignationView { id: string; roleFamilyId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null }
+export interface DepartmentView { id: string; parentId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo: boolean }
+export interface TeamView { id: string; departmentId: string; parentTeamId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo: boolean }
+export interface RoleFamilyView { id: string; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo: boolean }
+export interface DesignationView { id: string; roleFamilyId: string | null; name: string; description: string; archived: boolean; archivedAt: string | null; isDemo: boolean }
 export interface StructureView {
   departments: DepartmentView[];
   teams: TeamView[];
@@ -24,10 +24,10 @@ export interface StructureView {
   partial: boolean;
 }
 
-const dept = (r: DepartmentRow): DepartmentView => ({ id: r.id, parentId: r.parent_id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at });
-const team = (r: TeamRow): TeamView => ({ id: r.id, departmentId: r.department_id, parentTeamId: r.parent_team_id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at });
-const family = (r: RoleFamilyRow): RoleFamilyView => ({ id: r.id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at });
-const desig = (r: DesignationRow): DesignationView => ({ id: r.id, roleFamilyId: r.role_family_id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at });
+const dept = (r: DepartmentRow): DepartmentView => ({ id: r.id, parentId: r.parent_id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at, isDemo: r.is_demo === 1 });
+const team = (r: TeamRow): TeamView => ({ id: r.id, departmentId: r.department_id, parentTeamId: r.parent_team_id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at, isDemo: r.is_demo === 1 });
+const family = (r: RoleFamilyRow): RoleFamilyView => ({ id: r.id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at, isDemo: r.is_demo === 1 });
+const desig = (r: DesignationRow): DesignationView => ({ id: r.id, roleFamilyId: r.role_family_id, name: r.name, description: r.description, archived: r.archived_at !== null, archivedAt: r.archived_at, isDemo: r.is_demo === 1 });
 
 const LABEL: Record<Kind, string> = { department: "department", team: "team", roleFamily: "role family", designation: "designation" };
 
