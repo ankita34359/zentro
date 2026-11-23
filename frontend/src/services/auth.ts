@@ -9,6 +9,8 @@ export interface Me {
   capabilities: Record<string, string[]>;
   baseline: string[];
   needsOnboarding: boolean;
+  /** Set while an administrator views as a demo person: the page shows a banner and everything is read only. */
+  viewingAs?: { personName: string; adminName: string | null } | null;
 }
 
 export const getMe = (signal?: AbortSignal) => api<Me>("/api/auth/me", { signal });

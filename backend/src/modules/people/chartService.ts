@@ -58,7 +58,7 @@ export class ChartService {
     const budget = { left: MAX_NODES };
 
     const personNode = (p: PersonRow, kids: TreeNode[] | null, count: number, detail: string | null): TreeNode => ({
-      kind: "person", id: p.id, name: p.display_name, subtitle: p.designation_id ? designations.get(p.designation_id) ?? null : null, childCount: count, children: kids, detail,
+      kind: "person", id: p.id, name: p.display_name, subtitle: p.designation_id ? designations.get(p.designation_id) ?? null : null, childCount: count, children: kids, detail, isDemo: p.is_demo === 1,
     });
 
     if (q.view === "reporting") {
@@ -104,7 +104,7 @@ export class ChartService {
     const personLeaf = (membershipId: string, type: string): TreeNode => {
       budget.left -= 1;
       const p = byId.get(membershipId)!;
-      return { kind: "person", id: p.id, name: p.display_name, subtitle: p.designation_id ? designations.get(p.designation_id) ?? null : null, childCount: 0, children: [], detail: type === "member" ? null : type.replace("_", " ") };
+      return { kind: "person", id: p.id, name: p.display_name, subtitle: p.designation_id ? designations.get(p.designation_id) ?? null : null, childCount: 0, children: [], detail: type === "member" ? null : type.replace("_", " "), isDemo: p.is_demo === 1 };
     };
     const buildTeam = (id: string, level: number): TreeNode => {
       const t = structure.team(id)!;
@@ -113,7 +113,7 @@ export class ChartService {
       budget.left -= 1;
       const total = subs.length + members.length;
       const kids = level < depth && budget.left > 0 ? [...subs.map((s) => buildTeam(s.id, level + 1)), ...members.map((m) => personLeaf(m.membership_id, m.membership_type))] : null;
-      return { kind: "team", id, name: t.name, subtitle: leadOf.has(id) ? `Lead: ${leadOf.get(id)}` : null, childCount: total, children: kids };
+      return { kind: "team", id, name: t.name, subtitle: leadOf.has(id) ? `Lead: ${leadOf.get(id)}` : null, childCount: total, children: kids, isDemo: t.is_demo === 1 };
     };
     const buildDept = (id: string, level: number): TreeNode => {
       const d = structure.department(id)!;
@@ -123,7 +123,7 @@ export class ChartService {
       budget.left -= 1;
       const total = subs.length + ts.length + loose.length;
       const kids = level < depth && budget.left > 0 ? [...subs.map((s) => buildDept(s.id, level + 1)), ...ts.map((t) => buildTeam(t.id, level + 1)), ...loose.map((m) => personLeaf(m.membership_id, m.membership_type))] : null;
-      return { kind: "department", id, name: d.name, subtitle: headOf.has(id) ? `Head: ${headOf.get(id)}` : null, childCount: total, children: kids };
+      return { kind: "department", id, name: d.name, subtitle: headOf.has(id) ? `Head: ${headOf.get(id)}` : null, childCount: total, children: kids, isDemo: d.is_demo === 1 };
     };
     let nodes: TreeNode[];
     if (q.root) {

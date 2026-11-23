@@ -2,10 +2,10 @@ import type { TenantDb } from "../../../db/tenant.js";
 
 export type Kind = "department" | "team" | "roleFamily" | "designation";
 
-export interface DepartmentRow { id: string; parent_id: string | null; name: string; description: string; archived_at: string | null; created_at: string; updated_at: string }
-export interface TeamRow { id: string; department_id: string; parent_team_id: string | null; name: string; description: string; archived_at: string | null; created_at: string; updated_at: string }
-export interface RoleFamilyRow { id: string; name: string; description: string; archived_at: string | null; created_at: string; updated_at: string }
-export interface DesignationRow { id: string; role_family_id: string | null; name: string; description: string; archived_at: string | null; created_at: string; updated_at: string }
+export interface DepartmentRow { id: string; parent_id: string | null; name: string; description: string; archived_at: string | null; is_demo: number; created_at: string; updated_at: string }
+export interface TeamRow { id: string; department_id: string; parent_team_id: string | null; name: string; description: string; archived_at: string | null; is_demo: number; created_at: string; updated_at: string }
+export interface RoleFamilyRow { id: string; name: string; description: string; archived_at: string | null; is_demo: number; created_at: string; updated_at: string }
+export interface DesignationRow { id: string; role_family_id: string | null; name: string; description: string; archived_at: string | null; is_demo: number; created_at: string; updated_at: string }
 
 /** Departments, teams, role families and designations of ONE organization (the tenant handle supplies the organization id). */
 export class StructureRepository {
@@ -14,29 +14,29 @@ export class StructureRepository {
   // ----- reads (archived rows included: the screen shows them under "Archived") -----
 
   departments(): DepartmentRow[] {
-    return this.tdb.all<DepartmentRow>("SELECT id, parent_id, name, description, archived_at, created_at, updated_at FROM departments WHERE organization_id = @organization_id ORDER BY lower(name), id");
+    return this.tdb.all<DepartmentRow>("SELECT id, parent_id, name, description, archived_at, is_demo, created_at, updated_at FROM departments WHERE organization_id = @organization_id ORDER BY lower(name), id");
   }
   teams(): TeamRow[] {
-    return this.tdb.all<TeamRow>("SELECT id, department_id, parent_team_id, name, description, archived_at, created_at, updated_at FROM teams WHERE organization_id = @organization_id ORDER BY lower(name), id");
+    return this.tdb.all<TeamRow>("SELECT id, department_id, parent_team_id, name, description, archived_at, is_demo, created_at, updated_at FROM teams WHERE organization_id = @organization_id ORDER BY lower(name), id");
   }
   roleFamilies(): RoleFamilyRow[] {
-    return this.tdb.all<RoleFamilyRow>("SELECT id, name, description, archived_at, created_at, updated_at FROM role_families WHERE organization_id = @organization_id ORDER BY lower(name), id");
+    return this.tdb.all<RoleFamilyRow>("SELECT id, name, description, archived_at, is_demo, created_at, updated_at FROM role_families WHERE organization_id = @organization_id ORDER BY lower(name), id");
   }
   designations(): DesignationRow[] {
-    return this.tdb.all<DesignationRow>("SELECT id, role_family_id, name, description, archived_at, created_at, updated_at FROM designations WHERE organization_id = @organization_id ORDER BY lower(name), id");
+    return this.tdb.all<DesignationRow>("SELECT id, role_family_id, name, description, archived_at, is_demo, created_at, updated_at FROM designations WHERE organization_id = @organization_id ORDER BY lower(name), id");
   }
 
   department(id: string): DepartmentRow | undefined {
-    return this.tdb.get<DepartmentRow>("SELECT id, parent_id, name, description, archived_at, created_at, updated_at FROM departments WHERE organization_id = @organization_id AND id = @id", { id });
+    return this.tdb.get<DepartmentRow>("SELECT id, parent_id, name, description, archived_at, is_demo, created_at, updated_at FROM departments WHERE organization_id = @organization_id AND id = @id", { id });
   }
   team(id: string): TeamRow | undefined {
-    return this.tdb.get<TeamRow>("SELECT id, department_id, parent_team_id, name, description, archived_at, created_at, updated_at FROM teams WHERE organization_id = @organization_id AND id = @id", { id });
+    return this.tdb.get<TeamRow>("SELECT id, department_id, parent_team_id, name, description, archived_at, is_demo, created_at, updated_at FROM teams WHERE organization_id = @organization_id AND id = @id", { id });
   }
   roleFamily(id: string): RoleFamilyRow | undefined {
-    return this.tdb.get<RoleFamilyRow>("SELECT id, name, description, archived_at, created_at, updated_at FROM role_families WHERE organization_id = @organization_id AND id = @id", { id });
+    return this.tdb.get<RoleFamilyRow>("SELECT id, name, description, archived_at, is_demo, created_at, updated_at FROM role_families WHERE organization_id = @organization_id AND id = @id", { id });
   }
   designation(id: string): DesignationRow | undefined {
-    return this.tdb.get<DesignationRow>("SELECT id, role_family_id, name, description, archived_at, created_at, updated_at FROM designations WHERE organization_id = @organization_id AND id = @id", { id });
+    return this.tdb.get<DesignationRow>("SELECT id, role_family_id, name, description, archived_at, is_demo, created_at, updated_at FROM designations WHERE organization_id = @organization_id AND id = @id", { id });
   }
 
   // ----- name checks (active siblings only, ignoring case) -----

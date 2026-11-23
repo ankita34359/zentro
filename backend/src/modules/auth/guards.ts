@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { Guards } from "../../http/registry.js";
 import { clearSessionCookie, cookieShouldBeSecure, readCookie } from "../../lib/cookies.js";
-import { unauthenticated } from "../../lib/errors.js";
+import { HttpError, unauthenticated } from "../../lib/errors.js";
 import type { PermissionService } from "../permissions/service.js";
 import type { AuthService, AuthContext } from "./service.js";
 import { COOKIE_NAME, verifySessionJwt } from "./tokens.js";
@@ -28,6 +28,10 @@ export function createAuthGuards(service: AuthService, permissions: PermissionSe
       if (!auth) {
         if (readCookie(req, COOKIE_NAME)) res.append("Set-Cookie", clearSessionCookie(COOKIE_NAME, cookieShouldBeSecure(req, nodeEnv)));
         throw unauthenticated();
+      }
+      // Viewing as a demo person is read only: nothing may be changed from that session (docs/permission-model.md section 6, item 7).
+      if (auth.impersonatedByUserId && !["GET", "HEAD", "OPTIONS"].includes(req.method) && req.path !== "/api/demo/stop-viewing") {
+        throw new HttpError(403, "read_only_session", "You are viewing as a demo person. This view is read only. Stop viewing to make changes.");
       }
       res.locals.auth = auth;
     },

@@ -164,3 +164,12 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **The suggested order is a fixed rule** (overdue first, then due today, tomorrow, this week, then priority, importance and work already under way; blocked work last). The weights are not configurable, and the AI planner arrives in 7.3.
 - A team assignment lets every current member of the team update the task; a person who leaves the team loses that right on the next request.
 - Comments cannot be edited from the screen (the API allows it); they can be deleted by their author.
+
+## Added in stages 2.8 and 6.1 (demo data, Overview)
+
+- **The demo company covers what exists so far:** people, structure, reporting lines, tasks and their history, daily updates and notifications. Objectives, key results and KPIs join the seed with stages 3.1 and 3.3; evidence, scores and mentorship with their stages.
+- **Removal stops while your own data points at demo data** (for example a real task assigned to a demo person) and lists what to fix; it never deletes your rows to make room. A real person's ended team or department rows in a demo team are deleted with the team.
+- **The reminder job also reminds demo people** (they are ordinary rows); their notifications are removed with them.
+- **View as lasts one hour and is read only.** There is no way to act as a demo person; the audit log says who looked at whom.
+- **Overview numbers are counted per request** from the task, people and structure rows (a few thousand rows is instant); there is no cache and no history of the numbers yet (6.5). Charts are small hand-drawn SVG (a bar per day, a stacked bar) with a "view as table" switch; interactive charts arrive with the dashboards stages.
+- The Overview shows OKR and KPI widgets only once those exist (3.1, 3.3); until then the getting-started steps for them show their stage.

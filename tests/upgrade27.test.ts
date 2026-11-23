@@ -55,7 +55,7 @@ describe("upgrading a batch A database (migration 0008) to stages 4.1, 4.4 and 4
     migrate(db, upTo(8));
     await seed8(db);
     for (const table of NEW_TABLES) expect(hasTable(db, table), table).toBe(false);
-    const result = migrate(db, migrationsDir);
+    const result = migrate(db, upTo(9));
     expect(result.applied).toEqual(["0009_tasks_and_notifications.sql"]);
     expect(result.backupFile).toMatch(/pre-0009-.*\.db$/);
     expect(fs.existsSync(result.backupFile!)).toBe(true);
@@ -83,7 +83,7 @@ describe("upgrading a batch A database (migration 0008) to stages 4.1, 4.4 and 4
     const { db } = openDatabase(dataDir);
     migrate(db, upTo(8));
     await seed8(db);
-    const up = migrate(db, migrationsDir);
+    const up = migrate(db, upTo(9));
     const backup = path.basename(up.backupFile!);
     const copy = new Database(up.backupFile!, { readonly: true });
     expect((copy.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check).toBe("ok");
@@ -104,7 +104,7 @@ describe("upgrading a batch A database (migration 0008) to stages 4.1, 4.4 and 4
     const safety = new Database(path.join(dataDir, "backups", restore.preRestoreBackup!), { readonly: true });
     expect((safety.prepare("SELECT COUNT(*) n FROM tasks").get() as { n: number }).n).toBe(1); // the work after the upgrade is kept in the safety backup
     safety.close();
-    expect(migrate(reopened, migrationsDir).applied).toEqual(["0009_tasks_and_notifications.sql"]);
+    expect(migrate(reopened, upTo(9)).applied).toEqual(["0009_tasks_and_notifications.sql"]);
     expect((await post(appOn(reopened).app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD })).status).toBe(200);
     reopened.close();
   });
@@ -113,7 +113,7 @@ describe("upgrading a batch A database (migration 0008) to stages 4.1, 4.4 and 4
     const { db } = openDatabase(tmp());
     migrate(db, upTo(8));
     await seed8(db);
-    migrate(db, migrationsDir);
+    migrate(db, upTo(9));
     const { app } = appOn(db);
     const cookie = cookieOf(await post(app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD }));
     await post(app, "/api/tasks", { title: "Written by the new code" }, cookie);

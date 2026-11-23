@@ -65,9 +65,10 @@ describe("permission matrix: every role template × every route that needs a per
     // and the API holds no organization-wide data route at all that a baseline person could reach: every route that
     // returns lists of people or records is a permission route (this fails if someone adds a data route as baseline)
     const baselineGets = t.registry.list().filter((r) => r.access.kind === "baseline" && r.method === "get").map((r) => r.path).sort();
-    // (stages 4.4 and 4.5 add the signed-in person's OWN data: my work, daily updates, notifications and preferences. Each
+    // (stage 6.1's overview adds counts over the scope the person's permissions already reach, and nothing beyond it;
+    // stages 4.4 and 4.5 add the signed-in person's OWN data: my work, daily updates, notifications and preferences. Each
     // returns only the caller's rows; the tenancy matrix below checks that none of another organization's appears.)
-    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/preferences"]);
+    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/overview", "/api/preferences"]);
   });
 
   it("every role can use the baseline routes without any permission", async () => {
@@ -168,6 +169,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/tasks/:id/comments": { params: { id: taskA }, body: { body: "Hacked by B" } },
       "/api/tasks/:id/comments/:cid": { params: { id: taskA, cid: commentA }, body: { body: "Hacked by B" } },
       "/api/notifications/:id/read": { params: { id: notificationA } },
+      "/api/demo/view-as/:membershipId": { params: { membershipId: personA.membershipId } },
     };
     const snapshot = () => JSON.stringify([
       t.db.prepare("SELECT id, revoked_at, accepted_at, code_hash FROM invitations ORDER BY id").all(),
@@ -206,7 +208,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       expect(JSON.stringify(res.body)).not.toMatch(/Alpha|pending-a|member-a/i);
     }
     // lists: nothing of A's appears
-    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && (r.access.kind === "permission" || ["/api/organization", "/api/auth/me", "/api/my-work", "/api/notifications", "/api/preferences", "/api/daily-updates"].includes(r.path)));
+    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && (r.access.kind === "permission" || ["/api/organization", "/api/auth/me", "/api/my-work", "/api/notifications", "/api/preferences", "/api/daily-updates", "/api/overview"].includes(r.path)));
     expect(lists.length).toBeGreaterThanOrEqual(12);
     for (const route of lists) {
       const res = await call(route, ownerB, {});

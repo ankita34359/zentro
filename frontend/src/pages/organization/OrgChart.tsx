@@ -146,6 +146,7 @@ export function OrgChart({ onOpenPerson, canAdd, onAdd }: { onOpenPerson: (id: s
             <span className="block truncate text-body font-medium">{n.name}</span>
             {(n.subtitle || n.detail) && <span className="block truncate text-caption text-muted-foreground">{[n.subtitle, n.detail].filter(Boolean).join(" · ")}</span>}
           </button>
+          {n.isDemo && <Badge variant="dashed">Demo</Badge>}
           {hasKids && (
             <Badge variant="neutral" title={n.kind === "person" ? "People who report directly to them" : "Items inside"}>
               {n.childCount}

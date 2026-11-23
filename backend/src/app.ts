@@ -29,10 +29,14 @@ import { ChartService } from "./modules/people/chartService.js";
 import { registerChartRoutes } from "./modules/people/chartRoutes.js";
 import { HierarchyService } from "./modules/people/hierarchyService.js";
 import { PeopleService } from "./modules/people/service.js";
+import { DemoService } from "./modules/demo/service.js";
+import { registerDemoRoutes } from "./modules/demo/routes.js";
 import { EventWriter } from "./modules/automation/events.js";
 import { NotificationService } from "./modules/notifications/service.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { TaskService } from "./modules/tasks/service.js";
+import { OverviewService } from "./modules/overview/service.js";
+import { registerOverviewRoutes } from "./modules/overview/routes.js";
 import { registerTaskRoutes } from "./modules/tasks/routes.js";
 import { registerPeopleRoutes } from "./modules/people/routes.js";
 import { registerRoleRoutes } from "./modules/permissions/routes.js";
@@ -83,6 +87,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const chartService = new ChartService({ store, auth });
   const events = new EventWriter(store);
   const notifications = new NotificationService(store, auth);
+  const demoService = new DemoService({ store, auth, audit });
   const taskService = new TaskService({ store, auth, audit, events, notifications });
   const admin = new AdminService({ store, auth, permissions, audit });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
@@ -98,6 +103,8 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerChartRoutes(registry, { permissions, chart: chartService });
   registerTaskRoutes(registry, { permissions, tasks: taskService });
   registerNotificationRoutes(registry, { notifications });
+  registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService }) });
+  registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
 

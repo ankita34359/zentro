@@ -19,6 +19,7 @@ export interface PersonSummary {
   status: string;
   hasLogin: boolean;
   archived: boolean;
+  isDemo: boolean;
   designation: Ref | null;
   departments: (Ref & { type: string })[];
   teams: (Ref & { type: string })[];
@@ -375,6 +376,7 @@ export class PeopleService {
       status: p.status,
       hasLogin: p.user_id !== null,
       archived: p.archived_at !== null,
+      isDemo: p.is_demo === 1,
       designation: ref.designation(p.designation_id),
       departments: pl?.departments ?? [],
       teams: pl?.teams ?? [],

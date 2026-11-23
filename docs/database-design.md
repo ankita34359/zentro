@@ -250,6 +250,8 @@ Notation: `col` = column; `FK→t` = foreign key; **UQ** = unique; `?` = nullabl
 
 **Built in migration `0009_tasks_and_notifications.sql` (stages 4.1, 4.4, 4.5).** Additive only (new tables; tested by `tests/upgrade27.test.ts` and on real builds): `tasks` (status and priority are checked in code, not by CHECK; `due_at` and `start_date` are whole days; `is_demo` is there from the start; objective and key-result links arrive as nullable columns in 3.1 and 4.2), `task_assignments` (history kept: `unassigned_at`), `task_updates` (append only), `task_comments` (soft delete), `daily_updates` (one per person per day), `notifications` (unique dedupe key per recipient), `notification_preferences` (missing row = on) and `automation_events` (unique dedupe key per organization). All are in `ORGANIZATION_TABLES_IN_DELETE_ORDER`.
 
+**Built in migration `0010_demo_data.sql` (stage 2.8).** One new table, additive: `demo_data_batches` (a partial unique index allows one `loaded` batch per organization). Demo rows are ordinary rows in the real tables flagged `is_demo = 1` (people, logins, structure, tasks); child rows without their own flag (placements, reporting lines, role assignments, task history, notifications, daily updates) are found through their demo parent when removing. A test walks every table that has an `is_demo` column and asserts zero flagged rows after removal, and that the organization's own rows are identical before load and after removal.
+
 ### 3.2 Organization hierarchy
 
 | Table | Columns | Notes |

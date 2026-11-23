@@ -69,7 +69,7 @@ describe("restore a backup at start-up", () => {
     // the log says what happened, in order, without any data
     const msgs = logged().map((l) => l.msg);
     expect(msgs).toEqual(["restore requested", "fresh backup of the current data taken before restoring", "restore completed"]);
-    expect(logged()[0]).toMatchObject({ backup: s.backup, backupMigrations: 9 });
+    expect(logged()[0]).toMatchObject({ backup: s.backup, backupMigrations: 10 });
     expect(logged()[1]).toMatchObject({ preRestoreBackup: r.preRestoreBackup });
     expect(logged()[2]).toMatchObject({ backup: s.backup, preRestoreBackup: r.preRestoreBackup });
     expect(lines.join("\n")).not.toMatch(/example\.com/);
@@ -170,7 +170,7 @@ describe("restore a backup at start-up", () => {
     expect(applyRestoreRequest({ dataDir: s.dataDir, request: "pre-0005-older.db", log }).outcome).toBe("restored");
     const { db } = openDatabase(s.dataDir);
     const res = migrate(db, migrationsDir);
-    expect(res.applied).toEqual(["0005_permissions_and_role_grants.sql", "0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql"]);
+    expect(res.applied).toEqual(["0005_permissions_and_role_grants.sql", "0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql", "0010_demo_data.sql"]);
     expect(res.backupFile).toMatch(/pre-0005-.*\.db$/);
     db.close();
   });

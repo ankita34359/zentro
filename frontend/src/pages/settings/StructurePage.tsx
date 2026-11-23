@@ -175,11 +175,12 @@ function OrganizationName() {
 
 // ---------- a row with its actions ----------
 
-function Row({ title, description, archived, children, actions }: { title: string; description: string; archived: boolean; children?: ReactNode; actions?: ReactNode }) {
+function Row({ title, description, archived, demo, children, actions }: { title: string; description: string; archived: boolean; demo?: boolean; children?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <div className="min-w-0 flex-1 basis-48">
         <span className="font-medium">{title}</span> {children}
+        {demo && <Badge variant="dashed">Demo data</Badge>}{" "}
         {archived && <Badge variant="neutral">Archived</Badge>}
         {description && <span className="block text-label text-muted-foreground">{description}</span>}
       </div>
@@ -207,6 +208,7 @@ function DepartmentNode({ d, level, ctx }: { d: DepartmentItem; level: number; c
         title={d.name}
         description={d.description}
         archived={d.archived}
+        demo={d.isDemo}
         actions={
           ctx.canManage && (
             <>
@@ -248,6 +250,7 @@ function TeamNode({ t, level, ctx }: { t: TeamItem; level: number; ctx: Ctx }) {
     <li>
       <Row
         title={t.name}
+        demo={t.isDemo}
         description={t.description}
         archived={t.archived}
         actions={
@@ -371,6 +374,7 @@ function DesignationNode({ d, ctx }: { d: DesignationItem; ctx: Ctx }) {
         title={d.name}
         description={d.description}
         archived={d.archived}
+        demo={d.isDemo}
         actions={
           ctx.canManage && (
             <>

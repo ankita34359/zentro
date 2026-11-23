@@ -83,6 +83,7 @@ function ProfileBody({ id, onOpenPerson }: { id: string; onOpenPerson: (id: stri
           <h2 className="truncate text-heading font-semibold">{p.displayName}</h2>
           <p className="truncate text-label text-muted-foreground">{p.designation ? p.designation.name : "No designation"}{p.roleFamily ? ` · ${p.roleFamily.name}` : ""}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
+            {p.isDemo && <Badge variant="dashed">Demo data</Badge>}
             {p.archived && <Badge variant="atRisk">Archived</Badge>}
             {p.status === "invited" && <Badge variant="dashed">Invited, not joined yet</Badge>}
             {!p.hasLogin && p.status === "active" && <Badge variant="dashed" title="In the directory; has no login">No login</Badge>}
