@@ -7,7 +7,7 @@ import { PeopleRepository } from "../../people/repositories/people.js";
  * Deleting an organization or an account must cover ALL of them: a test lists the tables that have an
  * `organization_id` column and fails when one is missing here, so a later stage that adds a table cannot forget.
  */
-export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "demo_data_batches", "automation_events", "notification_preferences", "notifications", "daily_updates", "task_comments", "task_updates", "task_assignments", "task_dependencies", "tasks", "objective_progress_history", "key_results", "objectives", "reporting_relationships", "team_memberships", "department_memberships", "designation_assignments", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
+export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "demo_data_batches", "automation_events", "notification_preferences", "notifications", "daily_updates", "task_comments", "task_updates", "task_assignments", "task_dependencies", "tasks", "objective_progress_history", "key_results", "objective_assignments", "objective_relationships", "objectives", "kpi_measurements", "kpi_thresholds", "kpi_assignments", "kpis", "reporting_relationships", "team_memberships", "department_memberships", "designation_assignments", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
 
 export interface MemberCounts {
   /** Other people who have joined and still belong (active or suspended). People who left, and people only invited, do not count: invitations are counted separately. */
@@ -59,8 +59,14 @@ export class ErasureRepository {
     tdb.run("UPDATE tasks SET parent_task_id = NULL WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM tasks WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM objective_progress_history WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM objective_assignments WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM objective_relationships WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM key_results WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM objectives WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM kpi_measurements WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM kpi_thresholds WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM kpi_assignments WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM kpis WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM reporting_relationships WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM team_memberships WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM department_memberships WHERE organization_id = @organization_id");

@@ -85,6 +85,24 @@ export class DemoRepository {
       r,
     );
   }
+  insertRelationship(r: { id: string; parentId: string; childId: string; weight: number; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO objective_relationships (id, organization_id, parent_objective_id, child_objective_id, relationship_type, contribution_weight, created_by_membership_id, created_at) VALUES (@id, @organization_id, @parentId, @childId, 'contributes_to', @weight, @by, @now)", r);
+  }
+  insertObjectiveAssignment(r: { id: string; objectiveId: string; teamId: string | null; departmentId: string | null; role: string; startDate: string; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO objective_assignments (id, organization_id, objective_id, assignee_team_id, assignee_department_id, role, start_date, assigned_by_membership_id, created_at) VALUES (@id, @organization_id, @objectiveId, @teamId, @departmentId, @role, @startDate, @by, @now)", r);
+  }
+  insertKpi(r: { id: string; key: string; name: string; description: string; category: string; unit: string | null; frequency: string; direction: string; aggregation: string; defaultTarget: number; createdBy: string; now: string }): void {
+    this.tdb.run("INSERT INTO kpis (id, organization_id, key, name, description, category, unit, value_type, direction, frequency, aggregation, default_target, created_by_membership_id, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @key, @name, @description, @category, @unit, 'number', @direction, @frequency, @aggregation, @defaultTarget, @createdBy, 1, @now, @now)", r);
+  }
+  insertKpiAssignment(r: { id: string; kpiId: string; teamId: string | null; departmentId: string | null; designationId: string | null; roleFamilyId: string | null; targetValue: number; effectiveFrom: string; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO kpi_assignments (id, organization_id, kpi_id, team_id, department_id, designation_id, role_family_id, target_value, weight, effective_from, assigned_by_membership_id, created_at) VALUES (@id, @organization_id, @kpiId, @teamId, @departmentId, @designationId, @roleFamilyId, @targetValue, 1, @effectiveFrom, @by, @now)", r);
+  }
+  insertKpiThreshold(r: { id: string; kpiId: string; level: string; comparator: string; value: number; now: string }): void {
+    this.tdb.run("INSERT INTO kpi_thresholds (id, organization_id, kpi_id, level, comparator, basis, value, notify, created_at) VALUES (@id, @organization_id, @kpiId, @level, @comparator, 'percent_of_target', @value, 1, @now)", r);
+  }
+  insertKpiMeasurement(r: { id: string; kpiId: string; membershipId: string | null; teamId: string | null; departmentId: string | null; periodStart: string; periodEnd: string; value: number; by: string; note: string | null; supersedesId: string | null; now: string }): void {
+    this.tdb.run("INSERT INTO kpi_measurements (id, organization_id, kpi_id, subject_membership_id, subject_team_id, subject_department_id, period_start, period_end, value, value_status, recorded_at, recorded_by_membership_id, source, note, supersedes_measurement_id) VALUES (@id, @organization_id, @kpiId, @membershipId, @teamId, @departmentId, @periodStart, @periodEnd, @value, 'recorded', @now, @by, 'demo', @note, @supersedesId)", r);
+  }
   insertKeyResult(r: { id: string; objectiveId: string; title: string; unit: string | null; direction: string; method: string; start: number; target: number; current: number | null; currentAsOf: string | null; weight: number; ownerId: string; now: string }): void {
     this.tdb.run(
       "INSERT INTO key_results (id, organization_id, objective_id, title, description, measurement_type, unit, direction, progress_method, start_value, target_value, current_value, current_as_of, weight, owner_membership_id, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @objectiveId, @title, '', 'number', @unit, @direction, @method, @start, @target, @current, @currentAsOf, @weight, @ownerId, 1, @now, @now)",
@@ -120,8 +138,8 @@ export class DemoRepository {
   }
 
   /** Real rows that point at demo rows. Each has a plain message; removal is refused while any exist. */
-  blockers(): { kind: string; count: number; message: string }[] {
-    const n = (sql: string): number => this.tdb.get<{ n: number }>(sql)?.n ?? 0;
+  blockers(today = new Date().toISOString().slice(0, 10)): { kind: string; count: number; message: string }[] {
+    const n = (sql: string): number => this.tdb.get<{ n: number }>(sql, { today })?.n ?? 0;
     const found: { kind: string; count: number; message: string }[] = [];
     const add = (kind: string, count: number, message: (c: number) => string) => {
       if (count > 0) found.push({ kind, count, message: message(count) });
@@ -135,6 +153,9 @@ export class DemoRepository {
     const DEMO_OBJECTIVES = "(SELECT dob.id FROM objectives dob WHERE dob.organization_id = @organization_id AND dob.is_demo = 1)";
     add("objective_tasks", n(`SELECT COUNT(*) AS n FROM tasks lt WHERE lt.organization_id = @organization_id AND lt.is_demo = 0 AND lt.objective_id IN ${DEMO_OBJECTIVES}`), (c) => `${c} of your own ${c === 1 ? "task supports" : "tasks support"} a demo objective. Unlink ${c === 1 ? "it" : "them"} first.`);
     add("objectives", n(`SELECT COUNT(*) AS n FROM objectives ro WHERE ro.organization_id = @organization_id AND ro.is_demo = 0 AND (ro.team_id IN (SELECT dtm.id FROM teams dtm WHERE dtm.organization_id = @organization_id AND dtm.is_demo = 1) OR ro.department_id IN (SELECT ddp.id FROM departments ddp WHERE ddp.organization_id = @organization_id AND ddp.is_demo = 1) OR ro.owner_membership_id IN ${DEMO_PEOPLE})`), (c) => `${c} of your own ${c === 1 ? "objective belongs" : "objectives belong"} to a demo team, department or person. Archive or move ${c === 1 ? "it" : "them"} first.`);
+    add("objective_links", n(`SELECT COUNT(*) AS n FROM objective_relationships orl WHERE orl.organization_id = @organization_id AND orl.ended_at IS NULL AND ((orl.parent_objective_id IN ${DEMO_OBJECTIVES} AND orl.child_objective_id NOT IN ${DEMO_OBJECTIVES}) OR (orl.child_objective_id IN ${DEMO_OBJECTIVES} AND orl.parent_objective_id NOT IN ${DEMO_OBJECTIVES}))`), (c) => `${c} of your own objectives ${c === 1 ? "is" : "are"} aligned with demo objectives. Take ${c === 1 ? "it" : "them"} out of the alignment first.`);
+    add("objective_assignments", n(`SELECT COUNT(*) AS n FROM objective_assignments oa WHERE oa.organization_id = @organization_id AND oa.end_date IS NULL AND oa.objective_id NOT IN ${DEMO_OBJECTIVES} AND (oa.assignee_membership_id IN ${DEMO_PEOPLE} OR oa.assignee_team_id IN (SELECT dtm.id FROM teams dtm WHERE dtm.organization_id = @organization_id AND dtm.is_demo = 1) OR oa.assignee_department_id IN (SELECT ddp.id FROM departments ddp WHERE ddp.organization_id = @organization_id AND ddp.is_demo = 1))`), (c) => `${c} of your own objectives ${c === 1 ? "is" : "are"} assigned to demo people, teams or departments. End ${c === 1 ? "that assignment" : "those assignments"} first.`);
+    add("kpi_assignments", n(`SELECT COUNT(*) AS n FROM kpi_assignments ka WHERE ka.organization_id = @organization_id AND (ka.effective_to IS NULL OR ka.effective_to > @today) AND ka.kpi_id NOT IN (SELECT rk.id FROM kpis rk WHERE rk.organization_id = @organization_id AND rk.is_demo = 1) AND (ka.membership_id IN ${DEMO_PEOPLE} OR ka.team_id IN (SELECT dtm.id FROM teams dtm WHERE dtm.organization_id = @organization_id AND dtm.is_demo = 1) OR ka.department_id IN (SELECT ddp.id FROM departments ddp WHERE ddp.organization_id = @organization_id AND ddp.is_demo = 1) OR ka.designation_id IN (SELECT dds.id FROM designations dds WHERE dds.organization_id = @organization_id AND dds.is_demo = 1) OR ka.role_family_id IN (SELECT drf.id FROM role_families drf WHERE drf.organization_id = @organization_id AND drf.is_demo = 1))`), (c) => `${c} of your own KPI ${c === 1 ? "assignment points" : "assignments point"} at demo people, teams, departments, designations or role families. End ${c === 1 ? "it" : "them"} first.`);
     add("dependencies", n(`SELECT COUNT(*) AS n FROM task_dependencies d WHERE d.organization_id = @organization_id AND ((d.task_id IN (SELECT rt.id FROM tasks rt WHERE rt.organization_id = @organization_id AND rt.is_demo = 0) AND d.depends_on_task_id IN ${DEMO_TASKS}) OR (d.depends_on_task_id IN (SELECT rt2.id FROM tasks rt2 WHERE rt2.organization_id = @organization_id AND rt2.is_demo = 0) AND d.task_id IN ${DEMO_TASKS}))`), (c) => `${c} of your own ${c === 1 ? "task waits" : "tasks wait"} for, or ${c === 1 ? "is" : "are"} waited for by, demo tasks. Remove the dependenc${c === 1 ? "y" : "ies"} first.`);
     return found;
   }
@@ -149,6 +170,7 @@ export class DemoRepository {
       tasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = @organization_id AND is_demo = 1"),
       objectives: one("SELECT COUNT(*) AS n FROM objectives WHERE organization_id = @organization_id AND is_demo = 1"),
       keyResults: one("SELECT COUNT(*) AS n FROM key_results WHERE organization_id = @organization_id AND is_demo = 1"),
+      kpis: one("SELECT COUNT(*) AS n FROM kpis WHERE organization_id = @organization_id AND is_demo = 1"),
     };
   }
 
@@ -166,9 +188,18 @@ export class DemoRepository {
     this.tdb.run("UPDATE tasks SET parent_task_id = NULL WHERE organization_id = @organization_id AND is_demo = 1");
     this.tdb.run("DELETE FROM tasks WHERE organization_id = @organization_id AND is_demo = 1");
     // objectives (with their key results and history) hang off demo teams, departments and people: they go before those
+    this.tdb.run("DELETE FROM objective_relationships WHERE objective_relationships.organization_id = @organization_id AND (objective_relationships.parent_objective_id IN (SELECT dob0.id FROM objectives dob0 WHERE dob0.organization_id = @organization_id AND dob0.is_demo = 1) OR objective_relationships.child_objective_id IN (SELECT dob1.id FROM objectives dob1 WHERE dob1.organization_id = @organization_id AND dob1.is_demo = 1))");
+    this.tdb.run(`DELETE FROM objective_assignments WHERE objective_assignments.organization_id = @organization_id AND (objective_assignments.objective_id IN (SELECT dob2.id FROM objectives dob2 WHERE dob2.organization_id = @organization_id AND dob2.is_demo = 1) OR objective_assignments.assignee_membership_id IN ${DEMO_PEOPLE} OR objective_assignments.assignee_team_id IN (SELECT dtm3.id FROM teams dtm3 WHERE dtm3.organization_id = @organization_id AND dtm3.is_demo = 1) OR objective_assignments.assignee_department_id IN (SELECT dd4.id FROM departments dd4 WHERE dd4.organization_id = @organization_id AND dd4.is_demo = 1))`);
     this.tdb.run("DELETE FROM objective_progress_history WHERE objective_progress_history.organization_id = @organization_id AND objective_progress_history.objective_id IN (SELECT dob.id FROM objectives dob WHERE dob.organization_id = @organization_id AND dob.is_demo = 1)");
     this.tdb.run("DELETE FROM key_results WHERE organization_id = @organization_id AND is_demo = 1");
     this.tdb.run("DELETE FROM objectives WHERE organization_id = @organization_id AND is_demo = 1");
+    // KPIs: a demo KPI goes with its assignments, thresholds and measurements; a real KPI never points at demo rows (that is a blocker)
+    // values recorded about demo people, teams and departments hang off them (a value about a demo person is part of the demo), as do the ENDED assignments that pointed at them
+    this.tdb.run(`DELETE FROM kpi_measurements WHERE kpi_measurements.organization_id = @organization_id AND (kpi_measurements.kpi_id IN (SELECT dk2.id FROM kpis dk2 WHERE dk2.organization_id = @organization_id AND dk2.is_demo = 1) OR kpi_measurements.subject_membership_id IN ${DEMO_PEOPLE} OR kpi_measurements.subject_team_id IN (SELECT dtm5.id FROM teams dtm5 WHERE dtm5.organization_id = @organization_id AND dtm5.is_demo = 1) OR kpi_measurements.subject_department_id IN (SELECT ddp5.id FROM departments ddp5 WHERE ddp5.organization_id = @organization_id AND ddp5.is_demo = 1))`);
+    this.tdb.run(`DELETE FROM kpi_assignments WHERE kpi_assignments.organization_id = @organization_id AND (kpi_assignments.membership_id IN ${DEMO_PEOPLE} OR kpi_assignments.team_id IN (SELECT dtm6.id FROM teams dtm6 WHERE dtm6.organization_id = @organization_id AND dtm6.is_demo = 1) OR kpi_assignments.department_id IN (SELECT ddp6.id FROM departments ddp6 WHERE ddp6.organization_id = @organization_id AND ddp6.is_demo = 1) OR kpi_assignments.designation_id IN (SELECT dds6.id FROM designations dds6 WHERE dds6.organization_id = @organization_id AND dds6.is_demo = 1) OR kpi_assignments.role_family_id IN (SELECT drf6.id FROM role_families drf6 WHERE drf6.organization_id = @organization_id AND drf6.is_demo = 1))`);
+    this.tdb.run("DELETE FROM kpi_thresholds WHERE kpi_thresholds.organization_id = @organization_id AND kpi_thresholds.kpi_id IN (SELECT dk0.id FROM kpis dk0 WHERE dk0.organization_id = @organization_id AND dk0.is_demo = 1)");
+    this.tdb.run("DELETE FROM kpi_assignments WHERE kpi_assignments.organization_id = @organization_id AND kpi_assignments.kpi_id IN (SELECT dk1.id FROM kpis dk1 WHERE dk1.organization_id = @organization_id AND dk1.is_demo = 1)");
+    this.tdb.run("DELETE FROM kpis WHERE organization_id = @organization_id AND is_demo = 1");
     this.tdb.run(`DELETE FROM reporting_relationships WHERE reporting_relationships.organization_id = @organization_id AND (reporting_relationships.subordinate_membership_id IN ${DEMO_PEOPLE} OR reporting_relationships.manager_membership_id IN ${DEMO_PEOPLE})`);
     // (a real person's ENDED rows in a demo team or department are part of that team's history and go with it)
     this.tdb.run(`DELETE FROM team_memberships WHERE team_memberships.organization_id = @organization_id AND (team_memberships.membership_id IN ${DEMO_PEOPLE} OR team_memberships.team_id IN (SELECT dtm.id FROM teams dtm WHERE dtm.organization_id = @organization_id AND dtm.is_demo = 1))`);

@@ -16,7 +16,7 @@ describe("/healthz", () => {
       ready: true,
       version: "test",
       node: process.versions.node,
-      migrations: { applied: 11, total: 11 },
+      migrations: { applied: 14, total: 14 },
       registration: "closed",
       lastTick: null,
     });
@@ -63,6 +63,8 @@ describe("cron tick route", () => {
     await new Promise((r) => setTimeout(r, 80));
     const rows = t.db.prepare("SELECT job_name, status FROM scheduled_job_runs ORDER BY job_name").all();
     expect(rows).toEqual([
+      { job_name: "kpi.thresholds", status: "ok" },
+      { job_name: "okr.health", status: "ok" },
       { job_name: "platform.housekeeping", status: "ok" },
       { job_name: "tasks.reminders", status: "ok" },
       { job_name: "tick", status: "ok" },

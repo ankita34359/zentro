@@ -31,7 +31,7 @@ const upTo = (last: number): string => {
   return d;
 };
 const quiet = createLogger("error", () => undefined);
-const appOn = (db: Database.Database) => createApp({ db, config: testConfig({ REGISTRATION_MODE: "code", REGISTRATION_CODE: TEST_CODE }), version: "t", cronSecret: undefined, migrationsTotal: 11, log: quiet });
+const appOn = (db: Database.Database) => createApp({ db, config: testConfig({ REGISTRATION_MODE: "code", REGISTRATION_CODE: TEST_CODE }), version: "t", cronSecret: undefined, migrationsTotal: 14, log: quiet });
 const cookieOf = (res: { headers: Record<string, unknown> }) => ([] as string[]).concat((res.headers["set-cookie"] as string[]) ?? []).find((c) => c.startsWith("zentro_session="))!.split(";")[0]!;
 const count = (db: Database.Database, sql: string) => (db.prepare(sql).get() as { n: number }).n;
 const hasTable = (db: Database.Database, name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(name) !== undefined;
@@ -101,7 +101,7 @@ describe("upgrading a batch B database (migration 0009) to the demo data framewo
     const safety = new Database(path.join(dataDir, "backups", restore.preRestoreBackup!), { readonly: true });
     expect((safety.prepare("SELECT COUNT(*) n FROM organization_memberships WHERE is_demo = 1").get() as { n: number }).n).toBeGreaterThan(55); // kept in the safety backup
     safety.close();
-    expect(migrate(reopened, migrationsDir).applied).toEqual(["0010_demo_data.sql", "0011_objectives_and_task_links.sql"]);
+    expect(migrate(reopened, migrationsDir).applied).toEqual(["0010_demo_data.sql", "0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql"]);
     expect((await post(appOn(reopened).app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD })).status).toBe(200);
     reopened.close();
   });
@@ -116,7 +116,7 @@ describe("upgrading a batch B database (migration 0009) to the demo data framewo
     await post(app, "/api/demo/load", undefined, cookie);
     const older = migrate(db, upTo(9)); // what the batch B build does when it starts on this database
     expect(older.applied).toEqual([]);
-    expect(older.unknownApplied).toEqual(["0010", "0011"]);
+    expect(older.unknownApplied).toEqual(["0010", "0011", "0012", "0013", "0014"]);
     // the older code reads the same tables (demo people and tasks are ordinary rows with is_demo = 1) and the real data is intact
     expect(count(db, "SELECT COUNT(*) n FROM tasks WHERE is_demo = 0")).toBe(1);
     expect(count(db, "SELECT COUNT(*) n FROM organization_memberships WHERE is_demo = 0")).toBe(2);

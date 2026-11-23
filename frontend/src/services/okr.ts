@@ -1,6 +1,7 @@
 import { api } from "@/services/api";
 
 export interface Ref { id: string; name: string }
+export type Health = "not_started" | "on_track" | "at_risk" | "delayed" | "completed" | "no_data";
 export interface KeyResult {
   id: string;
   title: string;
@@ -43,6 +44,8 @@ export interface ObjectiveSummary {
   dataState: "ok" | "insufficient" | "none";
   coveragePct: number;
   elapsedPct: number;
+  health: Health | null;
+  healthReason: string;
   archived: boolean;
   isDemo: boolean;
 }
@@ -60,7 +63,7 @@ export interface Linkable { id: string; title: string; level: string; keyResults
 export interface KeyResultInput { title: string; measurementType?: string; unit?: string | null; direction?: "increase" | "decrease"; method?: "linear" | "binary" | "manual"; startValue?: number; targetValue: number; weight?: number; ownerId?: string | null; dueDate?: string | null }
 export interface NewObjective { level: string; title: string; description?: string; objectiveType?: string; startDate: string; endDate: string; priority?: string; departmentId?: string | null; teamId?: string | null; ownerId?: string | null; lifecycle?: "draft" | "active"; keyResults?: KeyResultInput[] }
 
-export type ObjectiveQuery = { level?: string; lifecycle?: string; mine?: boolean; search?: string };
+export type ObjectiveQuery = { level?: string; lifecycle?: string; health?: string; mine?: boolean; search?: string };
 const qs = (o: Record<string, string | boolean | undefined>): string => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(o)) if (v !== undefined && v !== "" && v !== false) p.set(k, String(v));
@@ -88,3 +91,26 @@ export const SOURCE_LABEL: Record<string, string> = { manual: "Recorded", task_o
 export const pctText = (pct: number | null): string => (pct === null ? "No data yet" : `${pct}%`);
 export const valueText = (k: Pick<KeyResult, "currentValue" | "unit" | "method">): string =>
   k.currentValue === null ? "Nothing recorded" : k.method === "binary" ? (k.currentValue >= 1 ? "Yes" : "No") : k.method === "manual" ? `${k.currentValue}%` : `${k.currentValue}${k.unit ? ` ${k.unit}` : ""}`;
+
+export const HEALTH_LABEL: Record<string, string> = { not_started: "Not started", on_track: "On track", at_risk: "At risk", delayed: "Delayed", completed: "Completed", no_data: "No data" };
+
+// ---------- alignment (stage 3.2) ----------
+export interface LinkedObjective { id: string; title: string; level: string; lifecycle: string; health: Health | null; attainmentPct: number | null; dataState: string; owner: Ref | null }
+export interface Alignment {
+  parent: { relationshipId: string; weight: number; objective: LinkedObjective | null; hidden: boolean } | null;
+  children: { relationshipId: string; weight: number; objective: LinkedObjective }[];
+  hiddenChildren: number;
+  assignments: { id: string; kind: "person" | "team" | "department"; id2: string; name: string; role: string; startDate: string }[];
+  can: { assign: boolean };
+}
+export interface TreeNode extends LinkedObjective { weight: number | null; contributionPct: number | null; unaligned: boolean; hiddenChildren: number; children: TreeNode[] }
+export interface GapItem { id: string; title: string; level: string; reason: string }
+export interface Gaps { unaligned: GapItem[]; notBrokenDown: GapItem[]; unmeasurable: GapItem[]; noData: GapItem[]; behindPace: GapItem[]; overdue: GapItem[]; unalignedTasks: number }
+
+export const getAlignment = (id: string) => api<Alignment>(`/api/objectives/${id}/alignment`);
+export const setParent = (id: string, b: { parentId: string; weight?: number }) => api<Alignment>(`/api/objectives/${id}/parent`, { method: "PUT", body: b });
+export const clearParent = (id: string) => api<Alignment>(`/api/objectives/${id}/parent`, { method: "DELETE" });
+export const assignObjective = (id: string, b: { assigneeId?: string; teamId?: string; departmentId?: string; role?: string }) => api<Alignment>(`/api/objectives/${id}/assignments`, { method: "POST", body: b });
+export const unassignObjective = (id: string, aid: string) => api<Alignment>(`/api/objectives/${id}/assignments/${aid}`, { method: "DELETE" });
+export const getTree = (includeClosed = false) => api<{ roots: TreeNode[]; total: number }>(`/api/objectives/tree${includeClosed ? "?includeClosed=true" : ""}`);
+export const getGaps = () => api<Gaps>("/api/objectives/alignment-gaps");

@@ -68,7 +68,7 @@ describe("Load demo data", () => {
     expect(flagged.objectives).toBe(c.objectives);
     expect(flagged.key_results).toBe(c.keyResults);
     expect(code(await post(t.app, "/api/demo/load", undefined, owner))).toBe("demo_loaded");
-    expect((await audit(owner))[0]!.summary).toMatch(/^Loaded demo data: \d+ people, 6 departments, 12 teams, \d+ tasks, \d+ objectives$/);
+    expect((await audit(owner))[0]!.summary).toMatch(/^Loaded demo data: \d+ people, 6 departments, 12 teams, \d+ tasks, \d+ objectives, \d+ KPIs$/);
     // the company is real data the rest of the app reads
     const dirs = (await get(t.app, "/api/employees?limit=500", owner)).body.data;
     expect(dirs.total).toBe(c.people! + 1);
@@ -215,7 +215,9 @@ describe("View as a demo person", () => {
     expect(list.length).toBeGreaterThan(55);
     const ceo = personaBy(list, (p) => p.designation === "Chief Executive Officer");
     const vp = personaBy(list, (p) => p.designation === "Vice President" && p.department === "Engineering");
-    const emp = personaBy(list, (p) => p.designation === "Software Engineer" && p.roles.includes("Employee"));
+    // the company is drawn from the organization's id, so pick an engineer who really has open work (the page for someone with none is empty by design)
+    const withOpenWork = new Set((t.db.prepare("SELECT DISTINCT a.assignee_membership_id AS id FROM task_assignments a JOIN tasks tk ON tk.id = a.task_id WHERE tk.is_demo = 1 AND tk.status NOT IN ('completed', 'cancelled') AND a.unassigned_at IS NULL").all() as { id: string }[]).map((r) => r.id));
+    const emp = personaBy(list, (p) => p.designation === "Software Engineer" && p.roles.includes("Employee") && withOpenWork.has(p.id));
     const total = (await get(t.app, "/api/employees?limit=500", owner)).body.data.total as number;
 
     const asCeo = await asCookie(owner, ceo.id);
@@ -350,5 +352,108 @@ describe("Demo objectives, key results and linked tasks (stages 3.1 and 4.2)", (
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM objectives").n).toBe(1);
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM key_results").n).toBe(1);
     expect((await get(t.app, `/api/objectives/${real}`, owner)).body.data.title).toBe("My real objective");
+  });
+});
+
+describe("Demo alignment and health (stage 3.2)", () => {
+  it("the demo objectives are aligned company → department → team → person with health computed, one is left unaligned for the gaps report, and the first sweep announces nothing", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const tree = (await get(t.app, "/api/objectives/tree", owner)).body.data as { roots: { level: string; title: string; children: { children: unknown[] }[] }[] };
+    expect(tree.roots.filter((r) => r.level === "company")).toHaveLength(3);
+    const depth = (n: { children: { children: unknown[] }[] }): number => 1 + Math.max(0, ...n.children.map((c) => depth(c as never)));
+    expect(Math.max(...tree.roots.map((r) => depth(r as never)))).toBe(4); // company → department → team → personal
+    const gaps = (await get(t.app, "/api/objectives/alignment-gaps", owner)).body.data;
+    expect(gaps.unaligned.map((g: { title: string }) => g.title)).toContain("Plan next year's roadmap");
+    const list = (await get(t.app, "/api/objectives", owner)).body.data as { health: string | null }[];
+    expect(new Set(list.map((o) => o.health)).size).toBeGreaterThanOrEqual(3); // a believable spread
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objectives WHERE is_demo = 1 AND health IS NULL").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_assignments").n).toBeGreaterThanOrEqual(4);
+    t.db.prepare("DELETE FROM scheduled_job_runs WHERE job_name = 'okr.health'").run();
+    await t.tick.run();
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type = 'objective.at_risk'").n).toBe(0);
+    // removal takes the links and assignments with it
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_relationships").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_assignments").n).toBe(0);
+  });
+
+  it("a real objective aligned with a demo one, or assigned to a demo team, stops the removal with a plain list", async () => {
+    const { owner } = await setup();
+    const real = await created("/api/objectives", { level: "department", departmentId: await created("/api/departments", { name: "My department" }, owner), title: "My real objective", startDate: "2026-01-01", endDate: "2026-12-31" }, owner);
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const demoCompany = ((await get(t.app, "/api/objectives", owner)).body.data as { id: string; level: string; isDemo: boolean }[]).find((o) => o.isDemo && o.level === "company")!;
+    const al = await request(t.app).put(`/api/objectives/${real}/parent`).set("Origin", ORIGIN).set("Cookie", owner).send({ parentId: demoCompany.id });
+    expect(al.status, JSON.stringify(al.body)).toBe(200);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    expect((blocked.body.error.details.blockers as { kind: string }[]).map((b) => b.kind)).toContain("objective_links");
+    await request(t.app).delete(`/api/objectives/${real}/parent`).set("Origin", ORIGIN).set("Cookie", owner);
+    const demoTeam = (await get(t.app, "/api/organization/structure", owner)).body.data.teams.find((x: { isDemo?: boolean }) => x.isDemo).id as string;
+    expect((await post(t.app, `/api/objectives/${real}/assignments`, { teamId: demoTeam }, owner)).status).toBe(201);
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).body.error.details.blockers.map((b: { kind: string }) => b.kind)).toContain("objective_assignments");
+  });
+});
+
+describe("Demo KPIs (stages 3.3 and 3.4)", () => {
+  it("the demo company has KPIs assigned to a role family, teams, a department and the organization, with months of values, gaps, a correction and alerts already raised", async () => {
+    const { owner } = await setup();
+    const load = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(load.body.data.counts.kpis).toBeGreaterThanOrEqual(9);
+    const kpis = (await get(t.app, "/api/kpis", owner)).body.data as { id: string; name: string; isDemo: boolean; assignmentCount: number }[];
+    expect(kpis.every((k) => k.isDemo)).toBe(true);
+    const leads = kpis.find((k) => k.name === "Qualified leads")!;
+    const detail = (await get(t.app, `/api/kpis/${leads.id}`, owner)).body.data;
+    expect(detail.assignments[0]).toMatchObject({ subject: { kind: "role_family", name: "Sales" }, targetValue: 40 });
+    expect(detail.assignments[0].appliesTo).toBeGreaterThan(5);
+    expect(detail.thresholds.map((x: { level: string }) => x.level)).toEqual(["critical", "warning"]);
+    // the first seller has a corrected value: both rows stay
+    const subjects = (await get(t.app, `/api/kpis/${leads.id}/subjects`, owner)).body.data as { subject: { kind: string; id: string }; missing: number }[];
+    expect(subjects.length).toBeGreaterThan(5);
+    expect(subjects.some((s) => s.missing > 0)).toBe(true);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpi_measurements WHERE kpi_id = ? AND supersedes_measurement_id IS NOT NULL", leads.id).n).toBe(1);
+    // organization-level KPIs use the KPI's own target
+    const arr = kpis.find((k) => k.name === "Annual recurring revenue")!;
+    const h = (await get(t.app, `/api/kpis/${arr.id}/history?subject=organization`, owner)).body.data;
+    expect(h.target).toMatchObject({ targetValue: 12 });
+    expect(h.periods.filter((p: { state: string }) => p.state === "recorded").length).toBe(6);
+    // the overview shows the platform team's failing change-failure rate as critical, and the missing months
+    const ov = (await get(t.app, "/api/kpis/overview", owner)).body.data;
+    expect(ov.totals.byStatus.critical).toBeGreaterThanOrEqual(1);
+    expect(ov.totals.missingPeriods).toBeGreaterThan(0);
+    expect(ov.attention.some((a: { kpiName: string; status: string }) => a.kpiName === "Change failure rate" && a.status === "critical")).toBe(true);
+    // alerts were raised once at load: the first hourly pass adds none
+    const before = one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type IN ('kpi.threshold', 'kpi.measurement_missed')").n;
+    expect(before).toBeGreaterThan(0);
+    t.db.prepare("DELETE FROM scheduled_job_runs WHERE job_name = 'kpi.thresholds'").run();
+    await t.tick.run();
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type IN ('kpi.threshold', 'kpi.measurement_missed')").n).toBe(before);
+  });
+
+  it("a demo seller sees only their own series; removal leaves no KPI row of any kind, and a real KPI assigned to a demo team blocks it", async () => {
+    const { owner } = await setup();
+    const real = await created("/api/kpis", { name: "My real KPI", defaultTarget: 10 }, owner);
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const ps = await personas(owner);
+    const seller = ps.find((p) => p.designation === "Account Executive")!;
+    const as = await asCookie(owner, seller.id);
+    const ov = (await get(t.app, "/api/kpis/overview", as)).body.data;
+    const all = (await get(t.app, "/api/kpis/overview", owner)).body.data;
+    expect(ov.totals.series).toBeGreaterThan(0);
+    expect(ov.totals.series).toBeLessThan(all.totals.series / 2); // their own series, their teammates' and their team's: never the whole company's
+    expect(JSON.stringify(ov)).not.toContain("Annual recurring revenue"); // the organization total is not theirs
+    // a real KPI given to a demo team stops the removal
+    const demoTeam = (await get(t.app, "/api/organization/structure", owner)).body.data.teams.find((x: { isDemo?: boolean }) => x.isDemo).id as string;
+    expect((await post(t.app, `/api/kpis/${real}/assignments`, { teamId: demoTeam }, owner)).status).toBe(201);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    expect((blocked.body.error.details.blockers as { kind: string }[]).map((b) => b.kind)).toContain("kpi_assignments");
+    const aid = (await get(t.app, `/api/kpis/${real}`, owner)).body.data.assignments[0].id as string;
+    await request(t.app).delete(`/api/kpis/${real}/assignments/${aid}`).set("Origin", ORIGIN).set("Cookie", owner);
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    for (const table of ["kpi_measurements", "kpi_thresholds"]) expect(one<{ n: number }>(`SELECT COUNT(*) n FROM ${table}`).n, table).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpis").n).toBe(1); // only the real one
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpi_assignments").n).toBe(0); // the real assignment to the (now gone) demo team was ended and went with it
+    expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
   });
 });

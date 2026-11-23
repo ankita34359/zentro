@@ -31,7 +31,7 @@ const upTo = (last: number): string => {
   return d;
 };
 const quiet = createLogger("error", () => undefined);
-const appOn = (db: Database.Database) => createApp({ db, config: testConfig({ REGISTRATION_MODE: "code", REGISTRATION_CODE: TEST_CODE }), version: "t", cronSecret: undefined, migrationsTotal: 11, log: quiet });
+const appOn = (db: Database.Database) => createApp({ db, config: testConfig({ REGISTRATION_MODE: "code", REGISTRATION_CODE: TEST_CODE }), version: "t", cronSecret: undefined, migrationsTotal: 14, log: quiet });
 const cookieOf = (res: { headers: Record<string, unknown> }) => ([] as string[]).concat((res.headers["set-cookie"] as string[]) ?? []).find((c) => c.startsWith("zentro_session="))!.split(";")[0]!;
 const count = (db: Database.Database, sql: string) => (db.prepare(sql).get() as { n: number }).n;
 const hasTable = (db: Database.Database, name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(name) !== undefined;
@@ -59,13 +59,14 @@ describe("upgrading a batch C database (migration 0010) to objectives and task l
     await seed10(db);
     expect(hasTable(db, "objectives")).toBe(false);
     const before = JSON.stringify(db.prepare("SELECT id, title, status, priority, due_at FROM tasks").all());
-    const result = migrate(db, migrationsDir);
+    const result = migrate(db, upTo(11));
     expect(result.applied).toEqual(["0011_objectives_and_task_links.sql"]);
     expect(result.backupFile).toMatch(/pre-0011-.*\.db$/);
     for (const table of ["objectives", "key_results", "objective_progress_history", "task_dependencies"]) {
       expect(hasTable(db, table), table).toBe(true);
       expect(count(db, `SELECT COUNT(*) n FROM ${table}`), table).toBe(0);
     }
+    migrate(db, migrationsDir); // the server applies every migration at start-up before it serves anything
     expect(JSON.stringify(db.prepare("SELECT id, title, status, priority, due_at FROM tasks").all())).toBe(before); // existing rows unchanged
     expect(db.prepare("SELECT objective_id, key_result_id, outcome_summary, outcome_quality FROM tasks").get()).toEqual({ objective_id: null, key_result_id: null, outcome_summary: null, outcome_quality: null });
     const { app } = appOn(db);
@@ -86,7 +87,8 @@ describe("upgrading a batch C database (migration 0010) to objectives and task l
     const { db } = openDatabase(dataDir);
     migrate(db, upTo(10));
     await seed10(db);
-    const up = migrate(db, migrationsDir);
+    const up = migrate(db, upTo(11));
+    migrate(db, migrationsDir);
     const backup = path.basename(up.backupFile!);
     const copy = new Database(up.backupFile!, { readonly: true });
     expect((copy.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check).toBe("ok");
@@ -107,7 +109,7 @@ describe("upgrading a batch C database (migration 0010) to objectives and task l
     const safety = new Database(path.join(dataDir, "backups", restore.preRestoreBackup!), { readonly: true });
     expect((safety.prepare("SELECT COUNT(*) n FROM objectives").get() as { n: number }).n).toBe(1); // the work after the upgrade is kept in the safety backup
     safety.close();
-    expect(migrate(reopened, migrationsDir).applied).toEqual(["0011_objectives_and_task_links.sql"]);
+    expect(migrate(reopened, migrationsDir).applied).toEqual(["0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql"]);
     expect((await post(appOn(reopened).app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD })).status).toBe(200);
     reopened.close();
   });
@@ -123,7 +125,7 @@ describe("upgrading a batch C database (migration 0010) to objectives and task l
     await post(app, `/api/key-results/${o.keyResults[0].id}/progress`, { value: 3 }, cookie);
     const older = migrate(db, upTo(10)); // what the batch C build does when it starts on this database
     expect(older.applied).toEqual([]);
-    expect(older.unknownApplied).toEqual(["0011"]);
+    expect(older.unknownApplied).toEqual(["0011", "0012", "0013", "0014"]);
     // the batch C queries (the columns it knows) read the same rows, and the new tables are simply ignored by it
     expect(count(db, "SELECT COUNT(*) n FROM tasks WHERE is_demo = 0")).toBe(1);
     expect(db.prepare("SELECT id, title, status, priority, importance_weight, progress_pct, start_date, due_at, estimated_minutes, actual_minutes, completed_at, blocked_reason, team_id, parent_task_id, created_by_membership_id, archived_at, is_demo, created_at, updated_at FROM tasks").all()).toHaveLength(1);

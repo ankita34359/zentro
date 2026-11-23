@@ -21,8 +21,11 @@ export interface ObjectiveRow {
   is_demo: number;
   created_at: string;
   updated_at: string;
+  health: string | null;
+  health_reason: string | null;
+  health_computed_at: string | null;
 }
-const OBJ_COLS = "id, level, department_id, team_id, owner_membership_id, title, description, objective_type, start_date, end_date, priority, lifecycle, visibility, published_at, weight, created_by_membership_id, archived_at, is_demo, created_at, updated_at";
+const OBJ_COLS = "id, level, department_id, team_id, owner_membership_id, title, description, objective_type, start_date, end_date, priority, lifecycle, visibility, published_at, weight, created_by_membership_id, archived_at, is_demo, created_at, updated_at, health, health_reason, health_computed_at";
 
 export interface KeyResultRow {
   id: string;
@@ -45,6 +48,11 @@ export interface KeyResultRow {
   created_at: string;
 }
 const KR_COLS = "id, objective_id, title, description, measurement_type, unit, direction, progress_method, start_value, target_value, current_value, current_as_of, weight, owner_membership_id, due_date, archived_at, is_demo, created_at";
+
+export interface RelationshipRow { id: string; parent_objective_id: string; child_objective_id: string; relationship_type: string; contribution_weight: number; created_by_membership_id: string; created_at: string; ended_at: string | null }
+const REL_COLS = "id, parent_objective_id, child_objective_id, relationship_type, contribution_weight, created_by_membership_id, created_at, ended_at";
+export interface AssignmentRow { id: string; objective_id: string; assignee_membership_id: string | null; assignee_team_id: string | null; assignee_department_id: string | null; role: string; start_date: string; end_date: string | null; assigned_by_membership_id: string; created_at: string }
+const ASG_COLS = "id, objective_id, assignee_membership_id, assignee_team_id, assignee_department_id, role, start_date, end_date, assigned_by_membership_id, created_at";
 
 export interface HistoryRow { id: string; objective_id: string; key_result_id: string | null; recorded_at: string; value: number | null; attainment: number | null; source: string; note: string | null; recorded_by_membership_id: string | null; supersedes_id: string | null }
 const HIST_COLS = "id, objective_id, key_result_id, recorded_at, value, attainment, source, note, recorded_by_membership_id, supersedes_id";
@@ -75,6 +83,9 @@ export class OkrRepository {
   }
   setVisibility(id: string, visibility: string, publishedAt: string | null, now: string): void {
     this.tdb.run("UPDATE objectives SET visibility = @visibility, published_at = @publishedAt, updated_at = @now WHERE organization_id = @organization_id AND id = @id", { id, visibility, publishedAt, now });
+  }
+  setHealth(id: string, health: string | null, reason: string, now: string): void {
+    this.tdb.run("UPDATE objectives SET health = @health, health_reason = @reason, health_computed_at = @now WHERE organization_id = @organization_id AND id = @id", { id, health, reason, now });
   }
   setArchived(id: string, at: string | null, now: string): void {
     this.tdb.run("UPDATE objectives SET archived_at = @at, updated_at = @now WHERE organization_id = @organization_id AND id = @id", { id, at, now });
@@ -131,5 +142,38 @@ export class OkrRepository {
   }
   openTaskCount(objectiveId: string): number {
     return this.taskCounts(objectiveId).open;
+  }
+
+  // ----- alignment: who contributes to whom -----
+
+  relationships(includeEnded = false): RelationshipRow[] {
+    return this.tdb.all<RelationshipRow>(`SELECT ${REL_COLS} FROM objective_relationships WHERE organization_id = @organization_id AND (@all = 1 OR ended_at IS NULL) ORDER BY created_at, rowid`, { all: includeEnded ? 1 : 0 });
+  }
+  relationship(id: string): RelationshipRow | undefined {
+    return this.tdb.get<RelationshipRow>(`SELECT ${REL_COLS} FROM objective_relationships WHERE organization_id = @organization_id AND id = @id`, { id });
+  }
+  insertRelationship(r: { id: string; parentId: string; childId: string; weight: number; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO objective_relationships (id, organization_id, parent_objective_id, child_objective_id, relationship_type, contribution_weight, created_by_membership_id, created_at) VALUES (@id, @organization_id, @parentId, @childId, 'contributes_to', @weight, @by, @now)", r);
+  }
+  setRelationshipWeight(id: string, weight: number): void {
+    this.tdb.run("UPDATE objective_relationships SET contribution_weight = @weight WHERE organization_id = @organization_id AND id = @id AND ended_at IS NULL", { id, weight });
+  }
+  endRelationship(id: string, now: string): void {
+    this.tdb.run("UPDATE objective_relationships SET ended_at = @now WHERE organization_id = @organization_id AND id = @id AND ended_at IS NULL", { id, now });
+  }
+
+  // ----- assignments -----
+
+  assignments(includeEnded = false): AssignmentRow[] {
+    return this.tdb.all<AssignmentRow>(`SELECT ${ASG_COLS} FROM objective_assignments WHERE organization_id = @organization_id AND (@all = 1 OR end_date IS NULL) ORDER BY created_at, rowid`, { all: includeEnded ? 1 : 0 });
+  }
+  assignment(id: string): AssignmentRow | undefined {
+    return this.tdb.get<AssignmentRow>(`SELECT ${ASG_COLS} FROM objective_assignments WHERE organization_id = @organization_id AND id = @id`, { id });
+  }
+  insertAssignment(a: { id: string; objectiveId: string; membershipId: string | null; teamId: string | null; departmentId: string | null; role: string; startDate: string; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO objective_assignments (id, organization_id, objective_id, assignee_membership_id, assignee_team_id, assignee_department_id, role, start_date, assigned_by_membership_id, created_at) VALUES (@id, @organization_id, @objectiveId, @membershipId, @teamId, @departmentId, @role, @startDate, @by, @now)", a);
+  }
+  endAssignment(id: string, day: string): void {
+    this.tdb.run("UPDATE objective_assignments SET end_date = @day WHERE organization_id = @organization_id AND id = @id AND end_date IS NULL", { id, day });
   }
 }

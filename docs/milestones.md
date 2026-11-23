@@ -60,10 +60,10 @@ The blueprint (this document set) is Milestone 0. Stage 1.1 comes first because 
 | ID | Stage | Delivers | Live check | Needs from you | Size |
 | --- | --- | --- | --- | --- | --- |
 | 3.1 | Objectives and key results (live, batch D) | CRUD for all four levels, measurement types, attainment math (shared library with tests), recording actuals, history, lifecycle | Create a company objective with three key results (percentage, number, boolean); record actuals; progress and attainment update; history shows entries | | L |
-| 3.2 | Alignment and health | Parent/child relationships with cycle check, assignments, publish leadership objectives, health computation plus hourly sweep, alignment-gaps report | Link a department objective to the company one; the tree shows contribution; an objective past pace turns **at risk** with its reason; a non-manager employee sees the published company objective read-only | | L |
-| 3.3 | KPI definitions | KPIs, frequency, direction, aggregation, assignments to person/team/department/designation/role family, thresholds | Create "Qualified leads", assign to a role family, set warning and critical thresholds | | M |
-| 3.4 | KPI measurements and trends | Append-only measurements, supersede (correction), coverage and **missing-period display**, trend chart with threshold lines, KPI overview | Record three monthly values, skip one: the chart shows a gap and "1 missing", not a zero; correct a value and see both rows in history | | L |
-| 3.5 | OKR and KPI polish | List filters, empty states, extended demo seed (objectives, key results, KPI history) | With demo data, browse OKRs and KPIs with filters; remove demo data cleanly | | M |
+| 3.2 | Alignment and health (built in batch E) | Parent/child relationships with cycle check, assignments, publish leadership objectives, health computation plus hourly sweep, alignment-gaps report | Link a department objective to the company one; the tree shows contribution; an objective past pace turns **at risk** with its reason; a non-manager employee sees the published company objective read-only | | L |
+| 3.3 | KPI definitions (built in batch E) | KPIs, frequency, direction, aggregation, assignments to person/team/department/designation/role family, thresholds | Create "Qualified leads", assign to a role family, set warning and critical thresholds | | M |
+| 3.4 | KPI measurements and trends (built in batch E) | Append-only measurements, supersede (correction), coverage and **missing-period display**, trend chart with threshold lines, KPI overview | Record three monthly values, skip one: the chart shows a gap and "1 missing", not a zero; correct a value and see both rows in history | | L |
+| 3.5 | OKR and KPI polish (built in batch E) | List filters, empty states, extended demo seed (objectives, key results, KPI history) | With demo data, browse OKRs and KPIs with filters; remove demo data cleanly | | M |
 
 ## 5. Milestone 4: Task management and evidence
 

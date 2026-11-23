@@ -11,6 +11,7 @@ import { NotificationsRepository } from "../../notifications/repositories/notifi
 import { AutomationEventsRepository } from "../../automation/repositories/events.js";
 import { DemoRepository } from "../../demo/repositories/demo.js";
 import { OkrRepository } from "../../okr/repositories/okr.js";
+import { KpiRepository } from "../../kpi/repositories/kpi.js";
 import { ErasureRepository } from "./erasure.js";
 import { InvitationsRepository } from "./invitations.js";
 import { SessionsRepository } from "./sessions.js";
@@ -37,6 +38,7 @@ export interface AuthStore {
   events(tdb: TenantDb): AutomationEventsRepository;
   demo(tdb: TenantDb): DemoRepository;
   okr(tdb: TenantDb): OkrRepository;
+  kpi(tdb: TenantDb): KpiRepository;
   transaction<T>(fn: () => T): T;
 }
 
@@ -61,6 +63,7 @@ export function createAuthStore(db: Database.Database): AuthStore {
     events: (tdb) => new AutomationEventsRepository(tdb),
     demo: (tdb) => new DemoRepository(tdb),
     okr: (tdb) => new OkrRepository(tdb),
+    kpi: (tdb) => new KpiRepository(tdb),
     transaction: (fn) => db.transaction(fn)(),
   };
 }

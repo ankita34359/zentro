@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar, type Tone } from "@/motion/ProgressBar";
-import { LEVEL_LABEL, LIFECYCLE_LABEL, pctText, type ObjectiveSummary } from "@/services/okr";
+import { HEALTH_LABEL, LEVEL_LABEL, LIFECYCLE_LABEL, pctText, type Health, type ObjectiveSummary } from "@/services/okr";
 
 const LIFECYCLE_VARIANT: Record<string, "neutral" | "info" | "onTrack" | "dashed"> = { draft: "dashed", active: "info", completed: "onTrack", cancelled: "dashed" };
 
@@ -29,4 +29,12 @@ export function Attainment({ pct, dataState, coveragePct, elapsedPct, label, com
       {dataState === "insufficient" && <p className="text-caption text-at-risk-ink">Based on part of the key results ({coveragePct}% of the weight has a value).</p>}
     </div>
   );
+}
+
+const HEALTH_VARIANT: Record<string, "neutral" | "info" | "onTrack" | "atRisk" | "offTrack" | "dashed"> = { not_started: "neutral", on_track: "onTrack", at_risk: "atRisk", delayed: "offTrack", completed: "onTrack", no_data: "dashed" };
+
+/** Health in words, never colour alone (the label is the meaning; the colour only repeats it). */
+export function HealthBadge({ health }: { health: Health | null }) {
+  if (health === null) return null;
+  return <Badge variant={HEALTH_VARIANT[health] ?? "neutral"}>{HEALTH_LABEL[health] ?? health}</Badge>;
 }

@@ -46,6 +46,8 @@ describe("Overview (stage 6.1)", () => {
     expect(await state()).toMatchObject({ tasks: true, objective: false, kpi: false });
     await created("/api/objectives", { level: "company", title: "Grow", startDate: "2026-01-01", endDate: "2026-12-31" }, owner);
     expect(await state()).toMatchObject({ objective: true, kpi: false });
+    await created("/api/kpis", { name: "Qualified leads" }, owner);
+    expect(await state()).toMatchObject({ kpi: true });
   });
 
   it("shows company objectives with their real attainment, 'no data' as null, and how many of my open tasks support none", async () => {
@@ -61,6 +63,14 @@ describe("Overview (stage 6.1)", () => {
     await post(t.app, `/api/key-results/${o.keyResults[0].id}/progress`, { value: 5 }, owner);
     ov = await overview(owner);
     expect(ov.objectives.items[0]).toMatchObject({ attainmentPct: 50, dataState: "ok" });
+  });
+
+  it("shows KPI health from the series the caller may see (nothing when there is none, and nothing without kpi.view)", async () => {
+    t = makeAuthApp();
+    const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
+    expect((await overview(owner)).kpis).toEqual({ totals: { series: 0, byStatus: {}, missingPeriods: 0, kpis: 0 }, attention: [] });
+    const none = await addPerson(t.app, owner, "none@example.com", undefined, "No Role");
+    expect((await overview(none.cookie)).kpis).toBeNull();
   });
 
   it("counts what is really there: statuses, overdue work, completions by day, and the load of each department", async () => {
@@ -141,7 +151,10 @@ describe("Overview (stage 6.1)", () => {
     expect(exec.organization.departmentLoad.length).toBeGreaterThanOrEqual(5);
     expect(exec.organization.tasksByStatus.completed).toBeGreaterThan(20);
     expect(exec.organization.completedByDay.reduce((n: number, d: { count: number }) => n + d.count, 0)).toBeGreaterThan(5);
-    expect(exec.checklist.filter((c: { done: boolean }) => c.done).map((c: { key: string }) => c.key)).toEqual(["departments", "people", "reporting", "objective", "tasks"]);
+    expect(exec.checklist.filter((c: { done: boolean }) => c.done).map((c: { key: string }) => c.key)).toEqual(["departments", "people", "reporting", "objective", "kpi", "tasks"]);
+    expect(exec.kpis.totals.series).toBeGreaterThan(10);
+    expect(exec.kpis.attention.length).toBeGreaterThan(0);
+    expect(exec.objectives.items.some((i: { health: string | null }) => i.health !== null)).toBe(true);
     expect(exec.objectives.total).toBeGreaterThanOrEqual(3);
     expect(exec.objectives.items.length).toBeGreaterThanOrEqual(3);
     expect(exec.objectives.items.some((i: { attainmentPct: number | null }) => i.attainmentPct !== null && i.attainmentPct > 0)).toBe(true);

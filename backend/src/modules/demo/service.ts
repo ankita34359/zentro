@@ -8,6 +8,9 @@ import { TEMPLATE_KEYS } from "../permissions/roleTemplates.js";
 import type { Capabilities } from "../permissions/service.js";
 import { addDays, todayIn } from "../tasks/dates.js";
 import { keyResultAttainment } from "../okr/attainment.js";
+import { healthOf } from "../okr/healthSweep.js";
+import { periodEndOf, completedPeriods } from "../kpi/periods.js";
+import { applySeriesAlerts, buildSeries, loadSeriesInput } from "../kpi/series.js";
 import { buildDemoCompany, demoEmail, type DemoTask, type RoleChoice } from "./seed.js";
 
 const ROLE_KEY: Record<RoleChoice, string> = {
@@ -152,6 +155,56 @@ export class DemoService {
         }
         keyResultIds.set(o.key, ids);
       }
+      for (const o of company.objectives) {
+        if (o.parentKey) repo.insertRelationship({ id: newId(), parentId: objectiveId.get(o.parentKey)!, childId: objectiveId.get(o.key)!, weight: o.parentWeight, by: personId.get(o.ownerKey)!, now: at(addDays(today, o.startOffset)) });
+        for (const c of o.contributors) repo.insertObjectiveAssignment({ id: newId(), objectiveId: objectiveId.get(o.key)!, teamId: c.kind === "team" ? teamId.get(c.key)! : null, departmentId: c.kind === "department" ? deptId.get(c.key)! : null, role: c.role, startDate: addDays(today, o.startOffset), by: personId.get(o.ownerKey)!, now: at(addDays(today, o.startOffset)) });
+      }
+      // the stored health starts out correct, so the first hourly sweep does not announce every objective that is behind
+      const okrRepo = this.o.store.okr(tdb);
+      const allKrs = okrRepo.keyResults();
+      for (const o of okrRepo.objectives()) if (o.is_demo === 1) {
+        const h = healthOf(o, allKrs.filter((k) => k.objective_id === o.id), today);
+        okrRepo.setHealth(o.id, h.health, h.reason, now);
+      }
+
+      // KPIs with their targets, thresholds and a few months of values (some months deliberately missing, one value corrected)
+      const designationByName = new Map(company.designations.map((d) => [d.name, designationId.get(d.name)!]));
+      for (const k of company.kpis) {
+        const kid = newId();
+        repo.insertKpi({ id: kid, key: `demo-${k.key}-${k.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 28)}`, name: k.name, description: k.description, category: k.category, unit: k.unit, frequency: k.frequency, direction: k.direction, aggregation: k.aggregation, defaultTarget: k.defaultTarget, createdBy: by, now });
+        const higher = k.direction === "higher_is_better";
+        repo.insertKpiThreshold({ id: newId(), kpiId: kid, level: "warning", comparator: higher ? "lt" : "gt", value: k.warnPct, now });
+        repo.insertKpiThreshold({ id: newId(), kpiId: kid, level: "critical", comparator: higher ? "lt" : "gt", value: k.critPct, now });
+        const periods = completedPeriods(k.frequency, today, Math.max(0, ...k.series.map((x) => x.values.length)));
+        for (const a of k.assignments) {
+          repo.insertKpiAssignment({
+            id: newId(), kpiId: kid, teamId: a.kind === "team" ? teamId.get(a.key)! : null, departmentId: a.kind === "department" ? deptId.get(a.key)! : null,
+            designationId: a.kind === "designation" ? designationByName.get(a.key)! : null, roleFamilyId: a.kind === "role_family" ? familyId.get(a.key)! : null,
+            targetValue: a.target ?? k.defaultTarget, effectiveFrom: periods[0] ?? addDays(today, -180), by, now: at(addDays(today, -190)),
+          });
+        }
+        for (const s of k.series) {
+          const subjectPerson = s.subject.kind === "person" ? personId.get(s.subject.key!)! : null;
+          const subjectTeam = s.subject.kind === "team" ? teamId.get(s.subject.key!)! : null;
+          const subjectDept = s.subject.kind === "department" ? deptId.get(s.subject.key!)! : null;
+          const offset = periods.length - s.values.length;
+          s.values.forEach((v, i) => {
+            if (v === null) return;
+            const start = periods[offset + i]!;
+            const recordedAt = at(addDays(periodEndOf(k.frequency, start), 2), 10);
+            const first = newId();
+            repo.insertKpiMeasurement({ id: first, kpiId: kid, membershipId: subjectPerson, teamId: subjectTeam, departmentId: subjectDept, periodStart: start, periodEnd: periodEndOf(k.frequency, start), value: v, by: subjectPerson ?? by, note: null, supersedesId: null, now: recordedAt });
+            if (s.correction && s.correction.index === i) {
+              repo.insertKpiMeasurement({ id: newId(), kpiId: kid, membershipId: subjectPerson, teamId: subjectTeam, departmentId: subjectDept, periodStart: start, periodEnd: periodEndOf(k.frequency, start), value: s.correction.value, by: subjectPerson ?? by, note: s.correction.note, supersedesId: first, now: at(addDays(periodEndOf(k.frequency, start), 5), 10) });
+            }
+          });
+        }
+      }
+      {
+        // the alerts the hourly job would raise are raised now, once, so the first pass after loading announces nothing new
+        const input = loadSeriesInput(tdb, today);
+        applySeriesAlerts(tdb, input, buildSeries(input), now, { missed: true });
+      }
 
       const taskId = new Map<string, string>();
       for (const t of company.tasks) this.insertTask(repo, t, taskId, personId, teamId, today, by, objectiveId, keyResultIds);
@@ -161,7 +214,7 @@ export class DemoService {
 
       const counts = repo.counts();
       repo.insertBatch({ id: newId(), createdBy: by, countsJson: JSON.stringify(counts), now });
-      this.o.audit.record(tdb, ctx, { action: "demo.load", entityType: "demo", entityId: null, summary: `Loaded demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks, ${counts.objectives} objectives`, after: counts });
+      this.o.audit.record(tdb, ctx, { action: "demo.load", entityType: "demo", entityId: null, summary: `Loaded demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks, ${counts.objectives} objectives, ${counts.kpis} KPIs`, after: counts });
     });
     return this.status(auth, requestId, caps);
   }
@@ -228,7 +281,7 @@ export class DemoService {
       this.o.store.sessions.deleteForUsers(userIds);
       this.o.store.users.deleteDemo(userIds);
       repo.markRemoved(batch.id, ctx.membershipId, now);
-      this.o.audit.record(tdb, ctx, { action: "demo.remove", entityType: "demo", entityId: null, summary: `Removed demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks, ${counts.objectives} objectives`, before: counts });
+      this.o.audit.record(tdb, ctx, { action: "demo.remove", entityType: "demo", entityId: null, summary: `Removed demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks, ${counts.objectives} objectives, ${counts.kpis} KPIs`, before: counts });
     });
     return this.status(auth, requestId, caps);
   }
