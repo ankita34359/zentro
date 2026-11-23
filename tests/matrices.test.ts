@@ -6,7 +6,7 @@ import { noHierarchy, resolveScope, isEmptyScope, type Grant } from "../backend/
 import { ROLE_TEMPLATES } from "../backend/src/modules/permissions/roleTemplates.js";
 import type { RouteDef } from "../backend/src/http/registry.js";
 import { ORIGIN, type TestApp } from "./helpers/app.js";
-import { get, invite, makeAuthApp, signUpWithOrg } from "./helpers/auth.js";
+import { get, invite, makeAuthApp, post, signUpWithOrg } from "./helpers/auth.js";
 import { addPerson, roleIds } from "./helpers/roles.js";
 
 let t: TestApp;
@@ -105,6 +105,15 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const invA = await invite(t.app, ownerA, "pending-a@example.com", "Pending Alpha");
     const personA = await addPerson(t.app, ownerA, "member-a@example.com", idsA.employee, "Member Alpha");
     const assignmentA = (t.db.prepare("SELECT id FROM user_role_assignments WHERE membership_id = ?").get(personA.membershipId) as { id: string }).id;
+    const mk = async (path: string, body: Record<string, unknown>): Promise<string> => {
+      const r = await post(t.app, path, body, ownerA);
+      expect(r.status, path).toBe(201);
+      return (r.body as { data: { id: string } }).data.id;
+    };
+    const deptA = await mk("/api/departments", { name: "Alpha Engineering" });
+    const teamA = await mk("/api/teams", { name: "Alpha Platform", departmentId: deptA });
+    const familyA = await mk("/api/role-families", { name: "Alpha Engineers" });
+    const designationA = await mk("/api/designations", { name: "Alpha Mentor", roleFamilyId: familyA });
     // Each id route: the ids of A's records to try as B, and a body that PASSES validation (so the answer comes from the lookup, not from validation).
     const fixtures: Record<string, { params: Record<string, string>; body?: Record<string, unknown> }> = {
       "/api/invitations/:id/revoke": { params: { id: invA.invitation.id } },
@@ -115,6 +124,18 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/role-assignments/:id/revoke": { params: { id: assignmentA } },
       "/api/people/:membershipId/reset-link": { params: { membershipId: personA.membershipId } },
       "/api/people/:membershipId/remove": { params: { membershipId: personA.membershipId } },
+      "/api/departments/:id": { params: { id: deptA }, body: { name: "Hacked by B" } },
+      "/api/departments/:id/archive": { params: { id: deptA } },
+      "/api/departments/:id/restore": { params: { id: deptA } },
+      "/api/teams/:id": { params: { id: teamA }, body: { name: "Hacked by B" } },
+      "/api/teams/:id/archive": { params: { id: teamA } },
+      "/api/teams/:id/restore": { params: { id: teamA } },
+      "/api/role-families/:id": { params: { id: familyA }, body: { name: "Hacked by B" } },
+      "/api/role-families/:id/archive": { params: { id: familyA } },
+      "/api/role-families/:id/restore": { params: { id: familyA } },
+      "/api/designations/:id": { params: { id: designationA }, body: { name: "Hacked by B" } },
+      "/api/designations/:id/archive": { params: { id: designationA } },
+      "/api/designations/:id/restore": { params: { id: designationA } },
     };
     const snapshot = () => JSON.stringify([
       t.db.prepare("SELECT id, revoked_at, accepted_at, code_hash FROM invitations ORDER BY id").all(),
@@ -123,12 +144,17 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT COUNT(*) n FROM auth_tokens").get(),
       t.db.prepare("SELECT COUNT(*) n FROM role_permissions").get(),
       t.db.prepare("SELECT id, name, archived_at FROM roles ORDER BY id").all(),
+      t.db.prepare("SELECT id, parent_id, name, archived_at FROM departments ORDER BY id").all(),
+      t.db.prepare("SELECT id, department_id, parent_team_id, name, archived_at FROM teams ORDER BY id").all(),
+      t.db.prepare("SELECT id, name, archived_at FROM role_families ORDER BY id").all(),
+      t.db.prepare("SELECT id, role_family_id, name, archived_at FROM designations ORDER BY id").all(),
+      t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
     ]);
     const before = snapshot();
 
     const idRoutes = t.registry.list().filter((r) => r.takesEntityId);
-    expect(idRoutes.length).toBeGreaterThanOrEqual(8);
+    expect(idRoutes.length).toBeGreaterThanOrEqual(20);
     for (const route of idRoutes) {
       const fx = fixtures[route.path];
       expect(fx, `add a tenancy fixture for ${route.path}`).toBeTruthy(); // a new id route cannot slip through
@@ -138,12 +164,12 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     }
     // lists: nothing of A's appears
     const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && (r.access.kind === "permission" || r.path === "/api/organization" || r.path === "/api/auth/me"));
-    expect(lists.length).toBeGreaterThanOrEqual(7);
+    expect(lists.length).toBeGreaterThanOrEqual(8);
     for (const route of lists) {
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "owner-a@example.com", invA.invitation.id, personA.membershipId, idsA.employee]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "owner-a@example.com", invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

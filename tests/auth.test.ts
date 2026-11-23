@@ -483,7 +483,7 @@ describe("the registry marks every new route", () => {
   it("every auth route declares its access, and the baseline ones answer 401 with no session", async () => {
     t = makeAuthApp();
     const rows = t.registry.list().filter((r) => r.path.startsWith("/api/auth") || r.path.startsWith("/api/org"));
-    expect(rows.length).toBe(14);
+    expect(rows.length).toBe(16);
     for (const r of rows.filter((x) => x.access.kind === "baseline")) {
       const res = await (r.method === "get" ? get(t.app, r.path) : post(t.app, r.path, {}));
       expect(res.status, r.path).toBe(401);

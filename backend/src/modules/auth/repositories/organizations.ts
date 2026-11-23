@@ -35,6 +35,10 @@ export class OrganizationsRepository {
     return this.db.prepare("SELECT 1 AS x FROM organizations WHERE slug = @slug").get({ slug }) !== undefined;
   }
 
+  rename(id: string, name: string, now: string): void {
+    this.db.prepare("UPDATE organizations SET name = @name, updated_at = @now WHERE id = @id").run({ id, name, now });
+  }
+
   insert(o: { id: string; name: string; slug: string; timezone: string; createdByUserId: string; now: string }): void {
     this.db
       .prepare(
