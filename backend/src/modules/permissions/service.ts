@@ -70,7 +70,8 @@ const CAPS_KEY = "capabilities";
 export class PermissionService {
   constructor(
     private readonly store: AuthStore,
-    private readonly hierarchy: HierarchyProvider = noHierarchy,
+    /** Builds the hierarchy for the caller's organization (stage 2.6: the real tables; tests may return a fake). */
+    private readonly hierarchyFor: (tdb: TenantDb) => HierarchyProvider = () => noHierarchy,
     private readonly clock: () => number = Date.now,
   ) {}
 
@@ -78,10 +79,10 @@ export class PermissionService {
 
   /** Loads the caller's active grants and resolves them. */
   capabilities(auth: AuthContext): Capabilities {
-    if (!auth.organizationId || !auth.membershipId) return new Capabilities(auth.membershipId ?? "", [], this.hierarchy, this.iso());
+    if (!auth.organizationId || !auth.membershipId) return new Capabilities(auth.membershipId ?? "", [], noHierarchy, this.iso());
     const tdb = this.store.tenant({ userId: auth.userId, membershipId: auth.membershipId, organizationId: auth.organizationId, sessionId: auth.sessionId, requestId: "" });
     const now = this.iso();
-    return new Capabilities(auth.membershipId, this.store.grants(tdb).grantsFor(auth.membershipId, now), this.hierarchy, now);
+    return new Capabilities(auth.membershipId, this.store.grants(tdb).grantsFor(auth.membershipId, now), this.hierarchyFor(tdb), now);
   }
 
   /** The route guard: the caller must hold the permission with a non-empty scope set. Memoized per request. */

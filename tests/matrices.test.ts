@@ -114,6 +114,11 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const teamA = await mk("/api/teams", { name: "Alpha Platform", departmentId: deptA });
     const familyA = await mk("/api/role-families", { name: "Alpha Engineers" });
     const designationA = await mk("/api/designations", { name: "Alpha Mentor", roleFamilyId: familyA });
+    const dirA = await mk("/api/employees", { name: "Dana Alpha", teamId: teamA, managerId: personA.membershipId });
+    const rowOf = (table: string, col = "membership_id") => (t.db.prepare(`SELECT id FROM ${table} WHERE ${col} = ?`).get(dirA) as { id: string }).id;
+    const reportingA = rowOf("reporting_relationships", "subordinate_membership_id");
+    const teamRowA = rowOf("team_memberships");
+    const deptRowA = rowOf("department_memberships");
     // Each id route: the ids of A's records to try as B, and a body that PASSES validation (so the answer comes from the lookup, not from validation).
     const fixtures: Record<string, { params: Record<string, string>; body?: Record<string, unknown> }> = {
       "/api/invitations/:id/revoke": { params: { id: invA.invitation.id } },
@@ -136,6 +141,19 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/designations/:id": { params: { id: designationA }, body: { name: "Hacked by B" } },
       "/api/designations/:id/archive": { params: { id: designationA } },
       "/api/designations/:id/restore": { params: { id: designationA } },
+      "/api/employees": { params: {}, body: { name: "Intruder", designationId: designationA } },
+      "/api/employees/:id": { params: { id: dirA }, body: { name: "Hacked by B" } },
+      "/api/employees/:id/designation": { params: { id: dirA }, body: { designationId: designationA } },
+      "/api/employees/:id/archive": { params: { id: dirA } },
+      "/api/employees/:id/restore": { params: { id: dirA } },
+      "/api/employees/:id/history": { params: { id: dirA } },
+      "/api/hierarchy/reporting": { params: {}, body: { subordinateId: dirA, managerId: personA.membershipId } },
+      "/api/hierarchy/reporting/:id": { params: { id: reportingA }, body: {} },
+      "/api/hierarchy/move": { params: {}, body: { membershipId: dirA, toTeamId: teamA } },
+      "/api/teams/:id/members": { params: { id: teamA }, body: { membershipId: dirA } },
+      "/api/teams/:id/members/:mid": { params: { id: teamA, mid: teamRowA }, body: { allocationPct: 50 } },
+      "/api/departments/:id/members": { params: { id: deptA }, body: { membershipId: dirA } },
+      "/api/departments/:id/members/:mid": { params: { id: deptA, mid: deptRowA }, body: { type: "deputy" } },
     };
     const snapshot = () => JSON.stringify([
       t.db.prepare("SELECT id, revoked_at, accepted_at, code_hash FROM invitations ORDER BY id").all(),
@@ -148,13 +166,18 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, department_id, parent_team_id, name, archived_at FROM teams ORDER BY id").all(),
       t.db.prepare("SELECT id, name, archived_at FROM role_families ORDER BY id").all(),
       t.db.prepare("SELECT id, role_family_id, name, archived_at FROM designations ORDER BY id").all(),
+      t.db.prepare("SELECT id, display_name, status, archived_at, designation_id, user_id FROM organization_memberships ORDER BY id").all(),
+      t.db.prepare("SELECT id, subordinate_membership_id, manager_membership_id, relationship_type, start_date, end_date FROM reporting_relationships ORDER BY id").all(),
+      t.db.prepare("SELECT id, team_id, membership_id, membership_type, allocation_pct, start_date, end_date FROM team_memberships ORDER BY id").all(),
+      t.db.prepare("SELECT id, department_id, membership_id, membership_type, start_date, end_date FROM department_memberships ORDER BY id").all(),
+      t.db.prepare("SELECT id, membership_id, designation_id, start_date, end_date FROM designation_assignments ORDER BY id").all(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
     ]);
     const before = snapshot();
 
     const idRoutes = t.registry.list().filter((r) => r.takesEntityId);
-    expect(idRoutes.length).toBeGreaterThanOrEqual(20);
+    expect(idRoutes.length).toBeGreaterThanOrEqual(30);
     for (const route of idRoutes) {
       const fx = fixtures[route.path];
       expect(fx, `add a tenancy fixture for ${route.path}`).toBeTruthy(); // a new id route cannot slip through
@@ -169,7 +192,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "owner-a@example.com", invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "owner-a@example.com", invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

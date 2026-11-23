@@ -119,7 +119,7 @@ export class MembershipsRepository {
   /** Active or invited people with the login's email, for the Users screen. */
   listPeople(): MemberListRow[] {
     return this.tdb.all<MemberListRow>(
-      "SELECT m.id AS id, m.display_name AS display_name, m.work_email AS work_email, m.status AS status, m.user_id AS user_id, u.email AS login_email FROM organization_memberships m LEFT JOIN users u ON u.id = m.user_id WHERE m.organization_id = @organization_id AND m.archived_at IS NULL ORDER BY m.display_name COLLATE NOCASE",
+      "SELECT m.id AS id, m.display_name AS display_name, m.work_email AS work_email, m.status AS status, m.user_id AS user_id, u.email AS login_email FROM organization_memberships m LEFT JOIN users u ON u.id = m.user_id WHERE m.organization_id = @organization_id AND m.archived_at IS NULL AND (m.user_id IS NOT NULL OR m.status = 'invited') ORDER BY m.display_name COLLATE NOCASE",
     );
   }
 

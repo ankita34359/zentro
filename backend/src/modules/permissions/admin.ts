@@ -1,4 +1,4 @@
-import type { TenantCtx } from "../../db/tenant.js";
+import type { TenantCtx, TenantDb } from "../../db/tenant.js";
 import { HttpError, notFound, permissionDenied } from "../../lib/errors.js";
 import { newId } from "../../lib/ids.js";
 import type { AuditService } from "../audit/service.js";
@@ -19,6 +19,9 @@ export interface AssignmentView {
   roleId: string;
   roleName: string;
   scopeType: string;
+  /** The department or team a scoped assignment covers (null for the whole organization). */
+  scopeId: string | null;
+  scopeName: string | null;
   validFrom: string;
   validTo: string | null;
   revokedAt: string | null;
@@ -192,38 +195,59 @@ export class AdminService {
 
   // ---------- assignments ----------
 
-  private view(a: { id: string; membership_id: string; role_id: string; role_name: string; scope_type: string; valid_from: string; valid_to: string | null; revoked_at: string | null; granted_by_name: string | null }): AssignmentView {
+  private scopeNames(tdb: TenantDb): Map<string, string> {
+    const s = this.o.store.structure(tdb);
+    return new Map<string, string>([...s.departments().map((d) => [d.id, d.name] as [string, string]), ...s.teams().map((t) => [t.id, t.name] as [string, string])]);
+  }
+
+  private view(a: { id: string; membership_id: string; role_id: string; role_name: string; scope_type: string; scope_id: string | null; valid_from: string; valid_to: string | null; revoked_at: string | null; granted_by_name: string | null }, names: Map<string, string>): AssignmentView {
     const now = this.now();
     const state: AssignmentView["state"] = a.revoked_at ? "revoked" : a.valid_from > now ? "scheduled" : a.valid_to !== null && a.valid_to < now ? "ended" : "active";
-    return { id: a.id, membershipId: a.membership_id, roleId: a.role_id, roleName: a.role_name, scopeType: a.scope_type, validFrom: a.valid_from, validTo: a.valid_to, revokedAt: a.revoked_at, grantedBy: a.granted_by_name, state };
+    return { id: a.id, membershipId: a.membership_id, roleId: a.role_id, roleName: a.role_name, scopeType: a.scope_type, scopeId: a.scope_id, scopeName: a.scope_id ? names.get(a.scope_id) ?? null : null, validFrom: a.valid_from, validTo: a.valid_to, revokedAt: a.revoked_at, grantedBy: a.granted_by_name, state };
   }
 
   listAssignments(auth: AuthContext, requestId: string, caps: Capabilities, membershipId?: string): AssignmentView[] {
     const ctx = this.ctx(auth, requestId);
     const scope = caps.scope("roles.view");
+    const tdb = this.o.store.tenant(ctx);
+    const names = this.scopeNames(tdb);
     return this.o.store
-      .grants(this.o.store.tenant(ctx))
+      .grants(tdb)
       .assignmentsFor(membershipId ?? null, this.now())
       .filter((a) => scopeContainsMember(scope, a.membership_id))
-      .map((a) => this.view(a));
+      .map((a) => this.view(a, names));
   }
 
-  /** Gives a person a role. Department and team scopes arrive with stage 2.5. */
+  /** Gives a person a role, for the whole organization or for one department or team (stage 2.6). */
   assignRole(
     auth: AuthContext,
     requestId: string,
     caps: Capabilities,
-    input: { membershipId: string; roleId: string; scopeType?: string; validFrom?: string; validTo?: string | null },
+    input: { membershipId: string; roleId: string; scopeType?: string; scopeId?: string | null; validFrom?: string; validTo?: string | null },
   ): AssignmentView {
     const ctx = this.ctx(auth, requestId);
     const tdb = this.o.store.tenant(ctx);
     const memberships = this.o.store.memberships(tdb);
     const grants = this.o.store.grants(tdb);
-    if (input.scopeType && input.scopeType !== "organization") {
-      throw new HttpError(400, "scope_not_available", "Department and team scopes arrive with stage 2.5. For now a role applies to the whole organization.");
+    const scopeType = (input.scopeType ?? "organization") as "organization" | "department" | "team";
+    if (!["organization", "department", "team"].includes(scopeType)) throw new HttpError(400, "scope_not_available", "A role applies to the whole organization, one department or one team.");
+    const structure = this.o.store.structure(tdb);
+    let scopeId: string | null = null;
+    let scopeName: string | null = null;
+    const mine = caps.scope("roles.manage");
+    if (scopeType === "organization") {
+      if (!mine.all) throw new HttpError(403, "cannot_grant_scope", "You can give a role for a department or team you manage, not for the whole organization.");
+    } else {
+      if (!input.scopeId) throw new HttpError(400, "validation_failed", "Request did not pass validation", [{ path: "scopeId", message: `Choose the ${scopeType}` }]);
+      const target = scopeType === "department" ? structure.department(input.scopeId) : structure.team(input.scopeId);
+      if (!target) throw notFound();
+      if (target.archived_at) throw new HttpError(409, "archived", `That ${scopeType} is archived.`);
+      if (!(mine.all || (scopeType === "department" ? mine.departments : mine.teams).has(input.scopeId))) throw new HttpError(403, "cannot_grant_scope", `You can only give a role for a ${scopeType} you manage.`);
+      scopeId = input.scopeId;
+      scopeName = target.name;
     }
     const target = memberships.findById(input.membershipId);
-    if (!target || target.status !== "active" || !scopeContainsMember(caps.scope("roles.manage"), target.id)) throw notFound(); // missing, another organization's, not joined, or outside your scope
+    if (!target || target.status !== "active" || target.user_id === null || !scopeContainsMember(caps.scope("roles.manage"), target.id)) throw notFound(); // missing, another organization's, not joined (no login), or outside your scope
     const role = grants.findRole(input.roleId);
     if (!role) throw notFound();
     const roleGrants = grants.roleGrants(role.id).map((g) => ({ permission: g.permission, mode: g.mode }));
@@ -234,21 +258,21 @@ export class AdminService {
     const validTo = input.validTo ?? null;
     if (validTo !== null && validTo <= validFrom) throw new HttpError(400, "validation_failed", "Request did not pass validation", [{ path: "validTo", message: "The end must be after the start" }]);
     if (validTo !== null && validTo <= now) throw new HttpError(400, "validation_failed", "Request did not pass validation", [{ path: "validTo", message: "The end must be in the future" }]);
-    if (grants.openAssignment(target.id, role.id, now)) throw new HttpError(409, "already_assigned", "This person already holds this role");
+    if (grants.openAssignment(target.id, role.id, now, scopeType, scopeId)) throw new HttpError(409, "already_assigned", scopeId ? "This person already holds this role for that department or team" : "This person already holds this role");
 
     const id = newId();
     this.o.store.transaction(() => {
-      grants.insertAssignment({ id, membershipId: target.id, roleId: role.id, validFrom, validTo, grantedByMembershipId: ctx.membershipId, now });
+      grants.insertAssignment({ id, membershipId: target.id, roleId: role.id, scopeType, scopeId, validFrom, validTo, grantedByMembershipId: ctx.membershipId, now });
       this.o.audit.record(tdb, ctx, {
         action: "role_assignment.create",
         entityType: "role_assignment",
         entityId: id,
-        summary: `Gave ${target.display_name} the role "${role.name}"${validTo ? ` until ${validTo.slice(0, 10)}` : ""}`,
-        after: { membershipId: target.id, roleId: role.id, scope: "organization", validFrom, validTo },
+        summary: `Gave ${target.display_name} the role "${role.name}"${scopeName ? ` for the ${scopeType} "${scopeName}"` : ""}${validTo ? ` until ${validTo.slice(0, 10)}` : ""}`,
+        after: { membershipId: target.id, roleId: role.id, scope: scopeType, scopeId, validFrom, validTo },
       });
       this.assertAdministratorRemains(ctx);
     });
-    return this.view(grants.findAssignment(id)!);
+    return this.view(grants.findAssignment(id)!, this.scopeNames(tdb));
   }
 
   revokeAssignment(auth: AuthContext, requestId: string, caps: Capabilities, id: string): AssignmentView {
@@ -274,7 +298,7 @@ export class AdminService {
       });
       this.assertAdministratorRemains(ctx);
     });
-    return this.view(grants.findAssignment(id)!);
+    return this.view(grants.findAssignment(id)!, this.scopeNames(tdb));
   }
 
   // ---------- removing a person ----------
@@ -294,6 +318,7 @@ export class AdminService {
     this.o.store.transaction(() => {
       grants.revokeAllFor(target.id, now);
       memberships.detachRemoved(target.id, now);
+      this.o.store.people(tdb).endEverythingFor(target.id, now.slice(0, 10)); // placements and reporting lines end today; history stays
       this.o.store.users.clearDefaultOrganization(userId, ctx.organizationId, now);
       this.o.store.sessions.detachOrganization(userId, ctx.organizationId);
       this.o.audit.record(tdb, ctx, { action: "person.remove", entityType: "membership", entityId: target.id, summary: `Removed ${target.display_name} from the organization (their login stays)` });

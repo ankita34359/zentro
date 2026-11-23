@@ -37,3 +37,33 @@ export function SheetLeft({
     </Dialog.Root>
   );
 }
+
+/** A panel that slides in from the right (a person's profile). Same Radix Dialog behaviour as the left one: focus trap, Escape, scroll lock. */
+export function SheetRight({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+  className,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="sheet-overlay fixed inset-0 z-40" />
+        <Dialog.Content className={cn("sheet-panel sheet-panel-right fixed inset-y-0 right-0 z-50 flex w-[34rem] max-w-full flex-col overflow-y-auto border-l bg-raised shadow-lg", className)}>
+          <Dialog.Title className="sr-only">{title}</Dialog.Title>
+          <Dialog.Description className="sr-only">{description}</Dialog.Description>
+          {children}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}

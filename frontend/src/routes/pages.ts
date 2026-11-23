@@ -19,6 +19,7 @@ export const UsersPage = lazyWithPreload(() => import("@/pages/settings/UsersPag
 export const RolesPage = lazyWithPreload(() => import("@/pages/settings/RolesPage"));
 export const StructurePage = lazyWithPreload(() => import("@/pages/settings/StructurePage"));
 export const AuditPage = lazyWithPreload(() => import("@/pages/settings/AuditPage"));
+export const OrganizationPage = lazyWithPreload(() => import("@/pages/organization/OrganizationPage"));
 export const ProfilePage = lazyWithPreload(() => import("@/pages/settings/ProfilePage"));
 
 /** Every page a visitor can reach from the sidebar. The unlisted /design style guide is left out on purpose. */

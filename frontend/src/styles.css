@@ -110,6 +110,8 @@
   .sheet-overlay[data-state="closed"] { animation: zentro-fade-out var(--duration-fast) var(--ease-in-out); }
   .sheet-panel[data-state="open"] { animation: zentro-slide-in var(--duration-slow) var(--ease-out); }
   .sheet-panel[data-state="closed"] { animation: zentro-slide-out var(--duration-base) var(--ease-in-out); }
+  .sheet-panel-right[data-state="open"] { animation: zentro-slide-in-right var(--duration-slow) var(--ease-out); }
+  .sheet-panel-right[data-state="closed"] { animation: zentro-slide-out-right var(--duration-base) var(--ease-in-out); }
 
   /* Sidebar: a single indicator slides between items: a tinted wash with a gradient bar on its left edge. */
   .nav-indicator {
@@ -130,6 +132,8 @@
 @keyframes zentro-fade-out { from { opacity: 1 } to { opacity: 0 } }
 @keyframes zentro-slide-in { from { transform: translateX(-100%) } to { transform: translateX(0) } }
 @keyframes zentro-slide-out { from { transform: translateX(0) } to { transform: translateX(-100%) } }
+@keyframes zentro-slide-in-right { from { transform: translateX(100%) } to { transform: translateX(0) } }
+@keyframes zentro-slide-out-right { from { transform: translateX(0) } to { transform: translateX(100%) } }
 @keyframes zentro-shimmer { from { background-position: 100% 0 } to { background-position: -100% 0 } }
 @keyframes zentro-pulse { 0% { transform: scale(1); opacity: 0.55 } 70%, 100% { transform: scale(2.6); opacity: 0 } }
 
@@ -140,6 +144,6 @@
   .skeleton { animation: none; background-image: none; }
   .pulse-dot::after { animation: none; opacity: 0; }
   .theme-icon[data-active="false"], .theme-icon[data-active="true"] { transform: none; }
-  .sheet-panel[data-state="open"], .sheet-panel[data-state="closed"] { animation-name: zentro-fade-in; }
-  .sheet-panel[data-state="closed"] { animation-name: zentro-fade-out; }
+  .sheet-panel[data-state="open"], .sheet-panel[data-state="closed"], .sheet-panel-right[data-state="open"], .sheet-panel-right[data-state="closed"] { animation-name: zentro-fade-in; }
+  .sheet-panel[data-state="closed"], .sheet-panel-right[data-state="closed"] { animation-name: zentro-fade-out; }
 }

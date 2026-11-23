@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, ShieldPlus, UserMinus, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { problemText } from "@/lib/authForm";
 import { formatDateTime } from "@/lib/format";
 import { assignRole, removePerson, revokeAssignment, type MemberView, type RoleView } from "@/services/auth";
+import { getStructure } from "@/services/structure";
 
 /**
  * One person on the Users screen: their roles (each can be taken away), Assign role (for example to someone who
@@ -36,11 +37,12 @@ export function PersonRow({
   const [assigning, setAssigning] = useState(false);
   const [roleId, setRoleId] = useState("");
   const [scope, setScope] = useState("organization");
+  const [scopeId, setScopeId] = useState("");
   const [until, setUntil] = useState("");
   const [confirm, setConfirm] = useState<"remove" | string | null>(null); // "remove" or an assignment id being revoked
 
   const assign = useMutation({
-    mutationFn: () => assignRole({ membershipId: m.id, roleId, scopeType: scope, ...(until ? { validTo: new Date(`${until}T23:59:59`).toISOString() } : {}) }),
+    mutationFn: () => assignRole({ membershipId: m.id, roleId, scopeType: scope, ...(scope !== "organization" ? { scopeId } : {}), ...(until ? { validTo: new Date(`${until}T23:59:59`).toISOString() } : {}) }),
     onSuccess: () => {
       setAssigning(false);
       setRoleId("");
@@ -78,13 +80,17 @@ export function PersonRow({
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!roleId) return onProblem("Choose a role to assign");
+    if (scope !== "organization" && !scopeId) return onProblem(`Choose the ${scope}`);
     onProblem(null);
     assign.mutate();
   }
 
   const joined = m.hasLogin && m.status === "active";
-  const heldIds = new Set(m.assignments.map((a) => a.roleId));
-  const assignable = (roles ?? []).filter((r) => !heldIds.has(r.id));
+  // a role held for the whole organization is not offered again for the whole organization (it can still be given for one department or team)
+  const heldWide = new Set(m.assignments.filter((a) => (a.scopeType ?? "organization") === "organization").map((a) => a.roleId));
+  const assignable = (roles ?? []).filter((r) => scope !== "organization" || !heldWide.has(r.id));
+  const structure = useQuery({ queryKey: ["structure"], queryFn: getStructure, enabled: assigning && scope !== "organization", retry: false });
+  const scopeOptions = scope === "department" ? (structure.data?.departments ?? []).filter((d) => !d.archived) : (structure.data?.teams ?? []).filter((t) => !t.archived);
 
   return (
     <li className="py-3">
@@ -101,6 +107,7 @@ export function PersonRow({
               <span key={a.id} className="inline-flex items-center gap-1">
                 <Badge variant="primary">
                   {a.roleName}
+                  {a.scopeName && <span className="font-normal"> · {a.scopeName}</span>}
                   {a.validTo && <span className="font-normal"> · until {formatDateTime(a.validTo, tz).split(",")[0]}</span>}
                 </Badge>
                 {confirm === a.id ? (
@@ -121,6 +128,7 @@ export function PersonRow({
             ) : (
               <Badge key={a.id} variant="primary">
                 {a.roleName}
+                {a.scopeName && <span className="font-normal"> · {a.scopeName}</span>}
               </Badge>
             ),
           )}
@@ -179,16 +187,27 @@ export function PersonRow({
             <label htmlFor={`scope-${m.id}`} className="text-label font-medium">
               Applies to
             </label>
-            <select id={`scope-${m.id}`} value={scope} onChange={(e) => setScope(e.target.value)} className="h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs">
+            <select id={`scope-${m.id}`} value={scope} onChange={(e) => { setScope(e.target.value); setScopeId(""); }} className="h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs">
               <option value="organization">The whole organization</option>
-              <option value="department" disabled>
-                One department (arrives with stage 2.6)
-              </option>
-              <option value="team" disabled>
-                One team (arrives with stage 2.6)
-              </option>
+              <option value="department">One department</option>
+              <option value="team">One team</option>
             </select>
           </div>
+          {scope !== "organization" && (
+            <div className="space-y-1.5">
+              <label htmlFor={`scope-id-${m.id}`} className="text-label font-medium">
+                {scope === "department" ? "Department" : "Team"}
+              </label>
+              <select id={`scope-id-${m.id}`} value={scopeId} onChange={(e) => setScopeId(e.target.value)} className="h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs">
+                <option value="">{structure.isPending ? "Loading…" : `Choose a ${scope}`}</option>
+                {scopeOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label htmlFor={`until-${m.id}`} className="text-label font-medium">
               Until (optional)

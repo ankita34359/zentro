@@ -179,7 +179,7 @@ describe("Users: assign a role, take it away, remove a person", () => {
       return extra(url, init);
     });
 
-  it("someone who joined with no role is marked 'No role' and can be given one (scope: the whole organization; department and team are disabled until 2.5)", async () => {
+  it("someone who joined with no role is marked 'No role' and can be given one (scope: the whole organization, or one department or team)", async () => {
     const f = usersApi((url, init) => (url === "/api/role-assignments" && init?.method === "POST" ? envelope({ id: "a2", membershipId: "m2", roleId: "r-manager", roleName: "Manager", scopeType: "organization", validFrom: "x", validTo: null, revokedAt: null, grantedBy: "Ankita", state: "active" }, 201) : undefined));
     renderApp("/settings/users");
     const people = await screen.findByRole("list", { name: "People" });
@@ -190,7 +190,7 @@ describe("Users: assign a role, take it away, remove a person", () => {
     await userEvent.click(within(piyush).getByRole("button", { name: "Assign a role to Piyush" }));
     const form = await screen.findByRole("form", { name: "Assign a role to Piyush" });
     const scope = within(form).getByLabelText("Applies to") as HTMLSelectElement;
-    expect([...scope.options].map((o) => [o.textContent, o.disabled])).toEqual([["The whole organization", false], ["One department (arrives with stage 2.6)", true], ["One team (arrives with stage 2.6)", true]]);
+    expect([...scope.options].map((o) => [o.textContent, o.disabled])).toEqual([["The whole organization", false], ["One department", false], ["One team", false]]);
     await userEvent.click(within(form).getByRole("button", { name: "Assign" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Choose a role to assign");
     await userEvent.selectOptions(within(form).getByLabelText("Role"), "Manager");
@@ -200,6 +200,28 @@ describe("Users: assign a role, take it away, remove a person", () => {
     const sent = bodyOf(calls(f, "/api/role-assignments", "POST")[0]!);
     expect(sent).toMatchObject({ membershipId: "m2", roleId: "r-manager", scopeType: "organization" });
     expect(new Date(sent.validTo).getFullYear()).toBe(2027);
+  });
+
+  it("a role can be given for one department: the department list comes from the structure, is required, and its id is sent", async () => {
+    const STRUCT = { departments: [{ id: "d-eng", parentId: null, name: "Engineering", description: "", archived: false, archivedAt: null }], teams: [], roleFamilies: [], designations: [], limits: { maxDepth: 8 }, partial: false };
+    const f = usersApi((url, init) => {
+      if (url === "/api/organization/structure") return envelope(STRUCT);
+      if (url === "/api/role-assignments" && init?.method === "POST") return envelope({ id: "a2", membershipId: "m2", roleId: "r-manager", roleName: "Manager", scopeType: "department", scopeId: "d-eng", scopeName: "Engineering", validFrom: "x", validTo: null, revokedAt: null, grantedBy: "Ankita", state: "active" }, 201);
+      return undefined;
+    });
+    renderApp("/settings/users");
+    const piyush = (await screen.findByText("Piyush")).closest("li")!;
+    await userEvent.click(within(piyush).getByRole("button", { name: "Assign a role to Piyush" }));
+    const form = await screen.findByRole("form", { name: "Assign a role to Piyush" });
+    await userEvent.selectOptions(within(form).getByLabelText("Role"), "Manager");
+    await userEvent.selectOptions(within(form).getByLabelText("Applies to"), "department");
+    await userEvent.click(within(form).getByRole("button", { name: "Assign" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Choose the department");
+    await waitFor(() => expect((within(form).getByLabelText("Department") as HTMLSelectElement).options.length).toBe(2));
+    await userEvent.selectOptions(within(form).getByLabelText("Department"), "Engineering");
+    await userEvent.click(within(form).getByRole("button", { name: "Assign" }));
+    await waitFor(() => expect(calls(f, "/api/role-assignments", "POST")).toHaveLength(1));
+    expect(bodyOf(calls(f, "/api/role-assignments", "POST")[0]!)).toMatchObject({ membershipId: "m2", roleId: "r-manager", scopeType: "department", scopeId: "d-eng" });
   });
 
   it("taking a role away asks first; the end date of a time-bound role is shown", async () => {

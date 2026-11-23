@@ -46,7 +46,7 @@ export interface MemberView {
   hasLogin: boolean;
   roles: { key: string; name: string }[];
   /** Active role assignments (to revoke one, or to show an end date). */
-  assignments: { id: string; roleId: string; roleName: string; validTo: string | null }[];
+  assignments: { id: string; roleId: string; roleName: string; validTo: string | null; scopeType?: string; scopeName?: string | null }[];
   isYou: boolean;
 }
 export interface InvitationPreview {
@@ -144,7 +144,7 @@ export interface AssignmentView {
   grantedBy: string | null;
   state: "active" | "revoked" | "ended" | "scheduled";
 }
-export const assignRole = (body: { membershipId: string; roleId: string; scopeType?: string; validFrom?: string; validTo?: string | null }) =>
+export const assignRole = (body: { membershipId: string; roleId: string; scopeType?: string; scopeId?: string; validFrom?: string; validTo?: string | null }) =>
   api<AssignmentView>("/api/role-assignments", { method: "POST", body });
 export const revokeAssignment = (id: string) => api<AssignmentView>(`/api/role-assignments/${id}/revoke`, { method: "POST" });
 export const removePerson = (membershipId: string) => api<{ removed: true }>(`/api/people/${membershipId}/remove`, { method: "POST" });

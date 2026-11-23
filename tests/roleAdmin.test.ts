@@ -186,7 +186,7 @@ describe("assigning roles (including to someone who joined with no role)", () =>
     expect(sched.body.data.state).toBe("scheduled");
   });
 
-  it("validates: dates in order and in the future, only the organization scope (department and team arrive in 2.5), no duplicates, unknown people and roles are 404", async () => {
+  it("validates: dates in order and in the future, a department or team needs its id and an unknown scope is refused, no duplicates, unknown people and roles are 404", async () => {
     const { owner, ids } = await org();
     const p = await addPerson(t.app, owner, "p@example.com", undefined, "P");
     const body = { membershipId: p.membershipId, roleId: ids.employee };
@@ -195,8 +195,8 @@ describe("assigning roles (including to someone who joined with no role)", () =>
     expect((await post(t.app, "/api/role-assignments", { ...body, validFrom: new Date(Date.now() + 5 * 86_400_000).toISOString(), validTo: new Date(Date.now() + 2 * 86_400_000).toISOString() }, owner)).status).toBe(400);
     const scope = await post(t.app, "/api/role-assignments", { ...body, scopeType: "department" }, owner);
     expect(scope.status).toBe(400);
-    expect(scope.body.error.code).toBe("scope_not_available");
-    expect((await post(t.app, "/api/role-assignments", { ...body, scopeType: "team" }, owner)).body.error.code).toBe("scope_not_available");
+    expect(scope.body.error.code).toBe("validation_failed");
+    expect((await post(t.app, "/api/role-assignments", { ...body, scopeType: "planet" }, owner)).body.error.code).toBe("scope_not_available");
     expect((await post(t.app, "/api/role-assignments", body, owner)).status).toBe(201);
     const dup = await post(t.app, "/api/role-assignments", body, owner);
     expect(dup.status).toBe(409);

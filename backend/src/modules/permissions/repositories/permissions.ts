@@ -150,14 +150,14 @@ export class RoleGrantsRepository {
   }
 
   /** An assignment of this role to this person that is not revoked and not over yet (so a second one would be a duplicate). */
-  openAssignment(membershipId: string, roleId: string, now: string): AssignmentRow | undefined {
-    return this.assignmentsFor(membershipId, now).find((a) => a.role_id === roleId && a.revoked_at === null && (a.valid_to === null || a.valid_to >= now));
+  openAssignment(membershipId: string, roleId: string, now: string, scopeType = "organization", scopeId: string | null = null): AssignmentRow | undefined {
+    return this.assignmentsFor(membershipId, now).find((a) => a.role_id === roleId && a.scope_type === scopeType && a.scope_id === scopeId && a.revoked_at === null && (a.valid_to === null || a.valid_to >= now));
   }
 
-  insertAssignment(a: { id: string; membershipId: string; roleId: string; validFrom: string; validTo: string | null; grantedByMembershipId: string | null; now: string }): void {
+  insertAssignment(a: { id: string; membershipId: string; roleId: string; scopeType?: "organization" | "department" | "team"; scopeId?: string | null; validFrom: string; validTo: string | null; grantedByMembershipId: string | null; now: string }): void {
     this.tdb.run(
-      "INSERT INTO user_role_assignments (id, organization_id, membership_id, role_id, scope_type, valid_from, valid_to, granted_by_membership_id, created_at) VALUES (@id, @organization_id, @membershipId, @roleId, 'organization', @validFrom, @validTo, @grantedByMembershipId, @now)",
-      a,
+      "INSERT INTO user_role_assignments (id, organization_id, membership_id, role_id, scope_type, scope_id, valid_from, valid_to, granted_by_membership_id, created_at) VALUES (@id, @organization_id, @membershipId, @roleId, @scopeType, @scopeId, @validFrom, @validTo, @grantedByMembershipId, @now)",
+      { ...a, scopeType: a.scopeType ?? "organization", scopeId: a.scopeId ?? null },
     );
   }
 

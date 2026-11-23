@@ -230,6 +230,8 @@ export class StructureService {
     if (subs + teams > 0) {
       throw new HttpError(409, "has_active_children", `This department still has ${subs} active sub-${subs === 1 ? "department" : "departments"} and ${teams} active ${teams === 1 ? "team" : "teams"}. Move or archive them first.`, { subDepartments: subs, teams });
     }
+    const inside = this.o.store.people(this.o.store.tenant(ctx)).openDeptMemberCount(id);
+    if (inside > 0) throw new HttpError(409, "has_active_members", `${inside} ${inside === 1 ? "person is" : "people are"} still in this department. Move or end their membership first.`, { members: inside });
     this.o.store.transaction(() => {
       r.setArchived("department", id, this.now(), this.now());
       this.audit(ctx, "archive", "department", id, `Archived the department "${cur.name}"`);
@@ -338,6 +340,8 @@ export class StructureService {
     if (cur.archived_at) throw new HttpError(409, "already_archived", "This team is already archived.");
     const subs = r.teams().filter((t) => t.parent_team_id === id && !t.archived_at).length;
     if (subs > 0) throw new HttpError(409, "has_active_children", `This team still has ${subs} active ${subs === 1 ? "sub-team" : "sub-teams"}. Move or archive ${subs === 1 ? "it" : "them"} first.`, { subTeams: subs });
+    const inside = this.o.store.people(this.o.store.tenant(ctx)).openTeamMemberCount(id);
+    if (inside > 0) throw new HttpError(409, "has_active_members", `${inside} ${inside === 1 ? "person is" : "people are"} still in this team. Move or end their membership first.`, { members: inside });
     this.o.store.transaction(() => {
       r.setArchived("team", id, this.now(), this.now());
       this.audit(ctx, "archive", "team", id, `Archived the team "${cur.name}"`);
