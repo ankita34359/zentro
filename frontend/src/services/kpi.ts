@@ -47,3 +47,35 @@ export const LEVEL_LABEL: Record<string, string> = { excellent: "Excellent", war
 export const COMPARATOR_LABEL: Record<string, string> = { lt: "is below", lte: "is at or below", gt: "is above", gte: "is at or above" };
 export const SUBJECT_LABEL: Record<string, string> = { person: "Person", team: "Team", department: "Department", designation: "Designation", role_family: "Role family" };
 export const thresholdText = (t: Pick<ThresholdView, "comparator" | "basis" | "value">, unit: string | null): string => `${COMPARATOR_LABEL[t.comparator]} ${t.value}${t.basis === "percent_of_target" ? "% of the target" : unit ? ` ${unit}` : ""}`;
+
+// ---------- measurements (stage 3.4) ----------
+export type SubjectKind = "person" | "team" | "department" | "organization";
+export type SeriesStatus = "no_data" | "ok" | "excellent" | "warning" | "critical";
+export interface SubjectView { kind: SubjectKind; id: string | null; name: string }
+export interface MeasurementRowView { id: string; value: number; valueStatus: string; recordedAt: string; recordedBy: { id: string; name: string } | null; source: string; note: string | null; current: boolean; supersedes: string | null }
+export interface PeriodView { start: string; end: string; label: string; state: "recorded" | "missing" | "open" | "not_expected"; value: number | null; valueStatus: string | null; attainmentPct: number | null; level: "excellent" | "warning" | "critical" | null; corrections: number; rows: MeasurementRowView[] }
+export interface HistoryView {
+  kpi: { id: string; name: string; unit: string | null; frequency: string; direction: string; aggregation: string };
+  subject: SubjectView;
+  target: { targetValue: number; targetMax: number | null; weight: number } | null;
+  lines: { level: string; comparator: string; value: number }[];
+  periods: PeriodView[];
+  expected: number;
+  present: number;
+  missingCount: number;
+  coveragePct: number | null;
+  status: SeriesStatus;
+  can: { record: boolean };
+}
+export interface SubjectEntry { subject: SubjectView; status: SeriesStatus; missing: number; latest: string | null; canRecord: boolean }
+export interface KpiOverview {
+  totals: { series: number; byStatus: Record<string, number>; missingPeriods: number; kpis: number };
+  kpis: { id: string; name: string; category: string; frequency: string; series: number; byStatus: Record<string, number>; missingPeriods: number; coveragePct: number | null }[];
+  attention: { kpiId: string; kpiName: string; subject: SubjectView; status: SeriesStatus; label: string; value: number | null; missing: number }[];
+}
+export const subjectParam = (s: { kind: SubjectKind; id: string | null }): string => (s.kind === "organization" ? "organization" : `${s.kind}:${s.id}`);
+export const getHistory = (id: string, subject: string) => api<HistoryView>(`/api/kpis/${id}/history?subject=${encodeURIComponent(subject)}`);
+export const getSubjects = (id: string) => api<SubjectEntry[]>(`/api/kpis/${id}/subjects`);
+export const getKpiOverview = () => api<KpiOverview>("/api/kpis/overview");
+export const recordMeasurement = (id: string, b: { subject: { type: SubjectKind; id?: string }; periodStart: string; value: number; valueStatus?: string; note?: string; supersedes?: string }) => api<HistoryView>(`/api/kpis/${id}/measurements`, { method: "POST", body: b });
+export const STATUS_LABEL: Record<string, string> = { no_data: "No data", ok: "OK", excellent: "Excellent", warning: "Warning", critical: "Critical" };

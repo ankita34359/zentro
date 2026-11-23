@@ -43,6 +43,26 @@ const ASG_COLS = "id, kpi_id, membership_id, team_id, department_id, designation
 export interface ThresholdRow { id: string; kpi_id: string; level: string; comparator: string; basis: string; value: number; notify: number }
 const THR_COLS = "id, kpi_id, level, comparator, basis, value, notify";
 
+export interface MeasurementRow {
+  id: string;
+  kpi_id: string;
+  kpi_assignment_id: string | null;
+  subject_membership_id: string | null;
+  subject_team_id: string | null;
+  subject_department_id: string | null;
+  period_start: string;
+  period_end: string;
+  value: number;
+  value_status: string;
+  recorded_at: string;
+  recorded_by_membership_id: string | null;
+  source: string;
+  source_ref: string | null;
+  note: string | null;
+  supersedes_measurement_id: string | null;
+}
+const MEAS_COLS = "id, kpi_id, kpi_assignment_id, subject_membership_id, subject_team_id, subject_department_id, period_start, period_end, value, value_status, recorded_at, recorded_by_membership_id, source, source_ref, note, supersedes_measurement_id";
+
 /** KPI definitions, assignments and thresholds for ONE organization (the tenant handle supplies the organization id). */
 export class KpiRepository {
   constructor(private readonly tdb: TenantDb) {}
@@ -96,5 +116,20 @@ export class KpiRepository {
   }
   insertThreshold(t: { id: string; kpiId: string; level: string; comparator: string; basis: string; value: number; notify: number; now: string }): void {
     this.tdb.run("INSERT INTO kpi_thresholds (id, organization_id, kpi_id, level, comparator, basis, value, notify, created_at) VALUES (@id, @organization_id, @kpiId, @level, @comparator, @basis, @value, @notify, @now)", t);
+  }
+
+  // ----- measurements (append only) -----
+
+  measurements(kpiId?: string): MeasurementRow[] {
+    return this.tdb.all<MeasurementRow>(`SELECT ${MEAS_COLS} FROM kpi_measurements WHERE organization_id = @organization_id AND (@kpiId IS NULL OR kpi_id = @kpiId) ORDER BY period_start, recorded_at, rowid`, { kpiId: kpiId ?? null });
+  }
+  measurement(id: string): MeasurementRow | undefined {
+    return this.tdb.get<MeasurementRow>(`SELECT ${MEAS_COLS} FROM kpi_measurements WHERE organization_id = @organization_id AND id = @id`, { id });
+  }
+  insertMeasurement(m: { id: string; kpiId: string; assignmentId: string | null; membershipId: string | null; teamId: string | null; departmentId: string | null; periodStart: string; periodEnd: string; value: number; valueStatus: string; by: string | null; source: string; note: string | null; supersedesId: string | null; now: string }): void {
+    this.tdb.run(
+      "INSERT INTO kpi_measurements (id, organization_id, kpi_id, kpi_assignment_id, subject_membership_id, subject_team_id, subject_department_id, period_start, period_end, value, value_status, recorded_at, recorded_by_membership_id, source, note, supersedes_measurement_id) VALUES (@id, @organization_id, @kpiId, @assignmentId, @membershipId, @teamId, @departmentId, @periodStart, @periodEnd, @value, @valueStatus, @now, @by, @source, @note, @supersedesId)",
+      m,
+    );
   }
 }

@@ -379,7 +379,7 @@ describe("notifications (the bell)", () => {
   it("preferences switch a kind off for that person only, and an unknown kind is refused", async () => {
     const s = await setup();
     const prefs = (await get(t.app, "/api/preferences", s.emp.cookie)).body.data.types as { type: string; inApp: boolean }[];
-    expect(prefs.map((p) => p.type)).toEqual(["task.assigned", "task.blocked", "task.completed", "task.comment", "task.due_soon", "task.overdue", "objective.at_risk", "task.reviewed"]);
+    expect(prefs.map((p) => p.type)).toEqual(["task.assigned", "task.blocked", "task.completed", "task.comment", "task.due_soon", "task.overdue", "objective.at_risk", "kpi.threshold", "kpi.missing", "task.reviewed"]);
     expect(prefs.every((p) => p.inApp)).toBe(true);
     const off = await send(t.app, "put", "/api/preferences", { types: [{ type: "task.assigned", inApp: false }] }, s.emp.cookie);
     expect(off.body.data.types.find((p: { type: string }) => p.type === "task.assigned").inApp).toBe(false);

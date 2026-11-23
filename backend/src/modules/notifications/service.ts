@@ -14,6 +14,8 @@ export const NOTIFICATION_TYPES: Readonly<Record<string, { label: string; descri
   "task.due_soon": { label: "A task is due soon", description: "A reminder the day before a task is due." },
   "task.overdue": { label: "A task is overdue", description: "When a task you work on or created is past its due date." },
   "objective.at_risk": { label: "An objective I own is at risk or delayed", description: "When an objective you own or created falls behind its pace." },
+  "kpi.threshold": { label: "A KPI I have reaches a warning or critical level", description: "When the latest value of a KPI you, your team or your people have crosses a threshold." },
+  "kpi.missing": { label: "A KPI value is missing", description: "When a measurement period has ended and no value was recorded." },
   "task.reviewed": { label: "My finished work is reviewed", description: "When a reviewer rates the outcome of a task you completed." },
 };
 

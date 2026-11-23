@@ -16,7 +16,7 @@ const call = (route: RouteDef, cookie: string | undefined, params: Record<string
   const url = route.path.replace(/:(\w+)/g, (_m, name: string) => params[name] ?? randomUUID());
   const r = request(t.app)[route.method](url).set("Origin", ORIGIN);
   if (cookie) r.set("Cookie", cookie);
-  return route.method === "get" ? r : r.send(body);
+  return route.method === "get" ? r.query(body) : r.send(body);
 };
 
 /** The grants a template gives, as the resolver sees them for an organization-wide assignment. */
@@ -128,6 +128,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const objectiveAssignmentA = (t.db.prepare("SELECT id FROM objective_assignments WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const kpiA = await mk("/api/kpis", { name: "Alpha secret KPI", defaultTarget: 10 });
     expect((await post(t.app, `/api/kpis/${kpiA}/assignments`, { teamId: teamA }, ownerA)).status).toBe(201);
+    expect((await post(t.app, `/api/kpis/${kpiA}/measurements`, { subject: { type: "person", id: personA.membershipId }, periodStart: "2026-01-01", value: 7 }, ownerA)).status).toBe(201);
     const kpiAssignmentA = (t.db.prepare("SELECT id FROM kpi_assignments WHERE kpi_id = ?").get(kpiA) as { id: string }).id;
     const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
@@ -198,6 +199,9 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/kpis/:id/assignments": { params: { id: kpiA }, body: { assigneeId: personA.membershipId, targetValue: 5 } },
       "/api/kpis/:id/assignments/:aid": { params: { id: kpiA, aid: kpiAssignmentA }, body: { weight: 2 } },
       "/api/kpis/:id/thresholds": { params: { id: kpiA }, body: { thresholds: [] } },
+      "/api/kpis/:id/subjects": { params: { id: kpiA } },
+      "/api/kpis/:id/history": { params: { id: kpiA }, body: { subject: `person:${personA.membershipId}` } },
+      "/api/kpis/:id/measurements": { params: { id: kpiA }, body: { subject: { type: "person", id: personA.membershipId }, periodStart: "2026-01-01", value: 5 } },
       "/api/notifications/:id/read": { params: { id: notificationA } },
       "/api/demo/view-as/:membershipId": { params: { membershipId: personA.membershipId } },
     };
@@ -233,6 +237,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, key, name, description, archived_at FROM kpis ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, team_id, membership_id, target_value, weight, effective_to FROM kpi_assignments ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, level, value FROM kpi_thresholds ORDER BY id").all(),
+      t.db.prepare("SELECT id, kpi_id, subject_membership_id, period_start, value, supersedes_measurement_id FROM kpi_measurements ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM automation_events").get(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),

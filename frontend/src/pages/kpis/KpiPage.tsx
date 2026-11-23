@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Plus } from "lucide-react";
+import { BarChart3, Gauge, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
+import { cn } from "@/lib/cn";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { FormAlert, FormField } from "@/components/common/FormField";
@@ -15,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { problemText } from "@/lib/authForm";
 import { AGGREGATION_LABEL, CATEGORY_LABEL, createKpi, DIRECTION_LABEL, FREQUENCY_LABEL, listKpis } from "@/services/kpi";
 import { KpiDrawer } from "./KpiDrawer";
+import { KpiOverviewView } from "./KpiOverviewView";
 import { CategoryBadge, kpiSentence } from "./kpiUi";
 
 const selectCls = "h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs";
@@ -33,6 +35,12 @@ export default function KpiPage() {
   const [mine, setMine] = useState(false);
   const filters = { category: category || undefined, frequency: frequency || undefined, search: search.trim() || undefined, assignedToMe: mine };
   const q = useQuery({ queryKey: ["kpis", filters], queryFn: () => listKpis(filters), retry: false, placeholderData: (p) => p });
+  const view = params.get("view") === "overview" ? "overview" : "list";
+  const tab = (v: "list" | "overview", label: string, Icon: typeof BarChart3) => (
+    <Link to={{ search: (() => { const n = new URLSearchParams(params); if (v === "list") n.delete("view"); else n.set("view", v); return n.toString() ? `?${n.toString()}` : ""; })() }} role="tab" aria-selected={view === v} className={cn("-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-label font-medium", view === v ? "border-primary text-primary-ink" : "border-transparent text-muted-foreground hover:text-foreground")}>
+      <Icon aria-hidden="true" className="size-4" /> {label}
+    </Link>
+  );
   const openId = params.get("kpi");
   const open = (id: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("kpi", id); return n; });
   const close = () => setParams((p) => { const n = new URLSearchParams(p); n.delete("kpi"); return n; }, { replace: true });
@@ -47,7 +55,12 @@ export default function KpiPage() {
         actions={canConfigure ? <Button size="sm" onClick={() => setAdding(true)}><Plus aria-hidden="true" /> New KPI</Button> : undefined}
       />
       {adding && canConfigure && <NewKpiForm onDone={() => setAdding(false)} onCreated={(id) => { setAdding(false); open(id); }} />}
-      <section aria-label="KPI list" className="space-y-4">
+      <div role="tablist" aria-label="KPI views" className="mb-5 flex overflow-x-auto border-b">
+        {tab("list", "KPIs", BarChart3)}
+        {tab("overview", "Overview", Gauge)}
+      </div>
+      {view === "overview" && <KpiOverviewView onOpen={open} />}
+      {view === "list" && <section aria-label="KPI list" className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <input aria-label="Search KPIs" type="search" placeholder="Search by name" value={search} onChange={(e) => setSearch(e.target.value)} className={selectCls} />
           <select aria-label="Category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
@@ -88,7 +101,7 @@ export default function KpiPage() {
             ))}
           </ul>
         )}
-      </section>
+      </section>}
       <KpiDrawer id={openId} onClose={close} />
     </>
   );

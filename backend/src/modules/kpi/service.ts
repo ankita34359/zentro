@@ -172,11 +172,11 @@ export class KpiService {
     return {
       id: k.id, key: k.key, name: k.name, description: k.description, category: k.category, unit: k.unit, valueType: k.value_type, direction: k.direction, frequency: k.frequency, aggregation: k.aggregation,
       defaultTarget: k.default_target, defaultTargetMax: k.default_target_max, archived: k.archived_at !== null, isDemo: k.is_demo === 1,
-      assignmentCount: visibleAssignments.filter((a) => a.kpi_id === k.id && (a.effective_to === null || a.effective_to >= w.today)).length,
+      assignmentCount: visibleAssignments.filter((a) => a.kpi_id === k.id && (a.effective_to === null || a.effective_to > w.today)).length,
     };
   }
   private assignmentView(w: ReturnType<KpiService["world"]>, a: KpiAssignmentRow): AssignmentView {
-    const active = a.effective_from <= w.today && (a.effective_to === null || a.effective_to >= w.today);
+    const active = a.effective_from <= w.today && (a.effective_to === null || a.effective_to > w.today);
     return { id: a.id, subject: this.subjectOf(w, a), targetValue: a.target_value, targetMax: a.target_max, weight: a.weight, effectiveFrom: a.effective_from, effectiveTo: a.effective_to, active, appliesTo: active ? this.holders(w, a).length : 0 };
   }
 
@@ -278,7 +278,7 @@ export class KpiService {
     const k = w.kpi.kpi(id);
     if (!k) throw notFound();
     if (k.archived_at) throw new HttpError(409, "already_archived", "This KPI is already archived.");
-    const open = w.kpi.assignments().filter((a) => a.kpi_id === id && (a.effective_to === null || a.effective_to >= w.today)).length;
+    const open = w.kpi.assignments().filter((a) => a.kpi_id === id && (a.effective_to === null || a.effective_to > w.today)).length;
     if (open > 0) throw new HttpError(409, "has_active_assignments", `${open} ${open === 1 ? "assignment is" : "assignments are"} still active. End ${open === 1 ? "it" : "them"} first.`, { assignments: open });
     this.o.store.transaction(() => {
       w.kpi.setArchived(id, this.now(), this.now());
@@ -354,10 +354,10 @@ export class KpiService {
     const from = input.effectiveFrom ?? w.today;
     if (!isDay(from)) throw new HttpError(400, "invalid_date", "Dates must be real dates written YYYY-MM-DD.");
     const to = input.effectiveTo ?? null;
-    if (to !== null && (!isDay(to) || to < from)) throw new HttpError(400, "invalid_date", "The end date must be a real date, not before the start.");
+    if (to !== null && (!isDay(to) || to < from)) throw new HttpError(400, "invalid_date", "The end date must be a real date, not before the start. It is the first day the assignment no longer applies.");
     // the same subject cannot hold the same KPI twice at the same time
     const sameSubject = (a: KpiAssignmentRow): boolean => a.kpi_id === id && a.membership_id === subject.membershipId && a.team_id === subject.teamId && a.department_id === subject.departmentId && a.designation_id === subject.designationId && a.role_family_id === subject.roleFamilyId;
-    const overlap = w.kpi.assignments().some((a) => sameSubject(a) && a.effective_from <= (to ?? "9999-12-31") && (a.effective_to ?? "9999-12-31") >= from);
+    const overlap = w.kpi.assignments().some((a) => sameSubject(a) && a.effective_from < (to ?? "9999-12-31") && (a.effective_to ?? "9999-12-31") > from);
     if (overlap) throw new HttpError(409, "already_assigned", `${label} already has this KPI for those dates. End the earlier assignment, or change its target.`);
     const aid = newId();
     this.o.store.transaction(() => {
@@ -384,8 +384,8 @@ export class KpiService {
     };
     if (next.weight <= 0 || next.weight > 100) throw new HttpError(400, "invalid_number", "The weight is more than 0 and at most 100.");
     if (k.direction === "target_range" && (next.targetMax === null || next.targetMax <= next.targetValue)) throw new HttpError(400, "invalid_range", "The upper end of the range must be above the lower end.");
-    if (next.effectiveTo !== null && (!isDay(next.effectiveTo) || next.effectiveTo < a.effective_from)) throw new HttpError(400, "invalid_date", "The end date must be a real date, not before the start.");
-    if (a.effective_to !== null && a.effective_to < w.today) throw new HttpError(409, "already_ended", "That assignment has already ended.");
+    if (next.effectiveTo !== null && (!isDay(next.effectiveTo) || next.effectiveTo < a.effective_from)) throw new HttpError(400, "invalid_date", "The end date must be a real date, not before the start. It is the first day the assignment no longer applies.");
+    if (a.effective_to !== null && a.effective_to <= w.today) throw new HttpError(409, "already_ended", "That assignment has already ended.");
     const label = this.subjectOf(w, a).name;
     this.o.store.transaction(() => {
       w.kpi.updateAssignment({ id: aid, ...next });

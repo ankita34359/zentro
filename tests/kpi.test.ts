@@ -70,12 +70,15 @@ describe("KPI definitions (stage 3.3)", () => {
     const aid = a.body.data.assignments[0].id as string;
     const ended = await send("delete", `/api/kpis/${k}/assignments/${aid}`, undefined, owner);
     expect(ended.status).toBe(200);
-    expect(ended.body.data.assignments[0]).toMatchObject({ active: true, effectiveTo: expect.any(String) }); // ends today, so it still counts today
-    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpi_assignments").n).toBe(1);
-    expect(code(await send("patch", `/api/kpis/${k}/assignments/${aid}`, { weight: 3 }, owner))).not.toBe("permission_denied");
-    expect((await post(t.app, `/api/kpis/${k}/archive`, undefined, owner)).status).toBe(409); // still active today
+    expect(ended.body.data.assignments[0]).toMatchObject({ active: false, appliesTo: 0, effectiveTo: expect.any(String) }); // the end date is the first day it no longer applies: today
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM kpi_assignments").n).toBe(1); // kept, so past values stay explainable
+    expect(code(await send("delete", `/api/kpis/${k}/assignments/${aid}`, undefined, owner))).toBe("already_ended");
+    expect(code(await send("patch", `/api/kpis/${k}/assignments/${aid}`, { weight: 3 }, owner))).toBe("already_ended");
+    // with nothing active any more the KPI can be assigned again, and archived
+    expect((await post(t.app, `/api/kpis/${k}/assignments`, { roleFamilyId: family }, owner)).status).toBe(201);
+    expect(code(await post(t.app, `/api/kpis/${k}/archive`, undefined, owner))).toBe("has_active_assignments");
     const actions = (t.db.prepare("SELECT action FROM audit_logs WHERE action LIKE 'kpi.%' ORDER BY rowid").all() as { action: string }[]).map((r) => r.action);
-    expect(actions).toEqual(["kpi.create", "kpi.assign", "kpi.thresholds", "kpi.assignment_end", "kpi.assignment_update"]);
+    expect(actions).toEqual(["kpi.create", "kpi.assign", "kpi.thresholds", "kpi.assignment_end", "kpi.assign"]);
   });
 
   it("a target range needs both ends on the assignment; a target to reach must be more than zero; weights and dates are checked", async () => {
