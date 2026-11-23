@@ -63,6 +63,7 @@ describe("upgrading a batch A database (migration 0008) to stages 4.1, 4.4 and 4
       expect(hasTable(db, table), table).toBe(true);
       expect(count(db, `SELECT COUNT(*) n FROM ${table}`), table).toBe(0);
     }
+    migrate(db, migrationsDir); // the server applies every migration at start-up before it serves anything
     const { app, tick } = appOn(db);
     const login = await post(app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD });
     expect(login.status).toBe(200);
@@ -89,6 +90,7 @@ describe("upgrading a batch A database (migration 0008) to stages 4.1, 4.4 and 4
     expect((copy.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check).toBe("ok");
     expect((copy.prepare("SELECT COUNT(*) n FROM schema_migrations").get() as { n: number }).n).toBe(8);
     copy.close();
+    migrate(db, migrationsDir);
     const { app } = appOn(db);
     const cookie = cookieOf(await post(app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD }));
     await post(app, "/api/tasks", { title: "Made after the upgrade" }, cookie);

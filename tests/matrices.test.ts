@@ -120,6 +120,10 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const dirA = await mk("/api/employees", { name: "Dana Alpha", teamId: teamA, managerId: personA.membershipId });
     const taskA = await mk("/api/tasks", { title: "Alpha secret task", assigneeIds: [personA.membershipId] });
     const commentA = await mk(`/api/tasks/${taskA}/comments`, { body: "Alpha secret comment" });
+    const taskA2 = await mk("/api/tasks", { title: "Alpha secret second task", assigneeIds: [personA.membershipId] });
+    expect((await post(t.app, `/api/tasks/${taskA2}/dependencies`, { dependsOnId: taskA }, ownerA)).status).toBe(201);
+    const objectiveA = await mk("/api/objectives", { level: "team", teamId: teamA, title: "Alpha secret objective", startDate: "2026-01-01", endDate: "2026-12-31", keyResults: [{ title: "Alpha secret key result", targetValue: 100 }] });
+    const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
     const notificationA = (t.db.prepare("SELECT id FROM notifications WHERE recipient_membership_id = ?").get(personA.membershipId) as { id: string }).id;
     const rowOf = (table: string, col = "membership_id") => (t.db.prepare(`SELECT id FROM ${table} WHERE ${col} = ?`).get(dirA) as { id: string }).id;
@@ -168,6 +172,17 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/tasks/:id/updates": { params: { id: taskA }, body: { type: "time_log", minutesLogged: 5 } },
       "/api/tasks/:id/comments": { params: { id: taskA }, body: { body: "Hacked by B" } },
       "/api/tasks/:id/comments/:cid": { params: { id: taskA, cid: commentA }, body: { body: "Hacked by B" } },
+      "/api/tasks/:id/dependencies": { params: { id: taskA2 }, body: { dependsOnId: taskA } },
+      "/api/tasks/:id/dependencies/:depId": { params: { id: taskA2, depId: taskA } },
+      "/api/tasks/:id/outcome": { params: { id: taskA }, body: { summary: "Hacked by B" } },
+      "/api/tasks/:id/review": { params: { id: taskA }, body: { quality: 1 } },
+      "/api/objectives": { params: {}, body: { level: "team", teamId: teamA, title: "Intruder", startDate: "2026-01-01", endDate: "2026-12-31" } },
+      "/api/objectives/:id": { params: { id: objectiveA }, body: { title: "Hacked by B" } },
+      "/api/objectives/:id/publish": { params: { id: objectiveA }, body: { published: true } },
+      "/api/objectives/:id/history": { params: { id: objectiveA } },
+      "/api/objectives/:id/key-results": { params: { id: objectiveA }, body: { title: "Hacked by B", targetValue: 10 } },
+      "/api/key-results/:id": { params: { id: keyResultA }, body: { title: "Hacked by B" } },
+      "/api/key-results/:id/progress": { params: { id: keyResultA }, body: { value: 5 } },
       "/api/notifications/:id/read": { params: { id: notificationA } },
       "/api/demo/view-as/:membershipId": { params: { membershipId: personA.membershipId } },
     };
@@ -192,6 +207,11 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, task_id, update_type, to_status, body FROM task_updates ORDER BY id").all(),
       t.db.prepare("SELECT id, task_id, body, edited_at, deleted_at FROM task_comments ORDER BY id").all(),
       t.db.prepare("SELECT id, recipient_membership_id, read_at, dismissed_at FROM notifications ORDER BY id").all(),
+      t.db.prepare("SELECT id, objective_id, key_result_id, outcome_summary, outcome_quality FROM tasks ORDER BY id").all(),
+      t.db.prepare("SELECT task_id, depends_on_task_id FROM task_dependencies ORDER BY task_id").all(),
+      t.db.prepare("SELECT id, title, lifecycle, visibility, archived_at, level FROM objectives ORDER BY id").all(),
+      t.db.prepare("SELECT id, objective_id, title, target_value, current_value FROM key_results ORDER BY id").all(),
+      t.db.prepare("SELECT id, key_result_id, value, source FROM objective_progress_history ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM automation_events").get(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
@@ -214,7 +234,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", objectiveA, keyResultA, taskA2, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

@@ -43,7 +43,7 @@ describe("creating tasks", () => {
     const r = await post(t.app, "/api/tasks", { title: "  Write   the report ", description: "Quarterly", priority: "high", importanceWeight: 4, dueAt: dayOffset(3), estimatedMinutes: 120 }, s.emp.cookie);
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body.data).toMatchObject({ title: "Write the report", status: "not_started", priority: "high", progressPct: 0, dueAt: dayOffset(3), overdue: false, estimatedMinutes: 120, assignees: [{ kind: "person", id: s.emp.membershipId, role: "assignee" }], createdBy: { id: s.emp.membershipId } });
-    expect(r.body.data.can).toEqual({ edit: true, editEstimate: true, update: true, assign: false, comment: true });
+    expect(r.body.data.can).toEqual({ edit: true, editEstimate: true, update: true, assign: false, comment: true, link: true, recordOutcome: false, review: false });
     expect((await get(t.app, "/api/tasks", s.emp.cookie)).body.data.total).toBe(1);
     expect((await audit(s.owner)).find((e) => e.action === "task.create")!.summary).toBe('Created the task "Write the report" for Emma Employee');
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type = 'task.created'").n).toBe(1);
@@ -379,7 +379,7 @@ describe("notifications (the bell)", () => {
   it("preferences switch a kind off for that person only, and an unknown kind is refused", async () => {
     const s = await setup();
     const prefs = (await get(t.app, "/api/preferences", s.emp.cookie)).body.data.types as { type: string; inApp: boolean }[];
-    expect(prefs.map((p) => p.type)).toEqual(["task.assigned", "task.blocked", "task.completed", "task.comment", "task.due_soon", "task.overdue"]);
+    expect(prefs.map((p) => p.type)).toEqual(["task.assigned", "task.blocked", "task.completed", "task.comment", "task.due_soon", "task.overdue", "task.reviewed"]);
     expect(prefs.every((p) => p.inApp)).toBe(true);
     const off = await send(t.app, "put", "/api/preferences", { types: [{ type: "task.assigned", inApp: false }] }, s.emp.cookie);
     expect(off.body.data.types.find((p: { type: string }) => p.type === "task.assigned").inApp).toBe(false);

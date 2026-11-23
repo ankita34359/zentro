@@ -37,6 +37,8 @@ import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { TaskService } from "./modules/tasks/service.js";
 import { OverviewService } from "./modules/overview/service.js";
 import { registerOverviewRoutes } from "./modules/overview/routes.js";
+import { OkrService } from "./modules/okr/service.js";
+import { registerOkrRoutes } from "./modules/okr/routes.js";
 import { registerTaskRoutes } from "./modules/tasks/routes.js";
 import { registerPeopleRoutes } from "./modules/people/routes.js";
 import { registerRoleRoutes } from "./modules/permissions/routes.js";
@@ -87,8 +89,9 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const chartService = new ChartService({ store, auth });
   const events = new EventWriter(store);
   const notifications = new NotificationService(store, auth);
+  const okrService = new OkrService({ store, auth, audit });
   const demoService = new DemoService({ store, auth, audit });
-  const taskService = new TaskService({ store, auth, audit, events, notifications });
+  const taskService = new TaskService({ store, auth, audit, events, notifications, okr: okrService });
   const admin = new AdminService({ store, auth, permissions, audit });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
   const delivery = opts.delivery ?? noDelivery;
@@ -103,6 +106,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerChartRoutes(registry, { permissions, chart: chartService });
   registerTaskRoutes(registry, { permissions, tasks: taskService });
   registerNotificationRoutes(registry, { notifications });
+  registerOkrRoutes(registry, { permissions, okr: okrService });
   registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
