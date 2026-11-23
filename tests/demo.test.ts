@@ -520,3 +520,55 @@ describe("Archived people and demo data (bug fix)", () => {
     expect((again.body.error.details.blockers as { kind: string; message: string }[]).find((x) => x.kind === "designations")!.message).toBe("1 of your real people holds a demo designation: Testing. Give them another designation first.");
   });
 });
+
+describe("Demo scores (stage 5.2)", () => {
+  it("the demo company arrives with two periods and a scorecard for every demo person, all flagged as demo, with real explanations", async () => {
+    const { owner } = await setup();
+    const load = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(load.status, JSON.stringify(load.body)).toBe(201);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; isDemo: boolean; scorecards: number }[];
+    expect(periods.filter((p) => p.isDemo)).toHaveLength(2);
+    const cur = periods.find((p) => p.isDemo && p.scorecards > 0)!;
+    const cards = (await get(t.app, `/api/performance/scorecards?periodId=${cur.id}`, owner)).body.data as { isDemo: boolean; total: number | null; status: string }[];
+    expect(cards.length).toBeGreaterThanOrEqual(50);
+    expect(cards.every((c) => c.isDemo)).toBe(true);
+    expect(cards.filter((c) => c.total !== null).length).toBeGreaterThan(20); // most have data
+    expect(new Set(cards.map((c) => c.status)).size).toBeGreaterThan(1); // and the data gaps show as provisional or insufficient, not as zeros
+    expect(cards.some((c) => c.status === "insufficient" && c.total === null)).toBe(true);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM performance_scores s WHERE NOT EXISTS (SELECT 1 FROM performance_score_components c WHERE c.score_id = s.id)").n).toBe(0);
+  });
+
+  it("view as a demo employee: their own scorecard opens with its components; a teammate's does not", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const ps = await personas(owner);
+    const seller = ps.find((p) => p.designation === "Account Executive")!;
+    const other = ps.find((p) => p.designation === "Account Executive" && p.id !== seller.id)!;
+    const as = await asCookie(owner, seller.id);
+    const periods = (await get(t.app, "/api/performance/periods", as)).body.data as { id: string; isDemo: boolean; scorecards: number }[];
+    const cur = periods.find((p) => p.scorecards > 0)!;
+    const mine = await get(t.app, `/api/performance/scorecards/for?periodId=${cur.id}`, as);
+    expect(mine.status, JSON.stringify(mine.body)).toBe(200);
+    expect(mine.body.data.latest.components.length).toBeGreaterThan(0);
+    expect((await get(t.app, `/api/performance/scorecards/for?periodId=${cur.id}&subjectId=${other.id}`, as)).status).toBe(404);
+  });
+
+  it("removal takes every demo period, scorecard, run and component, even a real person's scorecard inside a demo period, and works with an archived real person", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const demoDesignation = ((await get(t.app, "/api/organization/structure", owner)).body.data.designations as { id: string; name: string; isDemo?: boolean }[]).find((d) => d.isDemo && d.name === "Account Executive")!;
+    const manager = (await personas(owner)).find((p) => p.designation === "Sales Manager")!;
+    const id = await created("/api/employees", { name: "Testing", designationId: demoDesignation.id, managerId: manager.id }, owner);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; isDemo: boolean }[];
+    expect((await post(t.app, "/api/performance/scorecards/recalculate", { periodId: periods.find((p) => p.isDemo)!.id, subjectId: id }, owner)).status).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM performance_scorecards WHERE subject_membership_id = ?", id).n).toBe(1);
+    const line = (await get(t.app, `/api/employees/${id}/history`, owner)).body.data.managers[0] as { id: string };
+    expect((await request(t.app).patch(`/api/hierarchy/reporting/${line.id}`).set("Origin", ORIGIN).set("Cookie", owner).send({})).status).toBe(200);
+    expect((await post(t.app, `/api/employees/${id}/archive`, undefined, owner)).status).toBe(200);
+    const removed = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    for (const table of ["performance_periods", "performance_scorecards", "performance_scores", "performance_score_components"]) expect(one<{ n: number }>(`SELECT COUNT(*) n FROM ${table}`).n, table).toBe(0);
+    expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
+    expect(one<{ archived_at: string | null }>("SELECT archived_at FROM organization_memberships WHERE id = ?", id).archived_at).not.toBeNull(); // the real person stays
+  });
+});

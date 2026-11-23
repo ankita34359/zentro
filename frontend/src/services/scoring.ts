@@ -45,3 +45,31 @@ export const previewModel = (b: { modelId: string; values: Record<string, number
 
 export const STATUS_WORD: Record<string, string> = { final: "Final", provisional: "Provisional", insufficient: "Not enough data" };
 export const STATE_WORD: Record<string, string> = { ok: "Enough data", insufficient: "Not enough data", missing: "No data recorded" };
+
+// ---------- periods and scorecards (stage 5.2) ----------
+export interface PeriodView { id: string; name: string; periodType: string; startDate: string; endDate: string; status: "open" | "closed" | "locked"; closedAt: string | null; isDemo: boolean; scorecards: number }
+export interface ScoreSummary { scoreId: string; runNumber: number; status: "final" | "provisional" | "insufficient"; total: number | null; band: string | null; confidence: number; confidenceLabel: string; weightCoverage: number; modelName: string; modelVersion: number; computedAt: string; trigger: string }
+export interface ScorecardSummary extends ScoreSummary { scorecardId: string; subject: { id: string; name: string }; periodId: string; isDemo: boolean }
+export interface ScoreComponent { key: string; label: string; providerKey: string; state: DataState; score: number | null; weight: number; effectiveWeight: number; points: number | null; sampleSize: number; minSample: number; coverage: number; stateText: string; contributors: Contributor[]; notes: string[] }
+export interface ScoreDetail extends ScoreSummary {
+  scorecardId: string;
+  subject: { id: string; name: string };
+  period: { id: string; name: string; startDate: string; endDate: string; status: string };
+  componentsHidden: boolean;
+  components: ScoreComponent[];
+  explanation: Explanation | null;
+  engineVersion: string;
+  isLatest: boolean;
+}
+export interface ScorecardDetail { scorecardId: string; subject: { id: string; name: string }; period: PeriodView; latest: ScoreDetail | null; runs: ScoreSummary[]; can: { recalculate: boolean; components: boolean } }
+export interface VerifyResult { matches: boolean; expected: { total: number | null; status: string }; actual: { total: number | null; status: string }; engineVersion: string; modelVersion: number; mismatches: string[] }
+export interface RecalcResult { periodId: string; scored: number; unchanged: number; skipped: number }
+
+export const listPeriods = () => api<PeriodView[]>("/api/performance/periods");
+export const createPeriod = (b: { name: string; periodType?: string; startDate: string; endDate: string }) => api<PeriodView>("/api/performance/periods", { method: "POST", body: b });
+export const listScorecards = (periodId: string) => api<ScorecardSummary[]>(`/api/performance/scorecards?periodId=${encodeURIComponent(periodId)}`);
+export const getScorecardFor = (periodId: string, subjectId?: string) => api<ScorecardDetail>(`/api/performance/scorecards/for?periodId=${encodeURIComponent(periodId)}${subjectId ? `&subjectId=${encodeURIComponent(subjectId)}` : ""}`);
+export const recalculate = (b: { periodId: string; subjectId?: string }) => api<RecalcResult>("/api/performance/scorecards/recalculate", { method: "POST", body: b });
+export const getScore = (id: string) => api<ScoreDetail>(`/api/performance/scores/${id}`);
+export const verifyScore = (id: string) => api<VerifyResult>(`/api/performance/scores/${id}/verify`, { method: "POST" });
+export const TRIGGER_WORD: Record<string, string> = { scheduled: "Nightly", manual: "Calculated by hand", period_close: "Period closed", recalculation: "Recalculated" };

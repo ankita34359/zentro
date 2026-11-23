@@ -1,4 +1,4 @@
-import { addDays } from "../tasks/dates.js";
+import { addDays, daysBetween } from "../tasks/dates.js";
 
 /**
  * The fictional company behind "Load demo data": about 60 people in six departments, with reporting lines, team heads and
@@ -229,7 +229,7 @@ const BLOCKS = ["Waiting for access to the staging environment.", "Need a decisi
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
 
 /** The whole demo company for a seed (the organization's id). Always the same for the same seed. */
-export function buildDemoCompany(seed: string): DemoCompany {
+export function buildDemoCompany(seed: string, today = "2026-02-14"): DemoCompany {
   const rand = rng(`company:${seed}`);
   const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
   const between = (lo: number, hi: number): number => lo + Math.floor(rand() * (hi - lo + 1));
@@ -471,6 +471,66 @@ export function buildDemoCompany(seed: string): DemoCompany {
   addKpi({ name: "Time to hire", description: "Average days from opening a role to an accepted offer.", category: "people", unit: "days", frequency: "quarterly", direction: "lower_is_better", aggregation: "avg", defaultTarget: 35, warnPct: 125, critPct: 170, assignments: [{ kind: "department", key: "ops" }], series: [{ subject: { kind: "department", key: "ops" }, values: [52, 47, 41, 38] }] });
   addKpi({ name: "Annual recurring revenue", description: "Recurring revenue at the end of the month, in millions.", category: "financial", unit: "$M", frequency: "monthly", direction: "higher_is_better", aggregation: "last", defaultTarget: 12, warnPct: 75, critPct: 55, assignments: [], series: [{ subject: { kind: "organization", key: null }, values: [8.1, 8.4, 8.9, 9.6, 10.1, 10.4] }] });
   addKpi({ name: "Employee net promoter score", description: "Would people recommend working here (survey, −100 to 100).", category: "people", unit: "points", frequency: "quarterly", direction: "higher_is_better", aggregation: "last", defaultTarget: 50, warnPct: 70, critPct: 40, assignments: [], series: [{ subject: { kind: "organization", key: null }, values: [22, 26, 31, 36] }] });
+
+  // ----- scores (stage 5.2): personal objectives with recorded values, and finished tasks with outcomes, for most people, so the
+  // demo company has real scorecards. Drawn from its OWN random stream, after everything above, so nothing earlier changes. Some
+  // people are left with gaps on purpose (no personal objective, too few tasks) so the "missing" and "not enough data" chips show. -----
+  {
+    const sr = rng(`scores:${seed}`);
+    const spick = <T,>(xs: readonly T[]): T => xs[Math.floor(sr() * xs.length)]!;
+    const sbetween = (lo: number, hi: number): number => lo + Math.floor(sr() * (hi - lo + 1));
+    const quarterStart = (d: string): string => `${d.slice(0, 4)}-${String(Math.floor((Number(d.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`;
+    const q0 = quarterStart(today);
+    const prevEnd = addDays(q0, -1);
+    const prevStart = quarterStart(prevEnd);
+    const off = (d: string): number => daysBetween(today, d);
+    const GOALS: Record<string, string[]> = {
+      eng: ["Raise the quality of my releases", "Cut my review turnaround", "Own a reliability improvement"],
+      pd: ["Ship the research-backed improvements I own", "Raise the quality of my design reviews"],
+      sales: ["Hit my pipeline and conversion goals", "Grow my accounts"],
+      cs: ["Keep my customers happy and answered fast", "Improve my first-contact resolution"],
+      ops: ["Keep my area calm and on time", "Close my month-end tasks early"],
+      exec: ["Keep the leadership agenda on track"],
+    };
+    const unitOf = ["items", "points", "reviews", "accounts"];
+    const teamObj = new Map(objectives.filter((o) => o.teamKey && o.level === "team").map((o) => [o.teamKey!, o]));
+    const deptObj = new Map(objectives.filter((o) => o.level === "department" && o.lifecycle === "active").map((o) => [o.deptKey!, o]));
+    const personal = people.filter((p) => p.key !== ceo.key && sr() < 0.82);
+    for (const person of personal) {
+      const f = 0.4 + sr() * 0.7; // how well this person is doing: 40 % to 110 % of target
+      const targets = [sbetween(10, 30), sbetween(4, 12)];
+      const marks = [off(prevStart) + sbetween(25, 40), off(prevEnd) - sbetween(2, 8), -sbetween(2, 9)].map((d) => Math.min(-1, d));
+      const gap = sr() < 0.15; // a second key result with nothing recorded: shown as "no data yet", never as zero
+      const parent = (person.teamKey ? teamObj.get(person.teamKey) : undefined) ?? deptObj.get(person.deptKey);
+      const o = obj({ level: "individual", deptKey: null, teamKey: null, ownerKey: person.key, title: spick(GOALS[person.deptKey] ?? GOALS.ops!), description: "A personal goal agreed in a one-to-one.", objectiveType: "operational", priority: "medium", startOffset: off(prevStart), endOffset: off(q0) + 89, lifecycle: "active", published: false, keyResults: targets.map((target, k) => kr(k === 0 ? `Goals completed (${spick(unitOf)})` : "Reviews passed first time", "increase", 0, target, null, person.key, k === 1 && gap ? [] : marks.map((d, j) => ({ dayOffset: d, value: Math.round(target * f * ((j + 1) / 3) * 10) / 10 })), 1)) });
+      if (parent) {
+        o.parentKey = parent.key;
+        o.parentWeight = 1;
+      }
+    }
+    // finished tasks, five due in the previous quarter and five in the current one, for a share of the team members; the rest keep a short list
+    const reviewerOf = (p: DemoPerson): string | null => p.managerKey;
+    for (const person of people.filter((p) => p.teamType === "member" && sr() < 0.8)) {
+      const pool = TASK_POOL[person.deptKey] ?? TASK_POOL.ops!;
+      const lateRate = 0.1 + sr() * 0.4;
+      for (let i = 0; i < 10; i += 1) {
+        const prev = i < 5;
+        const lo = prev ? off(prevStart) : off(q0);
+        const hi = prev ? off(prevEnd) : -1;
+        const due = Math.min(-1, sbetween(Math.min(lo, hi), Math.max(lo, hi)));
+        const late = sr() < lateRate;
+        const completed = Math.min(-1, due + (late ? sbetween(1, 6) : -sbetween(0, 3)));
+        const est = spick([120, 240, 480, 960]);
+        const reviewer = reviewerOf(person);
+        tasks.push({
+          key: `t${tasks.length + 1}`, title: `${spick(pool)} (${prev ? "last" : "this"} quarter ${(i % 5) + 1})`, creatorKey: reviewer ?? person.key, assigneeKey: person.key, teamKey: person.teamKey,
+          status: "completed", priority: sr() < 0.2 ? "high" : "medium", importance: sbetween(1, 5), progressPct: 100, dueOffset: due, createdOffset: completed - sbetween(4, 14), completedOffset: completed,
+          estimatedMinutes: est, loggedMinutes: Math.round((est * sbetween(75, 130)) / 100 / 5) * 5, blockedReason: null, comment: null, objectiveKey: null, krIndex: null, dependsOnKey: null,
+          outcome: { summary: spick(OUTCOMES), quality: reviewer && sr() < 0.85 ? sbetween(3, 5) : null, qualityBy: reviewer },
+        });
+      }
+    }
+  }
 
   return {
     departments: DEPARTMENTS,

@@ -23,6 +23,7 @@ import {
   NotFoundPage,
   NotificationSettingsPage,
   KpiPage,
+  PerformancePage,
   OkrPage,
   OnboardingPage,
   OrganizationPage,
@@ -105,10 +106,11 @@ export function AppRoutes() {
           <Route element={<RequireCapability any={["kpi.view"]} />}>
             <Route path="/kpis/*" element={<KpiPage />} />
           </Route>
+          <Route path="/performance/*" element={<PerformancePage />} />
           <Route element={<RequireCapability any={["org.view"]} />}>
             <Route path="/organization/*" element={<OrganizationPage />} />
           </Route>
-          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs" && n.key !== "kpis").map((n) => (
+          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs" && n.key !== "kpis" && n.key !== "performance").map((n) => (
             <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
           ))}
         </Route>

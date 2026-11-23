@@ -282,13 +282,15 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 
 | Method | Path | Permission | Notes |
 | --- | --- | --- | --- |
-| GET / POST / PATCH | `/api/performance/periods[/:id]` | `performance.view_scores` / `performance.manage_periods` | |
+| GET | `/api/performance/periods` | baseline (everyone) | Newest first, with how many scorecards the caller may open (live, 5.2) |
+| POST / PATCH | `/api/performance/periods[/:id]` | `performance.manage_periods` | Name unique; dates real and ordered; only while open (live, 5.2) |
 | POST | `/api/performance/periods/:id/close` | `performance.manage_periods` | Triggers final recalculation |
-| GET | `/api/performance/scorecards` | own always; others `performance.view_scores` (scope) | `?subjectType&subjectId&periodId&status` |
-| GET | `/api/performance/scorecards/:id` | same | Latest run plus run history |
+| GET | `/api/performance/scorecards` | baseline: own always; others inside `performance.view_scores` | `?periodId` (required) `&search`; latest run per person (live, 5.2) |
+| GET | `/api/performance/scorecards/for` | same | `?periodId&subjectId` (default the caller); 404 when none or not theirs to see |
+| GET | `/api/performance/scorecards/:id` | same | Latest run plus run history (newest first) |
 | GET | `/api/performance/scores/:id` | same; components need `performance.view_components` for others | Components, contributing records (permission-filtered), `explanation_json` |
-| POST | `/api/performance/scores/:id/verify` | `performance.view_components` | Recompute from stored inputs; `{matches, expected, actual}` |
-| POST | `/api/performance/scorecards/recalculate` | `performance.recalculate` (scope) | One subject sync; many → `202 {jobId}` |
+| POST | `/api/performance/scores/:id/verify` | the person themself, or `performance.view_components` over them (403 otherwise) | Recompute from stored inputs and model; `{matches, expected, actual, mismatches}` |
+| POST | `/api/performance/scorecards/recalculate` | `performance.recalculate` (scope) | `{periodId, subjectId?}`: one person, or everyone in scope (at most 400); a run is added only when the inputs or the outcome changed; `{scored, unchanged, skipped}` |
 | GET | `/api/performance/compare` | `performance.compare` (scope) | `?roleFamilyId&periodId&subjectType`; `422 cohort_mismatch` across families |
 | POST / GET | `/api/performance/comparisons[/:id]` | `performance.compare` | Saved snapshots |
 | GET | `/api/performance/trends` | own or scope | `?subject&periodIds` per-component deltas across periods |

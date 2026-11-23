@@ -5,6 +5,9 @@ export interface PersonaRow { id: string; display_name: string; designation: str
 
 /** The subquery that names every demo person of the organization. */
 const DEMO_PEOPLE = "(SELECT om.id FROM organization_memberships om WHERE om.organization_id = @organization_id AND om.is_demo = 1)";
+const DEMO_MODELS = "(SELECT dsm0.id FROM scoring_models dsm0 WHERE dsm0.organization_id = @organization_id AND dsm0.is_demo = 1)";
+/** Scorecards that belong to the demo: of demo people, inside a demo period, or scored with a demo model (all derived data: nothing real is lost). */
+const DEMO_CARDS = `(SELECT dsc.id FROM performance_scorecards dsc WHERE dsc.organization_id = @organization_id AND (dsc.is_demo = 1 OR dsc.subject_membership_id IN ${DEMO_PEOPLE} OR dsc.period_id IN (SELECT dpp.id FROM performance_periods dpp WHERE dpp.organization_id = @organization_id AND dpp.is_demo = 1) OR dsc.scoring_model_id IN ${DEMO_MODELS} OR dsc.id IN (SELECT dps.scorecard_id FROM performance_scores dps WHERE dps.organization_id = @organization_id AND dps.scoring_model_id IN ${DEMO_MODELS})))`;
 const DEMO_TASKS = "(SELECT dt.id FROM tasks dt WHERE dt.organization_id = @organization_id AND dt.is_demo = 1)";
 
 /**
@@ -176,6 +179,8 @@ export class DemoRepository {
       tasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = @organization_id AND is_demo = 1"),
       objectives: one("SELECT COUNT(*) AS n FROM objectives WHERE organization_id = @organization_id AND is_demo = 1"),
       keyResults: one("SELECT COUNT(*) AS n FROM key_results WHERE organization_id = @organization_id AND is_demo = 1"),
+      periods: one("SELECT COUNT(*) AS n FROM performance_periods WHERE organization_id = @organization_id AND is_demo = 1"),
+      scorecards: one("SELECT COUNT(*) AS n FROM performance_scorecards WHERE organization_id = @organization_id AND is_demo = 1"),
       kpis: one("SELECT COUNT(*) AS n FROM kpis WHERE organization_id = @organization_id AND is_demo = 1"),
     };
   }
@@ -199,6 +204,11 @@ export class DemoRepository {
     this.tdb.run("DELETE FROM objective_progress_history WHERE objective_progress_history.organization_id = @organization_id AND objective_progress_history.objective_id IN (SELECT dob.id FROM objectives dob WHERE dob.organization_id = @organization_id AND dob.is_demo = 1)");
     this.tdb.run("DELETE FROM key_results WHERE organization_id = @organization_id AND is_demo = 1");
     this.tdb.run("DELETE FROM objectives WHERE organization_id = @organization_id AND is_demo = 1");
+    // scores of the demo: every run, its components, the scorecards and the demo's periods (scores are derived: they can be recalculated)
+    this.tdb.run(`DELETE FROM performance_score_components WHERE performance_score_components.organization_id = @organization_id AND performance_score_components.score_id IN (SELECT pss.id FROM performance_scores pss WHERE pss.organization_id = @organization_id AND pss.scorecard_id IN ${DEMO_CARDS})`);
+    this.tdb.run(`DELETE FROM performance_scores WHERE performance_scores.organization_id = @organization_id AND performance_scores.scorecard_id IN ${DEMO_CARDS}`);
+    this.tdb.run(`DELETE FROM performance_scorecards WHERE performance_scorecards.organization_id = @organization_id AND performance_scorecards.id IN ${DEMO_CARDS}`);
+    this.tdb.run("DELETE FROM performance_periods WHERE organization_id = @organization_id AND is_demo = 1");
     // scoring models made for the demo go; a real model bound to a demo designation or role family is a blocker (see blockers)
     this.tdb.run("DELETE FROM scoring_model_components WHERE scoring_model_components.organization_id = @organization_id AND scoring_model_components.scoring_model_id IN (SELECT dsm.id FROM scoring_models dsm WHERE dsm.organization_id = @organization_id AND dsm.is_demo = 1)");
     this.tdb.run("DELETE FROM scoring_models WHERE organization_id = @organization_id AND is_demo = 1");

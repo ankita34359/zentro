@@ -26,6 +26,7 @@ export const KpiPage = lazyWithPreload(() => import("@/pages/kpis/KpiPage"));
 export const NotificationSettingsPage = lazyWithPreload(() => import("@/pages/settings/NotificationSettingsPage"));
 export const DemoPage = lazyWithPreload(() => import("@/pages/settings/DemoPage"));
 export const ScoringPage = lazyWithPreload(() => import("@/pages/settings/ScoringPage"));
+export const PerformancePage = lazyWithPreload(() => import("@/pages/performance/PerformancePage"));
 export const ProfilePage = lazyWithPreload(() => import("@/pages/settings/ProfilePage"));
 
 /** Every page a visitor can reach from the sidebar. The unlisted /design style guide is left out on purpose. */

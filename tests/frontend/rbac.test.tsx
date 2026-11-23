@@ -56,10 +56,10 @@ describe("the sidebar follows what the person may do (a convenience; the server 
 });
 
 describe("a person with no role and the pages they can still open", () => {
-  it("Team Performance and Performance Intelligence show only the placeholder: the browser asks the server for nothing but who they are and the health check", async () => {
+  it("Team Performance shows only the placeholder: the browser asks the server for nothing but who they are and the health check", async () => {
     setMe(ME_NO_ROLE);
     const f = server();
-    for (const [path, title] of [["/team-performance", "Team Performance"], ["/performance", "Performance Intelligence"]] as const) {
+    for (const [path, title] of [["/team-performance", "Team Performance"]] as const) {
       const { unmount } = renderApp(path);
       expect(await screen.findByRole("heading", { level: 1, name: title })).toBeTruthy();
       expect(screen.getByText(/Planned for stage \d\.\d/)).toBeTruthy(); // no data, no numbers: an honest "not built yet"
@@ -68,6 +68,18 @@ describe("a person with no role and the pages they can still open", () => {
     const urls = new Set(f.mock.calls.map((c) => String(c[0])));
     // no organization data was requested: only who they are, the health check, and their OWN notification count for the bell (stage 4.5)
     expect([...urls].filter((u) => u !== "/api/auth/me" && u !== "/healthz" && u !== "/api/notifications?limit=25")).toEqual([]);
+  });
+});
+
+describe("a person with no role and Performance Intelligence (stage 5.2)", () => {
+  it("opens (everyone reads their own score) and asks the server only for the periods and the usual who-am-I, health and bell calls", async () => {
+    setMe(ME_NO_ROLE);
+    const f = server();
+    renderApp("/performance");
+    expect(await screen.findByRole("heading", { level: 1, name: "Performance Intelligence" })).toBeTruthy();
+    await waitFor(() => expect(calls(f, "/api/performance/periods").length).toBeGreaterThan(0));
+    const urls = new Set(f.mock.calls.map((c) => String(c[0])));
+    expect([...urls].filter((u) => u !== "/api/auth/me" && u !== "/healthz" && u !== "/api/notifications?limit=25" && u !== "/api/performance/periods")).toEqual([]);
   });
 });
 

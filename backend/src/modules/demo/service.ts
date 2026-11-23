@@ -11,6 +11,8 @@ import { keyResultAttainment } from "../okr/attainment.js";
 import { healthOf } from "../okr/healthSweep.js";
 import { periodEndOf, completedPeriods } from "../kpi/periods.js";
 import { applySeriesAlerts, buildSeries, loadSeriesInput } from "../kpi/series.js";
+import { Collector } from "../scoring/collector.js";
+import type { PerformanceService } from "../scoring/performance.js";
 import { buildDemoCompany, demoEmail, type DemoTask, type RoleChoice } from "./seed.js";
 
 const ROLE_KEY: Record<RoleChoice, string> = {
@@ -49,7 +51,7 @@ const at = (day: string, hour = 9): string => `${day}T${String(hour).padStart(2,
  * employee, manager and CEO views. Everything is audited.
  */
 export class DemoService {
-  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService }) {}
+  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; performance: PerformanceService }) {}
 
   private ctx(auth: AuthContext, requestId: string): TenantCtx {
     return this.o.auth.tenantCtx(auth, requestId);
@@ -80,7 +82,7 @@ export class DemoService {
     const org = this.o.store.orgs.findById(ctx.organizationId);
     const now = this.o.auth.iso();
     const today = todayIn(org?.timezone ?? "UTC", new Date(now));
-    const company = buildDemoCompany(ctx.organizationId);
+    const company = buildDemoCompany(ctx.organizationId, today);
     const by = ctx.membershipId;
 
     // roles the seed hands out are the organization's own role templates; one that was archived is simply not given
@@ -211,6 +213,29 @@ export class DemoService {
       for (const t of company.tasks) if (t.dependsOnKey) repo.insertDependency({ taskId: taskId.get(t.key)!, dependsOnId: taskId.get(t.dependsOnKey)!, by: personId.get(t.creatorKey) ?? by, now: at(addDays(today, t.createdOffset), 9) });
       for (const d of company.dailyUpdates) repo.insertDailyUpdate({ id: newId(), membershipId: personId.get(d.personKey)!, day: addDays(today, d.dayOffset), summary: d.summary, blockers: d.blockers, now: at(addDays(today, d.dayOffset), 17) });
       this.insertNotifications(repo, company.tasks, taskId, personId, today, now);
+
+      // scores: the demo's two periods (last quarter and this quarter), and a run for every demo person in each (stage 5.2)
+      {
+        const scoring = this.o.store.scorecards(tdb);
+        const q0 = `${today.slice(0, 4)}-${String(Math.floor((Number(today.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`;
+        const prevStart = new Date(Date.UTC(Number(q0.slice(0, 4)), Number(q0.slice(5, 7)) - 4, 1)).toISOString().slice(0, 10);
+        const curEnd = new Date(Date.UTC(Number(q0.slice(0, 4)), Number(q0.slice(5, 7)) + 2, 0)).toISOString().slice(0, 10);
+        const quarter = (d: string): string => `Q${Math.floor((Number(d.slice(5, 7)) - 1) / 3) + 1} ${d.slice(0, 4)}`;
+        const taken = new Set(scoring.periods().map((p) => p.name.toLowerCase()));
+        const nameOf = (d: string): string => (taken.has(quarter(d).toLowerCase()) ? `${quarter(d)} (demo)` : quarter(d));
+        const periods = [
+          { id: newId(), name: nameOf(prevStart), start: prevStart, end: addDays(q0, -1) },
+          { id: newId(), name: nameOf(q0), start: q0, end: curEnd },
+        ];
+        for (const p of periods) scoring.insertPeriod({ id: p.id, name: p.name, periodType: "quarter", startDate: p.start, endDate: p.end, isDemo: true, now });
+        this.o.performance.ensureModels(ctx, { tdb, models: this.o.store.scoring(tdb) });
+        this.o.performance.prepareDemoPeriods(tdb, ctx, periods.map((p) => p.id), today);
+        for (const p of periods) {
+          const row = scoring.period(p.id)!;
+          const collector = new Collector(tdb, { id: row.id, start: row.start_date, end: row.end_date, open: row.status === "open" }, today);
+          for (const person of company.people) this.o.performance.runFor(tdb, ctx, collector, row, personId.get(person.key)!, person.name, "scheduled", true);
+        }
+      }
 
       const counts = repo.counts();
       repo.insertBatch({ id: newId(), createdBy: by, countsJson: JSON.stringify(counts), now });

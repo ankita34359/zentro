@@ -132,6 +132,10 @@ export class TasksRepository {
   activeAssignments(): AssignmentRow[] {
     return this.tdb.all<AssignmentRow>(`SELECT ${ASSIGN_COLS} FROM task_assignments WHERE organization_id = @organization_id AND unassigned_at IS NULL ORDER BY assigned_at, rowid`);
   }
+  /** Every assignment ever made, ended ones included (scoring reads who did a task, not who does it now). */
+  allAssignments(): AssignmentRow[] {
+    return this.tdb.all<AssignmentRow>(`SELECT ${ASSIGN_COLS} FROM task_assignments WHERE organization_id = @organization_id ORDER BY assigned_at, rowid`);
+  }
   assignmentsOfTask(taskId: string): AssignmentRow[] {
     return this.tdb.all<AssignmentRow>(`SELECT ${ASSIGN_COLS} FROM task_assignments WHERE organization_id = @organization_id AND task_id = @taskId ORDER BY assigned_at, rowid`, { taskId });
   }
