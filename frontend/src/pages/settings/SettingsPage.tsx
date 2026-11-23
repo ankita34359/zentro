@@ -1,4 +1,4 @@
-import { ChevronRight, ScrollText, ShieldCheck, UserCog, Users } from "lucide-react";
+import { ChevronRight, Network, ScrollText, ShieldCheck, UserCog, Users } from "lucide-react";
 import { Link } from "react-router";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const ITEMS: { to: string; title: string; body: string; icon: typeof Users; any?: string[] }[] = [
   { to: "/settings/users", title: "Users and invitations", body: "Invite people into a role, copy their link, revoke it, and generate password-reset links.", icon: Users, any: ["invitations.manage", "people.manage"] },
   { to: "/settings/roles", title: "Roles", body: "Create and change roles, and see what each one allows.", icon: ShieldCheck, any: ["roles.view"] },
+  { to: "/settings/structure", title: "Organization structure", body: "Departments, teams and sub-teams, role families and designations; rename the organization.", icon: Network, any: ["org.view"] },
   { to: "/settings/audit", title: "Audit log", body: "Who changed what and when: roles, assignments, invitations and people.", icon: ScrollText, any: ["audit.view"] },
   { to: "/settings/profile", title: "Profile", body: "Your account details, your password, and deleting your account.", icon: UserCog },
 ];

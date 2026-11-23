@@ -292,6 +292,12 @@ SQLite has no Row Level Security. The replacement is layered and tested rather t
 - **Scope.** Assignment scope is `organization` only until stage 2.5 supplies departments and teams. Role definitions and invitations are organization-wide objects (an organization-wide `roles.manage`/`invitations.manage` is required); assignments and removals are checked against the caller's scope set.
 - **Audit** is Owner only by default (`audit.view`), append-only, kept forever, without IP addresses.
 
+## 7c. What stage 2.5 built (the structure the department and team scopes will point at)
+
+- Departments, teams, role families and designations now exist (migration 0007; [database-design](database-design.md)). They are managed with `org.manage` (organization-wide only) and read with `org.view`; renaming the organization needs the sensitive `org.settings`.
+- The **department and team scopes stay disabled** in Assign role until stage 2.6, because nobody can belong to a team yet. `HierarchyProvider` is still `noHierarchy`; the structure tables are the data it will read once memberships and reporting lines exist (2.6). A scoped `org.view` already filters the structure by `myTeams` through that provider (tested with an injected fake).
+- Heads and leads of departments and teams, which `reports` mode will use, arrive in 2.6.
+
 ## 8. Authentication and session flows
 
 | Flow | Behavior |

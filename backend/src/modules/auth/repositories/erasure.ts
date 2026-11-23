@@ -6,7 +6,7 @@ import type { TenantDb } from "../../../db/tenant.js";
  * Deleting an organization or an account must cover ALL of them: a test lists the tables that have an
  * `organization_id` column and fails when one is missing here, so a later stage that adds a table cannot forget.
  */
-export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
+export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
 
 export interface MemberCounts {
   /** Other people who have joined and still belong (active or suspended). People who left, and people only invited, do not count: invitations are counted separately. */
@@ -45,6 +45,10 @@ export class ErasureRepository {
   /** The whole organization goes (it has no other members and no pending invitations). */
   deleteOrganizationRows(tdb: TenantDb): void {
     tdb.run("DELETE FROM audit_logs WHERE organization_id = @organization_id"); // the only deletion of audit rows: the whole organization is going away
+    tdb.run("DELETE FROM designations WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM role_families WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM teams WHERE organization_id = @organization_id"); // sub-teams point at their parent: SQLite checks foreign keys at the end of the statement, so one statement per table is enough
+    tdb.run("DELETE FROM departments WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM invitations WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM user_role_assignments WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM role_permissions WHERE organization_id = @organization_id");

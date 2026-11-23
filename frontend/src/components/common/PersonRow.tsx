@@ -182,10 +182,10 @@ export function PersonRow({
             <select id={`scope-${m.id}`} value={scope} onChange={(e) => setScope(e.target.value)} className="h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs">
               <option value="organization">The whole organization</option>
               <option value="department" disabled>
-                One department (arrives with stage 2.5)
+                One department (arrives with stage 2.6)
               </option>
               <option value="team" disabled>
-                One team (arrives with stage 2.5)
+                One team (arrives with stage 2.6)
               </option>
             </select>
           </div>

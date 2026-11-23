@@ -18,6 +18,8 @@ import { registerAccountRoutes } from "./modules/auth/accountRoutes.js";
 import { noDelivery, type LinkDelivery } from "./modules/auth/delivery.js";
 import { InvitationService } from "./modules/auth/invitations.js";
 import { AdminService } from "./modules/permissions/admin.js";
+import { StructureService } from "./modules/organization/service.js";
+import { registerStructureRoutes } from "./modules/organization/routes.js";
 import { AuditService } from "./modules/audit/service.js";
 import { registerAuditRoutes } from "./modules/audit/routes.js";
 import { PermissionService } from "./modules/permissions/service.js";
@@ -63,6 +65,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const permissions = new PermissionService(store, opts.hierarchy ?? noHierarchy);
   const audit = new AuditService(store);
   const auth = new AuthService({ store, permissions, audit, config: opts.config, log: opts.log });
+  const structure = new StructureService({ store, auth, audit });
   const admin = new AdminService({ store, auth, permissions, audit });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
   const delivery = opts.delivery ?? noDelivery;
@@ -72,6 +75,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerAuthRoutes(registry, auth, { sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerRoleRoutes(registry, { auth, permissions, admin });
   registerAuditRoutes(registry, { auth, audit });
+  registerStructureRoutes(registry, { auth, permissions, structure });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
 
