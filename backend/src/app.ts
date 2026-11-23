@@ -38,6 +38,8 @@ import { TaskService } from "./modules/tasks/service.js";
 import { OverviewService } from "./modules/overview/service.js";
 import { registerOverviewRoutes } from "./modules/overview/routes.js";
 import { OkrService } from "./modules/okr/service.js";
+import { KpiService } from "./modules/kpi/service.js";
+import { registerKpiRoutes } from "./modules/kpi/routes.js";
 import { AlignmentService } from "./modules/okr/alignment.js";
 import { registerAlignmentRoutes } from "./modules/okr/alignmentRoutes.js";
 import { registerOkrRoutes } from "./modules/okr/routes.js";
@@ -110,6 +112,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerNotificationRoutes(registry, { notifications });
   registerAlignmentRoutes(registry, { permissions, alignment: new AlignmentService({ store, auth, audit, okr: okrService }), tasks: taskService });
   registerOkrRoutes(registry, { permissions, okr: okrService });
+  registerKpiRoutes(registry, { permissions, kpis: new KpiService({ store, auth, audit }) });
   registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });

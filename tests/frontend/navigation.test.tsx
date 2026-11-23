@@ -82,7 +82,7 @@ describe("routes", () => {
     expect(document.title).toBe("Overview · Zentro");
   });
 
-  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs"))("renders $label with an empty state that says what to do", async (n) => {
+  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs" && n.key !== "kpis"))("renders $label with an empty state that says what to do", async (n) => {
     renderApp(n.path);
     await screen.findByRole("heading", { level: 1, name: n.label });
     expect(screen.getByRole("heading", { level: 2 })).toBeTruthy(); // the empty-state headline
@@ -123,9 +123,18 @@ describe("routes", () => {
     expect(screen.queryByText(/Planned for stage/)).toBeNull();
   });
 
-  it("keeps sub-paths inside their section (deep links work)", async () => {
-    renderApp("/kpis/123/edit");
+  it("renders KPIs as a real page (stages 3.3 and 3.4) with an honest empty state", async () => {
+    stubFetch((url) => (url.startsWith("/api/kpis") ? envelope([]) : json(HEALTH_OK)));
+    renderApp("/kpis");
     await screen.findByRole("heading", { level: 1, name: "KPIs" });
+    expect(document.title).toBe("KPIs · Zentro");
+    expect(await screen.findByRole("heading", { level: 2, name: "No KPIs yet" })).toBeTruthy();
+    expect(screen.queryByText(/Planned for stage/)).toBeNull();
+  });
+
+  it("keeps sub-paths inside their section (deep links work)", async () => {
+    renderApp("/team-performance/123/edit");
+    await screen.findByRole("heading", { level: 1, name: "Team Performance" });
   });
 
   it("shows a 404 page inside the shell for an unknown address, with a way back", async () => {
