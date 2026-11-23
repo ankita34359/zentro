@@ -17,6 +17,7 @@ export const AcceptInvitePage = lazyWithPreload(() => import("@/pages/auth/Accep
 export const SettingsPage = lazyWithPreload(() => import("@/pages/settings/SettingsPage"));
 export const UsersPage = lazyWithPreload(() => import("@/pages/settings/UsersPage"));
 export const RolesPage = lazyWithPreload(() => import("@/pages/settings/RolesPage"));
+export const StructurePage = lazyWithPreload(() => import("@/pages/settings/StructurePage"));
 export const AuditPage = lazyWithPreload(() => import("@/pages/settings/AuditPage"));
 export const ProfilePage = lazyWithPreload(() => import("@/pages/settings/ProfilePage"));
 

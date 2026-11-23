@@ -28,6 +28,11 @@ const ACTIONS: [string, string][] = [
   ["person.remove", "Person removed"],
   ["person.leave", "Person left (deleted their account)"],
 ];
+// Stage 2.5: the structure (departments, teams, role families, designations).
+const STRUCTURE: [string, string][] = [["department", "Department"], ["team", "Team"], ["role_family", "Role family"], ["designation", "Designation"]];
+const STRUCTURE_VERBS: [string, string][] = [["create", "created"], ["rename", "renamed"], ["update", "description changed"], ["move", "moved"], ["archive", "archived"], ["restore", "restored"]];
+for (const [key, noun] of STRUCTURE) for (const [verb, text] of STRUCTURE_VERBS) ACTIONS.push([`${key}.${verb}`, `${noun} ${text}`]);
+ACTIONS.push(["organization.rename", "Organization renamed"]);
 const LABEL = Object.fromEntries(ACTIONS);
 
 /** Turns the stored before/after JSON into short readable lines. */

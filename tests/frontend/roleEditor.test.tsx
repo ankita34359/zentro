@@ -190,7 +190,7 @@ describe("Users: assign a role, take it away, remove a person", () => {
     await userEvent.click(within(piyush).getByRole("button", { name: "Assign a role to Piyush" }));
     const form = await screen.findByRole("form", { name: "Assign a role to Piyush" });
     const scope = within(form).getByLabelText("Applies to") as HTMLSelectElement;
-    expect([...scope.options].map((o) => [o.textContent, o.disabled])).toEqual([["The whole organization", false], ["One department (arrives with stage 2.5)", true], ["One team (arrives with stage 2.5)", true]]);
+    expect([...scope.options].map((o) => [o.textContent, o.disabled])).toEqual([["The whole organization", false], ["One department (arrives with stage 2.6)", true], ["One team (arrives with stage 2.6)", true]]);
     await userEvent.click(within(form).getByRole("button", { name: "Assign" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Choose a role to assign");
     await userEvent.selectOptions(within(form).getByLabelText("Role"), "Manager");
