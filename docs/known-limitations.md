@@ -134,3 +134,12 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **Roles cannot be deleted, only archived,** and not while anyone holds them. There is no "reset a template to its original" action yet. The Owner role can never be changed.
 - **Capabilities are read per request, the screen per page load.** A person whose role changes sees their sidebar change when their page next loads or the tab regains focus (the server enforces the new rights on the very next request).
 - Role names must be unique among live roles (case-insensitive); an archived role's name becomes free again.
+
+## Added in stage 2.5 (organization structure)
+
+- **Structure exists but nobody is in it yet.** People cannot be put in a department or team, and departments and teams have no head or lead, until stage 2.6. Archiving a department or team therefore only checks for active sub-items, not for members (2.6 adds that check).
+- **The department and team scopes of Assign role stay disabled** until 2.6, and `my teams` / `reports` grants still reach nobody (or only the person alone) until then.
+- **No drag and drop and no chart.** The structure is edited with forms and drawn as indented lists; the organization chart is stage 2.7.
+- **Depth cap of 8 levels** (departments, and teams inside a department) is enforced in code, not by the database; a manual database edit could exceed it.
+- **Designations and role families are not used by anything yet.** KPIs, comparisons and people records (2.6, 3.3, 5.4) will reference them.
+- Names are unique among active siblings, case-insensitively; an archived item's name becomes free again, and restoring it then needs another name.

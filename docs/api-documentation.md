@@ -89,6 +89,17 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 
 `GET /api/organization`'s `memberCount` counts only people who have joined and still belong (not invited, not left).
 
+### 2.5 Stage 2.5 details
+
+Structure endpoints (see the table in section 4): departments, teams, role families and designations, plus `PATCH /api/organization`. Rules that apply to all of them:
+
+- **Names** are trimmed, single-spaced, 1 to 80 characters without control characters (400 `invalid_name`), and unique among **active siblings**, ignoring letter case (409 `name_taken`): the same name may exist under a different parent, and an archived item's name is free again. A restore that would collide is refused.
+- **Depth:** departments nest at most 8 levels; teams (sub-teams) nest at most 8 levels inside a department. Moving a subtree is checked against the height of the subtree (400 `depth_exceeded`).
+- **No cycles:** a department or team cannot move under itself or one of its own descendants (409 `would_create_cycle`).
+- **Archive, never delete:** an item with active children cannot be archived (409 `has_active_children`); an archived item cannot be edited (409 `archived`) or receive new children (409 `parent_archived`) until restored. (Stage 2.6 adds "has active members" to the archive rule.)
+- Every change is one transaction that also writes its audit row (`department.create|rename|update|move|archive|restore`, the same for `team`, `role_family`, `designation`, and `organization.rename`).
+- Writing needs `org.manage` for the whole organization (`all_in_scope`); reading needs `org.view`, and a scoped viewer gets only their teams and the departments above them (`partial: true`). Until stage 2.6 nobody belongs to a team, so only people with `org.view` in `all_in_scope` (Owner, CEO and similar) or `reports` (the person alone) get an answer; the rest get 403 as for any empty scope.
+
 ### 2.3 Stage 2.3 details
 
 **Roles (read only).** `GET /api/permissions` (key, module, description, the scope modes a role may give it, `sensitive`), `GET /api/roles` (the organization's roles with `permissionCount` and `holderCount`) and `GET /api/roles/:id` (one role with each permission and the modes it grants), all `roles.view`. Another organization's role id is `404`. Editing roles and assigning them is stage 2.4.
@@ -157,6 +168,16 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 | GET / POST | `/api/role-assignments` **2.4** | `roles.view` / `roles.manage` | POST `{membershipId, roleId, scopeType?: organization, validFrom?, validTo?}`; department/team scopes arrive in 2.5 |
 | POST | `/api/role-assignments/:id/revoke` **2.4** | `roles.manage` | Last-admin guard; you can only revoke a role you could assign |
 | POST | `/api/people/:membershipId/remove` **2.4** | `people.manage` (in scope) | Removes a joined person from the organization; their login stays |
+| GET | `/api/organization/structure` **2.5** | `org.view` (scoped) | The whole structure in one call: `departments`, `teams`, `roleFamilies`, `designations` (archived ones marked `archived: true`), `limits.maxDepth` (8) and `partial` (true when the caller's `org.view` is scoped: only their teams and the departments above them) |
+| PATCH | `/api/organization` **2.5** | `org.settings` | `{name}`: rename the organization (the slug never changes); audited |
+| POST / PATCH | `/api/departments`, `/api/departments/:id` **2.5** | `org.manage` | POST `{name, description?, parentId?}`; PATCH `{name?, description?, parentId?}` (`parentId: null` = top level). 400 `depth_exceeded` (more than 8 levels), 409 `name_taken`, `would_create_cycle`, `parent_archived`, `archived` |
+| POST | `/api/departments/:id/archive`, `/restore` **2.5** | `org.manage` | Archive is refused while the department has active sub-departments or teams (409 `has_active_children`, with counts). Restore needs an active parent and a free name. Nothing is ever deleted |
+| POST / PATCH | `/api/teams`, `/api/teams/:id` **2.5** | `org.manage` | POST `{name, description?, departmentId, parentTeamId?}`; PATCH `{name?, description?, departmentId?, parentTeamId?}`. A sub-team shares its parent's department (400 `wrong_department`); moving a team to another department takes its sub-teams along, and without `parentTeamId` it becomes top-level there |
+| POST | `/api/teams/:id/archive`, `/restore` **2.5** | `org.manage` | Archive refused while it has active sub-teams |
+| POST / PATCH | `/api/role-families`, `/api/role-families/:id` **2.5** | `org.manage` | `{name, description?}` |
+| POST | `/api/role-families/:id/archive`, `/restore` **2.5** | `org.manage` | Archive refused while it has active designations |
+| POST / PATCH | `/api/designations`, `/api/designations/:id` **2.5** | `org.manage` | `{name, description?, roleFamilyId?}` (`roleFamilyId: null` = no family) |
+| POST | `/api/designations/:id/archive`, `/restore` **2.5** | `org.manage` | Restore needs an active role family if it has one |
 
 ## 5. Objectives and OKRs
 

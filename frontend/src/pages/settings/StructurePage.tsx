@@ -159,7 +159,7 @@ function OrganizationName() {
   return (
     <Card className="mb-6">
       <CardContent className="pt-5">
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-3" aria-label="Organization name">
+        <form onSubmit={submit} className="flex flex-wrap items-end gap-3" aria-label="Rename the organization">
           <div className="min-w-0 flex-1 basis-64">
             <FormField label="Organization name" value={name} maxLength={80} onChange={(e) => { setName(e.target.value); setSaved(false); }} error={rename.isError ? problemText(rename.error) : undefined} />
           </div>
@@ -202,7 +202,7 @@ function DepartmentNode({ d, level, ctx }: { d: DepartmentItem; level: number; c
   const max = ctx.s.limits.maxDepth;
   const here = ctx.panel?.anchor === d.id;
   return (
-    <li className="rounded-lg border bg-card p-3">
+    <li className={level === 1 ? "rounded-lg border bg-card p-3" : ""}>
       <Row
         title={d.name}
         description={d.description}
@@ -227,7 +227,7 @@ function DepartmentNode({ d, level, ctx }: { d: DepartmentItem; level: number; c
       />
       {here && <PanelForm ctx={ctx} className="mt-3" department={d} />}
       {(teams.length > 0 || subs.length > 0) && (
-        <ul className="mt-3 space-y-2 border-l pl-3 sm:pl-4">
+        <ul className="mt-3 space-y-2 border-l pl-2 sm:pl-4">
           {teams.map((t) => (
             <TeamNode key={t.id} t={t} level={1} ctx={ctx} />
           ))}
@@ -271,7 +271,7 @@ function TeamNode({ t, level, ctx }: { t: TeamItem; level: number; ctx: Ctx }) {
       </Row>
       {here && <PanelForm ctx={ctx} className="mt-2" team={t} />}
       {subs.length > 0 && (
-        <ul className="mt-2 space-y-2 border-l pl-3 sm:pl-4">
+        <ul className="mt-2 space-y-2 border-l pl-2 sm:pl-4">
           {subs.map((c) => (
             <TeamNode key={c.id} t={c} level={level + 1} ctx={ctx} />
           ))}
