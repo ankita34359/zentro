@@ -49,6 +49,14 @@ export interface Comparison {
 }
 export interface TrendResult { subject: { id: string; name: string }; componentsHidden: boolean; points: TrendPoint[]; comparison: Comparison | null }
 
+/** What the caller may read of a person's score: their own always (a baseline right), others inside their permission scope. */
+export function scoreAccess(caps: Capabilities, me: string, subject: string): { scores: boolean; components: boolean } {
+  if (me === subject) return { scores: true, components: true };
+  const s = caps.scope("performance.view_scores");
+  const c = caps.scope("performance.view_components");
+  return { scores: s.all || s.members.has(subject), components: c.all || c.members.has(subject) };
+}
+
 const isDay = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
 const labelOf = (c: number): string => (c >= 0.8 ? "high" : c >= 0.5 ? "medium" : "low");
@@ -312,10 +320,7 @@ export class PerformanceService {
   // ---------- reading ----------
 
   private access(caps: Capabilities, me: string, subject: string): { scores: boolean; components: boolean } {
-    if (me === subject) return { scores: true, components: true };
-    const s = caps.scope("performance.view_scores");
-    const c = caps.scope("performance.view_components");
-    return { scores: s.all || s.members.has(subject), components: c.all || c.members.has(subject) };
+    return scoreAccess(caps, me, subject);
   }
   private summary(score: ScoreRow, model: ModelRow | undefined, band: string | null): ScoreSummary {
     return { scoreId: score.id, runNumber: score.run_number, status: score.status as ScoreSummary["status"], total: score.total_score, band, confidence: Math.round(score.confidence * 100) / 100, confidenceLabel: labelOf(score.confidence), weightCoverage: Math.round(score.weight_coverage * 100) / 100, modelName: model?.name ?? "Model", modelVersion: score.model_version, computedAt: score.computed_at, trigger: score.trigger };

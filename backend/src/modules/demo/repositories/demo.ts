@@ -205,6 +205,7 @@ export class DemoRepository {
     this.tdb.run("DELETE FROM key_results WHERE organization_id = @organization_id AND is_demo = 1");
     this.tdb.run("DELETE FROM objectives WHERE organization_id = @organization_id AND is_demo = 1");
     // scores of the demo: every run, its components, the scorecards and the demo's periods (scores are derived: they can be recalculated)
+    this.tdb.run("DELETE FROM performance_comparisons WHERE performance_comparisons.organization_id = @organization_id AND performance_comparisons.period_id IN (SELECT dpp.id FROM performance_periods dpp WHERE dpp.organization_id = @organization_id AND dpp.is_demo = 1)");
     this.tdb.run(`DELETE FROM performance_score_components WHERE performance_score_components.organization_id = @organization_id AND performance_score_components.score_id IN (SELECT pss.id FROM performance_scores pss WHERE pss.organization_id = @organization_id AND pss.scorecard_id IN ${DEMO_CARDS})`);
     this.tdb.run(`DELETE FROM performance_scores WHERE performance_scores.organization_id = @organization_id AND performance_scores.scorecard_id IN ${DEMO_CARDS}`);
     this.tdb.run(`DELETE FROM performance_scorecards WHERE performance_scorecards.organization_id = @organization_id AND performance_scorecards.id IN ${DEMO_CARDS}`);

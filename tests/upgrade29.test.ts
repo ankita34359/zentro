@@ -109,7 +109,7 @@ describe("upgrading a batch C database (migration 0010) to objectives and task l
     const safety = new Database(path.join(dataDir, "backups", restore.preRestoreBackup!), { readonly: true });
     expect((safety.prepare("SELECT COUNT(*) n FROM objectives").get() as { n: number }).n).toBe(1); // the work after the upgrade is kept in the safety backup
     safety.close();
-    expect(migrate(reopened, migrationsDir).applied).toEqual(["0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql", "0015_scoring_models.sql", "0016_scorecards.sql"]);
+    expect(migrate(reopened, migrationsDir).applied).toEqual(["0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql", "0015_scoring_models.sql", "0016_scorecards.sql", "0017_comparisons.sql"]);
     expect((await post(appOn(reopened).app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD })).status).toBe(200);
     reopened.close();
   });
@@ -125,7 +125,7 @@ describe("upgrading a batch C database (migration 0010) to objectives and task l
     await post(app, `/api/key-results/${o.keyResults[0].id}/progress`, { value: 3 }, cookie);
     const older = migrate(db, upTo(10)); // what the batch C build does when it starts on this database
     expect(older.applied).toEqual([]);
-    expect(older.unknownApplied).toEqual(["0011", "0012", "0013", "0014", "0015", "0016"]);
+    expect(older.unknownApplied).toEqual(["0011", "0012", "0013", "0014", "0015", "0016", "0017"]);
     // the batch C queries (the columns it knows) read the same rows, and the new tables are simply ignored by it
     expect(count(db, "SELECT COUNT(*) n FROM tasks WHERE is_demo = 0")).toBe(1);
     expect(db.prepare("SELECT id, title, status, priority, importance_weight, progress_pct, start_date, due_at, estimated_minutes, actual_minutes, completed_at, blocked_reason, team_id, parent_task_id, created_by_membership_id, archived_at, is_demo, created_at, updated_at FROM tasks").all()).toHaveLength(1);

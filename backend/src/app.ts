@@ -44,6 +44,8 @@ import { MeasurementService } from "./modules/kpi/measurements.js";
 import { ModelService } from "./modules/scoring/models.js";
 import { registerModelRoutes } from "./modules/scoring/modelRoutes.js";
 import { PerformanceService } from "./modules/scoring/performance.js";
+import { ComparisonService } from "./modules/scoring/comparison.js";
+import { registerComparisonRoutes } from "./modules/scoring/comparisonRoutes.js";
 import { registerPerformanceRoutes } from "./modules/scoring/performanceRoutes.js";
 import { registerMeasurementRoutes } from "./modules/kpi/measurementRoutes.js";
 import { AlignmentService } from "./modules/okr/alignment.js";
@@ -123,6 +125,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerMeasurementRoutes(registry, { permissions, measurements: measurementService });
   registerModelRoutes(registry, { permissions, models: new ModelService({ store, auth, audit }) });
   registerPerformanceRoutes(registry, { permissions, performance: performanceService });
+  registerComparisonRoutes(registry, { permissions, comparison: new ComparisonService({ store, auth, audit }) });
   registerKpiRoutes(registry, { permissions, kpis: new KpiService({ store, auth, audit }) });
   registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService, measurements: measurementService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });

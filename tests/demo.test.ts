@@ -554,6 +554,34 @@ describe("Demo scores (stage 5.2)", () => {
     expect((await get(t.app, `/api/performance/scorecards/for?periodId=${cur.id}&subjectId=${other.id}`, as)).status).toBe(404);
   });
 
+  it("compare the demo's Engineering people: the administrator sees names and ranks; a demo engineer sees only their own position; a manager sees their team", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const fam = ((await get(t.app, "/api/organization/structure", owner)).body.data.roleFamilies as { id: string; name: string }[]).find((f) => f.name === "Engineering")!;
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; status: string }[];
+    const cur = periods.find((p) => p.status === "open")!;
+    const all = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&roleFamilyId=${fam.id}&minTenureDays=0`, owner)).body.data;
+    expect(all.cohortSize).toBeGreaterThanOrEqual(8);
+    expect(all.normalization).toBe("percentile_z");
+    expect(all.entries.length).toBe(all.cohortSize);
+    expect(all.entries[0].rank).toBe(1);
+    const ps = await personas(owner);
+    const engineer = ps.find((p) => p.designation === "Software Engineer" && all.entries.some((e: { subject: { id: string } }) => e.subject.id === p.id))!;
+    const as = await asCookie(owner, engineer.id);
+    const mine = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&minTenureDays=0`, as)).body.data;
+    expect(mine.canSeeNames).toBe(false);
+    expect(mine.entries).toHaveLength(1);
+    expect(mine.you.of).toBe(all.cohortSize);
+    // a department head compares inside their own department only
+    const vp = (dept: string) => ps.find((p) => p.department === dept && p.designation === "Vice President")!;
+    const own = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&roleFamilyId=${fam.id}&minTenureDays=0`, await asCookie(owner, vp("Engineering").id))).body.data;
+    expect(own.entries.length).toBeGreaterThan(5);
+    expect(own.cohortSize).toBe(all.cohortSize); // they are ranked among everyone...
+    const other = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&roleFamilyId=${fam.id}&minTenureDays=0`, await asCookie(owner, vp("Sales").id))).body.data;
+    expect(other.entries).toHaveLength(0); // ...but another department's head sees no engineer's name or score
+    expect(other.hiddenCount).toBe(all.cohortSize);
+  });
+
   it("removal takes every demo period, scorecard, run and component, even a real person's scorecard inside a demo period, and works with an archived real person", async () => {
     const { owner } = await setup();
     await post(t.app, "/api/demo/load", undefined, owner);

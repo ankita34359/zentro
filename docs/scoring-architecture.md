@@ -304,7 +304,7 @@ For each mentorship assignment `e` (mentor `m`, mentee `x`) overlapping period `
 | **Which scores** | `final` and `provisional` scores of the same model family; `insufficient` are excluded (toggle to show them greyed). Components are compared only where both sides have the component. |
 | **Normalization** | Cohort size ≥ 3: percentile rank (mid-rank) and rank among N. Cohort size ≥ 8: also z-score. Smaller cohort: raw side-by-side with "too few peers to rank". |
 | **Context shown, not applied** | Tenure in role, weighted task load, team size, evidence confidence, data coverage, objective stretch hint. These are displayed next to the numbers; v1 does **not** adjust scores for them (known limitation), so the comparison is fair to read rather than falsely "corrected". |
-| **Explaining differences** | `explainDifference(a, b)` is deterministic: per component `(score_a − score_b) × effective_weight`, sorted by absolute contribution. The agent narrates this table. |
+| **Explaining differences** | `explainDifference(a, b)` is deterministic: per component, A's points minus B's points (a component with no data has no points), sorted by absolute contribution. The contributions add up to the difference between the two totals before rounding, which `(score_a − score_b) × effective_weight` does not when the two people's effective weights differ. The agent narrates this table. (Live, stage 5.4.) |
 | **Who sees names** | Names and ranks need `performance.compare` in scope. Others see only their own percentile within their cohort. |
 | **Snapshots** | A saved comparison stores its results in `performance_comparisons`, so it does not change under people's feet. |
 

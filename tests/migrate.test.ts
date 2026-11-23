@@ -27,9 +27,9 @@ describe("migration runner", () => {
   it("applies the real migrations once and is idempotent", () => {
     const { db } = openDatabase(mk());
     const first = migrate(db, migrationsDir);
-    expect(first.applied).toEqual(["0001_spike_counters.sql", "0002_scheduled_job_runs.sql", "0003_auth_core.sql", "0004_invitations_and_reset.sql", "0005_permissions_and_role_grants.sql", "0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql", "0010_demo_data.sql", "0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql", "0015_scoring_models.sql", "0016_scorecards.sql"]);
+    expect(first.applied).toEqual(["0001_spike_counters.sql", "0002_scheduled_job_runs.sql", "0003_auth_core.sql", "0004_invitations_and_reset.sql", "0005_permissions_and_role_grants.sql", "0006_audit_log_and_protected_roles.sql", "0007_organization_structure.sql", "0008_people_and_reporting.sql", "0009_tasks_and_notifications.sql", "0010_demo_data.sql", "0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql", "0015_scoring_models.sql", "0016_scorecards.sql", "0017_comparisons.sql"]);
     expect(first.backupFile).toBeNull(); // fresh database: nothing to protect
-    expect(migrate(db, migrationsDir)).toMatchObject({ applied: [], total: 16, backupFile: null });
+    expect(migrate(db, migrationsDir)).toMatchObject({ applied: [], total: 17, backupFile: null });
     db.close();
   });
 

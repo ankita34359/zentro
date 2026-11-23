@@ -31,6 +31,7 @@ const server = (periods: unknown[] = [PERIOD], extra: (url: string, init?: Reque
     if (path === "/api/performance/scores/s1") return envelope(SCORE({ scoreId: "s1", runNumber: 1, total: 80, isLatest: false }));
     if (path === "/api/performance/scores/s2/verify") return envelope({ matches: true, expected: { total: 84.3, status: "provisional" }, actual: { total: 84.3, status: "provisional" }, engineVersion: "1", modelVersion: 1, mismatches: [] });
     if (path === "/api/performance/trends") return envelope({ subject: { id: "me-1", name: "Emma Employee" }, componentsHidden: false, points: [], comparison: null });
+    if (path === "/api/organization/structure") return envelope({ departments: [], teams: [], roleFamilies: [{ id: "f1", name: "Engineers", description: "", archived: false, archivedAt: null }, { id: "f2", name: "Designers", description: "", archived: false, archivedAt: null }], designations: [], organization: { id: "o", name: "Acme" } });
     if (path === "/api/notifications") return envelope({ notifications: [], unreadCount: 0, nextCursor: null });
     return json(HEALTH_OK);
   });
@@ -168,5 +169,46 @@ describe("Performance Intelligence (stage 5.2)", () => {
     expect(within(cmp).getByText(/Q3 2026 70\.0 → Q4 2026 90\.0/)).toBeTruthy();
     expect(within(cmp).getByText(/may not be like for like/)).toBeTruthy();
     expect(within(cmp).getByText("No data in Q3 2026")).toBeTruthy();
+  });
+
+  it("Compare, for someone with no permission: only their own position, in words, and no names anywhere", async () => {
+    setMe(withCaps({}));
+    server([PERIOD], (url) => (url.startsWith("/api/performance/compare?") ? envelope({ period: { id: "p1", name: "Q4 2026", status: "open" }, roleFamily: { id: "f1", name: "Engineers" }, filters: { departmentId: null, minTenureDays: 30, includeInsufficient: false, subjectIds: [] }, cohortSize: 8, excluded: { insufficient: 0, tenure: 0 }, normalization: "percentile_z", notes: ["Tenure, team size and workload are shown beside the scores, not applied to them: a comparison is a conversation starter, not a verdict."], you: { rank: 4, of: 8, percentile: 56.3, zScore: 0.22, total: 80 }, entries: [{ subject: { id: "me-1", name: "Emma Employee" }, total: 80, status: "provisional", band: null, model: "Employee v1", rank: 4, percentile: 56.3, zScore: 0.22, isYou: true, context: { tenureDays: 200, teamSize: 8, taskLoad: 0, dataCoverage: 1, confidence: "low", evidence: 1 } }], hiddenCount: 7, canSeeNames: false }) : undefined));
+    renderApp("/performance?tab=compare");
+    const you = await screen.findByRole("status", { name: "Your position" });
+    expect(you.textContent).toMatch(/You are 4th of 8, at the 56\.3 percentile \(z-score 0\.22\)\. Your score is 80\.0\./);
+    expect(screen.getByText(/Only your own position is shown/)).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull(); // no table of other people
+    expect(screen.queryByRole("combobox", { name: "Role family" })).toBeNull(); // no choice of group without permission to compare
+    expect(screen.queryByRole("form", { name: "Save this comparison" })).toBeNull();
+  });
+
+  it("Compare, with permission: names and ranks, a note for people outside the viewer's scope, why two people differ, and saving a snapshot", async () => {
+    setMe(withCaps({ "performance.compare": ["all_in_scope"] }));
+    const entry = (id: string, name: string, total: number, rank: number) => ({ subject: { id, name }, total, status: "provisional", band: null, model: "Employee v1", rank, percentile: 50, zScore: null, isYou: false, context: { tenureDays: 120, teamSize: 5, taskLoad: 12, dataCoverage: 0.7, confidence: "medium", evidence: 1 } });
+    const result = { period: { id: "p1", name: "Q4 2026", status: "open" }, roleFamily: { id: "f1", name: "Engineers" }, filters: { departmentId: null, minTenureDays: 30, includeInsufficient: false, subjectIds: [] }, cohortSize: 5, excluded: { insufficient: 0, tenure: 0 }, normalization: "percentile", notes: ["A z-score needs at least 8 people, so only the rank and the percentile are shown."], you: null, entries: [entry("a", "Ann Engineer", 90, 1), entry("b", "Bob Engineer", 70, 2)], hiddenCount: 3, canSeeNames: true };
+    const f = server([PERIOD], (url, init) => {
+      if (url.startsWith("/api/performance/compare/difference")) return envelope({ period: { id: "p1", name: "Q4 2026" }, a: { id: "a", name: "Ann Engineer", total: 90 }, b: { id: "b", name: "Bob Engineer", total: 70 }, totalDifference: 20, parts: [{ key: "okr", label: "OKR achievement", a: 90, b: 70, contribution: 20, note: null }] });
+      if (url.startsWith("/api/performance/compare?")) return envelope(result);
+      if (url === "/api/performance/comparisons" && init?.method === "POST") return envelope({ id: "c1", name: "Engineers now", periodId: "p1", createdBy: { id: "x", name: "Owner" }, createdAt: "2026-11-23T10:00:00.000Z", cohortSize: 5, normalization: "percentile", result }, 201);
+      if (url === "/api/performance/comparisons/c1") return envelope({ id: "c1", name: "Engineers now", periodId: "p1", createdBy: { id: "x", name: "Owner" }, createdAt: "2026-11-23T10:00:00.000Z", cohortSize: 5, normalization: "percentile", result });
+      if (url === "/api/performance/comparisons") return envelope([{ id: "c1", name: "Engineers now", periodId: "p1", createdBy: { id: "x", name: "Owner" }, createdAt: "2026-11-23T10:00:00.000Z", cohortSize: 5, normalization: "percentile" }]);
+      return undefined;
+    });
+    renderApp("/performance?tab=compare");
+    const table = await screen.findByRole("table", { name: "People compared, highest first" });
+    expect(within(table).getByText("Ann Engineer")).toBeTruthy();
+    expect(within(table).getAllByText(/days in role/).length).toBe(2); // context beside the numbers
+    expect(screen.getByText(/3 more people are in this group but outside what you may see/)).toBeTruthy();
+    const group = await screen.findByRole("group", { name: "Pick two people" });
+    await userEvent.selectOptions(within(group).getByLabelText("First person"), "a");
+    await userEvent.selectOptions(within(group).getByLabelText("Second person"), "b");
+    const diff = await screen.findByRole("region", { name: "Difference" });
+    expect(within(diff).getAllByText("+20.0")).toHaveLength(2); // the gap, and the one part that makes it
+    await userEvent.type(screen.getByLabelText("Save this comparison as"), "Engineers now");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/performance/comparisons" && (c[1] as RequestInit)?.method === "POST")).toBe(true));
+    expect(bodyOf(f.mock.calls.find((c) => c[0] === "/api/performance/comparisons" && (c[1] as RequestInit)?.method === "POST")!)).toMatchObject({ name: "Engineers now", periodId: "p1", minTenureDays: 30, includeInsufficient: false });
+    expect(await screen.findByText(/shown exactly as it was saved/)).toBeTruthy();
   });
 });

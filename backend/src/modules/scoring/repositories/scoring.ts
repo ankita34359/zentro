@@ -68,6 +68,7 @@ export interface ScoreRow {
   id: string; scorecard_id: string; run_number: number; scoring_model_id: string; model_version: number; engine_version: string; status: string; total_score: number | null; confidence: number; weight_coverage: number; inputs_hash: string;
   trigger: string; explanation_json: string; inputs_json: string; model_json: string; computed_at: string; computed_by_membership_id: string | null;
 }
+export interface ComparisonRow { id: string; name: string; comparison_type: string; period_id: string; cohort_json: string; normalization_method: string; cohort_size: number; results_json: string; created_by_membership_id: string; created_at: string }
 export interface ScoreComponentRow { id: string; score_id: string; component_key: string; label: string; provider_key: string; raw_value: number | null; normalized_score: number | null; weight: number; effective_weight: number; contribution_points: number | null; data_state: string; sample_size: number; min_sample: number; coverage: number; inputs_json: string; notes_json: string }
 const PERIOD_COLS = "id, name, period_type, start_date, end_date, status, closed_at, closed_by_membership_id, is_demo, created_at";
 const CARD_COLS = "id, subject_type, subject_key, subject_membership_id, period_id, scoring_model_id, status, latest_score_id, is_demo, created_at";
@@ -118,6 +119,16 @@ export class ScorecardRepository {
   /** The one place a scorecard changes: which run is the latest, and which model it is scored with. The runs themselves never change. */
   pointScorecard(id: string, scoreId: string, modelId: string, status: string): void {
     this.tdb.run("UPDATE performance_scorecards SET latest_score_id = @scoreId, scoring_model_id = @modelId, status = @status WHERE organization_id = @organization_id AND id = @id", { id, scoreId, modelId, status });
+  }
+
+  comparisons(): ComparisonRow[] {
+    return this.tdb.all<ComparisonRow>("SELECT id, name, comparison_type, period_id, cohort_json, normalization_method, cohort_size, results_json, created_by_membership_id, created_at FROM performance_comparisons WHERE organization_id = @organization_id ORDER BY created_at DESC, rowid DESC");
+  }
+  comparison(id: string): ComparisonRow | undefined {
+    return this.tdb.get<ComparisonRow>("SELECT id, name, comparison_type, period_id, cohort_json, normalization_method, cohort_size, results_json, created_by_membership_id, created_at FROM performance_comparisons WHERE organization_id = @organization_id AND id = @id", { id });
+  }
+  insertComparison(c: { id: string; name: string; periodId: string; cohortJson: string; normalization: string; cohortSize: number; resultsJson: string; by: string; now: string }): void {
+    this.tdb.run("INSERT INTO performance_comparisons (id, organization_id, name, comparison_type, period_id, cohort_json, normalization_method, cohort_size, results_json, created_by_membership_id, created_at) VALUES (@id, @organization_id, @name, 'peer', @periodId, @cohortJson, @normalization, @cohortSize, @resultsJson, @by, @now)", c);
   }
 
   /** Runs without the (large) stored inputs and model. */

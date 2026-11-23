@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { CompareTab } from "./CompareTab";
 import { problemText } from "@/lib/authForm";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
@@ -31,10 +32,10 @@ export default function PerformancePage() {
   const { can } = useAuth();
   const [params, setParams] = useSearchParams();
   const periods = useQuery({ queryKey: ["performance-periods"], queryFn: listPeriods, retry: false });
-  const tab = params.get("tab") === "periods" ? "periods" : "scorecards";
+  const tab = params.get("tab") === "periods" ? "periods" : params.get("tab") === "compare" ? "compare" : "scorecards";
   const set = (k: string, v: string | null) => setParams((p) => { const n = new URLSearchParams(p); if (v === null) n.delete(k); else n.set(k, v); return n; }, { replace: true });
   const periodId = params.get("period") ?? periods.data?.find((p) => p.status === "open")?.id ?? periods.data?.[0]?.id ?? null;
-  const tabLink = (t: "scorecards" | "periods", label: string) => (
+  const tabLink = (t: "scorecards" | "periods" | "compare", label: string) => (
     <Link to={{ search: (() => { const n = new URLSearchParams(params); if (t === "scorecards") n.delete("tab"); else n.set("tab", t); return n.toString() ? `?${n.toString()}` : ""; })() }} role="tab" aria-selected={tab === t} className={cn("-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-label font-medium", tab === t ? "border-primary text-primary-ink" : "border-transparent text-muted-foreground hover:text-foreground")}>{label}</Link>
   );
   return (
@@ -45,9 +46,10 @@ export default function PerformancePage() {
         <>
           <div role="tablist" aria-label="Performance views" className="mb-5 flex overflow-x-auto border-b">
             {tabLink("scorecards", "Scorecards")}
+            {tabLink("compare", "Compare")}
             {tabLink("periods", "Periods")}
           </div>
-          {tab === "periods" ? <PeriodsTab periods={periods.data} onOpen={(id) => { set("tab", null); set("period", id); }} /> : periods.data.length === 0 ? (
+          {tab === "periods" ? <PeriodsTab periods={periods.data} onOpen={(id) => { set("tab", null); set("period", id); }} /> : tab === "compare" && periods.data.length > 0 ? <CompareTab periods={periods.data} periodId={periodId!} onPeriod={(id) => set("period", id)} /> : periods.data.length === 0 ? (
             <EmptyState illustration="gauge" title="No performance period yet">
               {can("performance.manage_periods") ? "Create a period (a month, quarter or year) on the Periods tab, then calculate scores for it." : "An administrator creates a performance period before scores can be calculated."}
             </EmptyState>

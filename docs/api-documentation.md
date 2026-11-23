@@ -293,8 +293,10 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | GET | `/api/performance/scores/:id` | same; components need `performance.view_components` for others | Components, contributing records (permission-filtered), `explanation_json` |
 | POST | `/api/performance/scores/:id/verify` | the person themself, or `performance.view_components` over them (403 otherwise) | Recompute from stored inputs and model; `{matches, expected, actual, mismatches}` |
 | POST | `/api/performance/scorecards/recalculate` | `performance.recalculate` (scope) | `{periodId, subjectId?}`: one person, or everyone in scope (at most 400); a run is added only when the inputs or the outcome changed; `{scored, unchanged, skipped}` |
-| GET | `/api/performance/compare` | `performance.compare` (scope) | `?roleFamilyId&periodId&subjectType`; `422 cohort_mismatch` across families |
-| POST / GET | `/api/performance/comparisons[/:id]` | `performance.compare` | Saved snapshots |
+| GET | `/api/performance/compare` | baseline: everyone gets `you` (own rank and percentile); named rows only for people inside `performance.compare` scope whose score the caller may see | `?periodId&roleFamilyId&departmentId&subjectIds&minTenureDays&includeInsufficient`; `422 cohort_mismatch` across families; under 3 people no rank, from 8 a z-score (live, 5.4) |
+| GET | `/api/performance/compare/difference` | `performance.compare` + both people in scope | `?periodId&a&b`: why two totals differ, part by part (live, 5.4) |
+| GET / POST | `/api/performance/comparisons` | `performance.compare` | Saved snapshots: own, or all with compare over everyone (live, 5.4) |
+| GET | `/api/performance/comparisons/:id` | same | One snapshot exactly as saved |
 | GET | `/api/performance/trends` | baseline: own always; others inside `performance.view_scores`, parts need `view_components` | `?subjectId&from&to`: scores across periods with the change since the one before; `from`/`to` (period ids) add a part-by-part comparison. A period with no data gives no change, never a drop to zero (live, 5.3) |
 | GET / POST | `/api/performance/models` | `performance.view_components` / `performance.configure` | Scoring models |
 | PATCH | `/api/performance/models/:id` | `performance.configure` | Creates a new version |

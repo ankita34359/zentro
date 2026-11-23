@@ -97,3 +97,42 @@ export const getTrends = (q: { subjectId?: string; from?: string; to?: string })
 };
 /** "+20.0", "−3.5", "No change", or "No comparison" when either side had no data (never a drop to zero). */
 export const deltaText = (d: number | null): string => (d === null ? "No comparison" : d === 0 ? "No change" : `${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}`);
+
+// ---------- peer comparison (stage 5.4) ----------
+export interface CompareEntry {
+  subject: { id: string; name: string };
+  total: number | null;
+  status: "final" | "provisional" | "insufficient";
+  band: string | null;
+  model: string;
+  rank: number | null;
+  percentile: number | null;
+  zScore: number | null;
+  isYou: boolean;
+  context: { tenureDays: number | null; teamSize: number | null; taskLoad: number; dataCoverage: number; confidence: string; evidence: number };
+}
+export interface CompareResult {
+  period: { id: string; name: string; status: string };
+  roleFamily: { id: string; name: string } | null;
+  filters: { departmentId: string | null; minTenureDays: number; includeInsufficient: boolean; subjectIds: string[] };
+  cohortSize: number;
+  excluded: { insufficient: number; tenure: number };
+  normalization: "raw" | "percentile" | "percentile_z";
+  notes: string[];
+  you: { rank: number | null; of: number; percentile: number | null; zScore: number | null; total: number | null } | null;
+  entries: CompareEntry[];
+  hiddenCount: number;
+  canSeeNames: boolean;
+}
+export interface SavedComparison { id: string; name: string; periodId: string; createdBy: { id: string; name: string }; createdAt: string; cohortSize: number; normalization: string }
+export interface SavedComparisonDetail extends SavedComparison { result: CompareResult }
+export interface Difference { period: { id: string; name: string }; a: { id: string; name: string; total: number | null }; b: { id: string; name: string; total: number | null }; totalDifference: number | null; parts: { key: string; label: string; a: number | null; b: number | null; contribution: number; note: string | null }[] }
+export interface CompareFilters { periodId: string; roleFamilyId?: string; minTenureDays?: number; includeInsufficient?: boolean }
+const qs = (o: Record<string, string | number | boolean | undefined>): string => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)])).toString();
+export const getCompare = (f: CompareFilters) => api<CompareResult>(`/api/performance/compare?${qs({ ...f })}`);
+export const getDifference = (q: { periodId: string; a: string; b: string }) => api<Difference>(`/api/performance/compare/difference?${qs({ ...q })}`);
+export const listComparisons = () => api<SavedComparison[]>("/api/performance/comparisons");
+export const getComparison = (id: string) => api<SavedComparisonDetail>(`/api/performance/comparisons/${id}`);
+export const saveComparison = (b: CompareFilters & { name: string }) => api<SavedComparisonDetail>("/api/performance/comparisons", { method: "POST", body: b });
+/** "4th", "1st", "22nd" ... */
+export const ordinal = (n: number): string => { const v = n % 100; const s = ["th", "st", "nd", "rd"]; return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`; };
