@@ -45,6 +45,41 @@ export interface DemoTask {
   loggedMinutes: number;
   blockedReason: string | null;
   comment: { authorKey: string; body: string } | null;
+  /** The objective (and the key result, by position) the task supports (stage 4.2). */
+  objectiveKey: string | null;
+  krIndex: number | null;
+  /** Recorded on finished tasks only. `qualityBy` rates it (never the person who did it). */
+  outcome: { summary: string; quality: number | null; qualityBy: string | null } | null;
+  /** Another task (earlier in the list, so there is never a loop) this one waits for. */
+  dependsOnKey: string | null;
+}
+export interface DemoKeyResult {
+  title: string;
+  direction: "increase" | "decrease";
+  method: "linear" | "binary" | "manual";
+  start: number;
+  target: number;
+  unit: string | null;
+  weight: number;
+  ownerKey: string;
+  /** Recorded actual values, oldest first. The last one is the current value. Empty = nothing recorded (no data). */
+  history: { dayOffset: number; value: number; note?: string }[];
+}
+export interface DemoObjective {
+  key: string;
+  level: "company" | "department" | "team" | "individual";
+  deptKey: string | null;
+  teamKey: string | null;
+  ownerKey: string;
+  title: string;
+  description: string;
+  objectiveType: "strategic" | "operational" | "development";
+  priority: "low" | "medium" | "high" | "critical";
+  startOffset: number;
+  endOffset: number;
+  lifecycle: "draft" | "active" | "completed";
+  published: boolean;
+  keyResults: DemoKeyResult[];
 }
 export interface DemoDailyUpdate { personKey: string; dayOffset: number; summary: string; blockers: string | null }
 export interface DemoCompany {
@@ -55,6 +90,7 @@ export interface DemoCompany {
   people: DemoPerson[];
   tasks: DemoTask[];
   dailyUpdates: DemoDailyUpdate[];
+  objectives: DemoObjective[];
 }
 
 /** Small deterministic generator (mulberry32). */
@@ -249,6 +285,10 @@ export function buildDemoCompany(seed: string): DemoCompany {
         estimatedMinutes: est,
         loggedMinutes: status === "not_started" ? 0 : Math.round((est * (status === "completed" ? between(70, 130) : between(10, 70))) / 100 / 5) * 5,
         blockedReason: status === "blocked" ? pick(BLOCKS) : null,
+        objectiveKey: null,
+        krIndex: null,
+        outcome: null,
+        dependsOnKey: null,
         comment: rand() < 0.22 ? { authorKey: (rand() < 0.6 ? lead : person).key === person.key && person.managerKey ? person.managerKey : lead.key, body: pick(COMMENTS) } : null,
       });
     }
@@ -260,6 +300,95 @@ export function buildDemoCompany(seed: string): DemoCompany {
     if (rand() < 0.4) dailyUpdates.push({ personKey: person.key, dayOffset: -1, summary: pick(SUMMARIES), blockers: rand() < 0.15 ? pick(BLOCKS) : null });
   }
 
+  // ----- objectives, key results and the tasks that support them (stages 3.1 and 4.2). Drawn after everything above, so
+  // the people and tasks of earlier versions of the seed do not change. -----
+  const kr = (title: string, direction: "increase" | "decrease", start: number, target: number, unit: string | null, ownerKey: string, history: DemoKeyResult["history"], weight = 1, method: DemoKeyResult["method"] = "linear"): DemoKeyResult => ({ title, direction, method, start, target, unit, weight, ownerKey, history });
+  const objectives: DemoObjective[] = [];
+  const obj = (o: Omit<DemoObjective, "key">): DemoObjective => {
+    const full = { ...o, key: `o${objectives.length + 1}` };
+    objectives.push(full);
+    return full;
+  };
+  const head = (dept: string): string => heads[dept]!.key;
+  const lead = (team: string): string => leads[team]!.key;
+  obj({ level: "company", deptKey: null, teamKey: null, ownerKey: ceo.key, title: "Reach $12M in annual recurring revenue", description: "Grow revenue by winning new enterprise customers while keeping the ones we have.", objectiveType: "strategic", priority: "critical", startOffset: -120, endOffset: 150, lifecycle: "active", published: true, keyResults: [
+    kr("Annual recurring revenue", "increase", 8, 12, "$M", head("sales"), [{ dayOffset: -90, value: 8.3 }, { dayOffset: -60, value: 8.9 }, { dayOffset: -30, value: 9.6 }, { dayOffset: -3, value: 10.4, note: "After the logistics renewal." }], 3),
+    kr("New enterprise customers signed", "increase", 0, 40, "customers", head("sales"), [{ dayOffset: -75, value: 6 }, { dayOffset: -45, value: 11 }, { dayOffset: -20, value: 17 }, { dayOffset: -2, value: 24 }], 2),
+    kr("Gross revenue churn", "decrease", 7, 4, "%", head("cs"), [{ dayOffset: -60, value: 6.8 }, { dayOffset: -30, value: 6.2 }, { dayOffset: -2, value: 5.1 }], 2),
+  ] });
+  obj({ level: "company", deptKey: null, teamKey: null, ownerKey: ceo.key, title: "Make Zentro the easiest product to adopt", description: "Customers should be productive in their first week.", objectiveType: "strategic", priority: "high", startOffset: -100, endOffset: 120, lifecycle: "active", published: true, keyResults: [
+    kr("Median days from signing to first value", "decrease", 21, 7, "days", head("cs"), [{ dayOffset: -70, value: 20 }, { dayOffset: -40, value: 19 }, { dayOffset: -10, value: 15 }], 2),
+    kr("Customer satisfaction (CSAT)", "increase", 78, 90, "points", head("cs"), [{ dayOffset: -50, value: 79 }, { dayOffset: -20, value: 82 }]),
+    kr("Self-serve activation rate", "increase", 30, 60, "%", head("pd"), []), // nothing recorded yet: shows "No data yet", never 0%
+  ] });
+  obj({ level: "company", deptKey: null, teamKey: null, ownerKey: ceo.key, title: "Build a team people want to stay in", description: "Hire well, grow people, and keep them.", objectiveType: "strategic", priority: "medium", startOffset: -90, endOffset: 180, lifecycle: "active", published: false, keyResults: [
+    kr("Employee net promoter score", "increase", 20, 50, "points", head("ops"), [{ dayOffset: -80, value: 24 }, { dayOffset: -15, value: 31 }]),
+    kr("Open roles filled", "increase", 0, 12, "roles", head("ops"), [{ dayOffset: -50, value: 3 }, { dayOffset: -5, value: 5 }]),
+  ] });
+  obj({ level: "department", deptKey: "eng", teamKey: null, ownerKey: head("eng"), title: "Ship faster with fewer incidents", description: "A faster, safer delivery pipeline.", objectiveType: "operational", priority: "high", startOffset: -90, endOffset: 90, lifecycle: "active", published: false, keyResults: [
+    kr("Median build and deploy time", "decrease", 40, 15, "min", lead("platform"), [{ dayOffset: -60, value: 38 }, { dayOffset: -25, value: 29 }, { dayOffset: -4, value: 24 }], 2),
+    kr("Severity-1 incidents per month", "decrease", 6, 1, "incidents", lead("infra"), [{ dayOffset: -45, value: 5 }, { dayOffset: -10, value: 3 }]),
+    kr("API availability", "increase", 99.5, 99.95, "%", lead("platform"), [{ dayOffset: -30, value: 99.71 }, { dayOffset: -3, value: 99.82 }]),
+  ] });
+  obj({ level: "department", deptKey: "pd", teamKey: null, ownerKey: head("pd"), title: "Redesign the first-run experience", description: "Make the first ten minutes obvious.", objectiveType: "operational", priority: "high", startOffset: -60, endOffset: 100, lifecycle: "active", published: false, keyResults: [
+    kr("Users who finish setup in their first session", "increase", 35, 70, "%", lead("product"), [{ dayOffset: -35, value: 38 }, { dayOffset: -8, value: 47 }]),
+    kr("Usability test pass rate", "increase", 50, 90, "%", lead("design"), [{ dayOffset: -12, value: 62 }]),
+  ] });
+  obj({ level: "department", deptKey: "pd", teamKey: null, ownerKey: head("pd"), title: "Plan next year's roadmap", description: "A first draft, not yet started.", objectiveType: "operational", priority: "low", startOffset: 20, endOffset: 120, lifecycle: "draft", published: false, keyResults: [
+    kr("Roadmap themes agreed with leadership", "increase", 0, 5, "themes", head("pd"), []),
+  ] });
+  obj({ level: "department", deptKey: "sales", teamKey: null, ownerKey: head("sales"), title: "Grow the pipeline", description: "More qualified deals at every stage.", objectiveType: "operational", priority: "high", startOffset: -80, endOffset: 100, lifecycle: "active", published: false, keyResults: [
+    kr("Qualified pipeline", "increase", 2, 6, "$M", lead("inside"), [{ dayOffset: -50, value: 2.6 }, { dayOffset: -22, value: 3.4 }, { dayOffset: -3, value: 4.1 }], 2),
+    kr("Win rate", "increase", 18, 28, "%", lead("field"), [{ dayOffset: -30, value: 20 }]),
+  ] });
+  obj({ level: "department", deptKey: "cs", teamKey: null, ownerKey: head("cs"), title: "Answer customers faster", description: "Fast, first-class support.", objectiveType: "operational", priority: "medium", startOffset: -70, endOffset: 80, lifecycle: "active", published: false, keyResults: [
+    kr("Median first response time", "decrease", 240, 60, "min", lead("support"), [{ dayOffset: -40, value: 220 }, { dayOffset: -14, value: 150 }, { dayOffset: -2, value: 118 }], 2),
+    kr("Tickets resolved on first contact", "increase", 55, 80, "%", lead("support"), [{ dayOffset: -20, value: 61 }]),
+  ] });
+  obj({ level: "department", deptKey: "ops", teamKey: null, ownerKey: head("ops"), title: "Close the books in five days", description: "A calm, predictable month end.", objectiveType: "operational", priority: "medium", startOffset: -200, endOffset: -15, lifecycle: "completed", published: false, keyResults: [
+    kr("Working days to close the month", "decrease", 10, 5, "days", lead("finops"), [{ dayOffset: -150, value: 9 }, { dayOffset: -90, value: 7 }, { dayOffset: -40, value: 5 }]),
+  ] });
+  obj({ level: "team", deptKey: "eng", teamKey: "platform", ownerKey: lead("platform"), title: "Make the public API dependable", description: "Rate limits, clear errors and good docs.", objectiveType: "operational", priority: "high", startOffset: -45, endOffset: 60, lifecycle: "active", published: false, keyResults: [
+    kr("Endpoints covered by rate limiting", "increase", 0, 100, "%", lead("platform"), [{ dayOffset: -20, value: 35 }, { dayOffset: -3, value: 60 }], 1, "manual"),
+    kr("API reference pages reviewed", "increase", 0, 48, "pages", lead("platform"), [{ dayOffset: -10, value: 14 }]),
+  ] });
+  obj({ level: "team", deptKey: "sales", teamKey: "inside", ownerKey: lead("inside"), title: "Qualify leads within a day", description: "Nobody waits for a first call.", objectiveType: "operational", priority: "medium", startOffset: -30, endOffset: 60, lifecycle: "active", published: false, keyResults: [
+    kr("Leads contacted within 24 hours", "increase", 60, 95, "%", lead("inside"), [{ dayOffset: -12, value: 72 }]),
+  ] });
+  obj({ level: "team", deptKey: "cs", teamKey: "support", ownerKey: lead("support"), title: "Keep the help centre current", description: "Every release has its help article.", objectiveType: "operational", priority: "low", startOffset: -30, endOffset: 60, lifecycle: "active", published: false, keyResults: [
+    kr("Release notes with a help article", "increase", 0, 1, null, lead("support"), [], 1, "binary"),
+  ] });
+  const learner = people.find((p) => p.teamKey === "platform" && p.teamType === "member" && p.role === "r_employee");
+  if (learner) {
+    obj({ level: "individual", deptKey: null, teamKey: null, ownerKey: learner.key, title: "Get certified in cloud infrastructure", description: "A development goal agreed in a one-to-one.", objectiveType: "development", priority: "medium", startOffset: -40, endOffset: 110, lifecycle: "active", published: false, keyResults: [
+      kr("Course modules completed", "increase", 0, 12, "modules", learner.key, [{ dayOffset: -14, value: 3 }]),
+    ] });
+  }
+
+  // tasks support the objectives of their team, else their department, else the company
+  const OUTCOMES = ["Shipped and verified with the team.", "Delivered to the customer; feedback was positive.", "Completed ahead of the review; notes are in the folder.", "Done. Follow-up work is tracked in a new task."];
+  const byTeam = new Map(objectives.filter((o) => o.teamKey).map((o) => [o.teamKey!, o]));
+  const byDept = new Map(objectives.filter((o) => o.level === "department" && o.lifecycle === "active").map((o) => [o.deptKey!, o]));
+  const company = objectives.filter((o) => o.level === "company");
+  const taskPerson = new Map(tasks.map((t) => [t.key, byKey.get(t.assigneeKey)!]));
+  tasks.forEach((t, i) => {
+    const person = taskPerson.get(t.key)!;
+    const target = (person.teamKey ? byTeam.get(person.teamKey) : undefined) ?? byDept.get(person.deptKey) ?? (rand() < 0.5 ? company[Math.floor(rand() * company.length)] : undefined);
+    if (target && rand() < 0.62 && target.lifecycle !== "completed") {
+      t.objectiveKey = target.key;
+      t.krIndex = target.keyResults.length > 0 && rand() < 0.6 ? Math.floor(rand() * target.keyResults.length) : null;
+    }
+    if (t.status === "completed" && rand() < 0.55) {
+      const reviewer = person.managerKey && rand() < 0.65 ? person.managerKey : null;
+      t.outcome = { summary: pick(OUTCOMES), quality: reviewer ? between(3, 5) : null, qualityBy: reviewer };
+    }
+    // a few open tasks wait for an earlier task of the same team (earlier in the list: never a loop)
+    if (i > 0 && (t.status === "not_started" || t.status === "in_progress") && t.dependsOnKey === null && rand() < 0.1) {
+      const earlier = tasks.slice(Math.max(0, i - 12), i).filter((e) => e.teamKey === t.teamKey && e.status !== "cancelled" && e.key !== t.key);
+      if (earlier.length > 0) t.dependsOnKey = pick(earlier).key;
+    }
+  });
+
   return {
     departments: DEPARTMENTS,
     teams: TEAMS,
@@ -268,6 +397,7 @@ export function buildDemoCompany(seed: string): DemoCompany {
     people,
     tasks,
     dailyUpdates,
+    objectives,
   };
 }
 

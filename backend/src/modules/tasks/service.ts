@@ -6,6 +6,7 @@ import type { EventWriter } from "../automation/events.js";
 import type { AuthStore } from "../auth/repositories/store.js";
 import type { AuthContext, AuthService } from "../auth/service.js";
 import type { NotificationService } from "../notifications/service.js";
+import type { OkrService } from "../okr/service.js";
 import { scopeContainsMember, type ScopeSet } from "../permissions/resolver.js";
 import type { Capabilities } from "../permissions/service.js";
 import type { PersonRow } from "../people/repositories/people.js";
@@ -49,14 +50,25 @@ export interface TaskSummary {
   assignees: AssigneeView[];
   completedAt: string | null;
   isDemo: boolean;
+  objectiveId: string | null;
+  keyResultId: string | null;
+  /** Open tasks this one has to wait for. */
+  waitingOn: number;
 }
+export interface DependencyView { id: string; title: string; status: string; visible: boolean }
+export interface OutcomeView { summary: string; value: number | null; quality: number | null; reviewedAt: string | null; reviewedBy: Ref | null }
 export interface TaskDetail extends TaskSummary {
   description: string;
   parentTaskId: string | null;
   createdAt: string;
   updatedAt: string;
   /** What the caller may do with this task. The server checks again on every write. */
-  can: { edit: boolean; editEstimate: boolean; update: boolean; assign: boolean; comment: boolean };
+  can: { edit: boolean; editEstimate: boolean; update: boolean; assign: boolean; comment: boolean; link: boolean; recordOutcome: boolean; review: boolean };
+  /** The objective and key result it supports (titles only for ones the caller may see). */
+  links: { objective: { id: string; title: string; level: string } | null; keyResult: { id: string; title: string } | null; hidden: boolean };
+  dependsOn: DependencyView[];
+  blocking: DependencyView[];
+  outcome: OutcomeView | null;
   /** The statuses this task may move to from where it is. */
   nextStatuses: string[];
 }
@@ -105,7 +117,7 @@ const cleanDate = (raw: string | null | undefined, field: string): string | null
  */
 export class TaskService {
   constructor(
-    private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; events: EventWriter; notifications: NotificationService },
+    private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; events: EventWriter; notifications: NotificationService; okr: OkrService },
   ) {}
 
   private ctx(auth: AuthContext, requestId: string): TenantCtx {
@@ -129,7 +141,16 @@ export class TaskService {
     const myTeams = new Set(people.teamRows({ membershipId: ctx.membershipId, asOf: today }).map((r) => r.team_id));
     const assigns = new Map<string, AssignmentRow[]>();
     for (const a of tasks.activeAssignments()) assigns.set(a.task_id, [...(assigns.get(a.task_id) ?? []), a]);
-    return { tdb, tasks, people, structure, today, names, teams, myTeams, assigns };
+    const taskStatus = new Map<string, string>();
+    const dependsOn = new Map<string, string[]>();
+    const blocking = new Map<string, string[]>();
+    const depRows = tasks.dependencies();
+    if (depRows.length > 0) for (const t of tasks.list({ includeArchived: true })) taskStatus.set(t.id, t.status);
+    for (const d of depRows) {
+      dependsOn.set(d.task_id, [...(dependsOn.get(d.task_id) ?? []), d.depends_on_task_id]);
+      blocking.set(d.depends_on_task_id, [...(blocking.get(d.depends_on_task_id) ?? []), d.task_id]);
+    }
+    return { ctx, tdb, tasks, people, structure, today, names, teams, myTeams, assigns, taskStatus, dependsOn, blocking };
   }
   private who = (w: ReturnType<TaskService["world"]>, id: string): Ref => ({ id, name: w.names.get(id) ?? "Former member" });
 
@@ -176,7 +197,13 @@ export class TaskService {
       assignees: (w.assigns.get(t.id) ?? []).map((a) => (a.assignee_membership_id ? { assignmentId: a.id, kind: "person" as const, id: a.assignee_membership_id, name: w.names.get(a.assignee_membership_id) ?? "Former member", role: a.role } : { assignmentId: a.id, kind: "team" as const, id: a.assignee_team_id!, name: w.teams.get(a.assignee_team_id!) ?? "Team", role: a.role })),
       completedAt: t.completed_at,
       isDemo: t.is_demo === 1,
+      objectiveId: t.objective_id,
+      keyResultId: t.key_result_id,
+      waitingOn: this.waitingOn(w, t.id),
     };
+  }
+  private waitingOn(w: ReturnType<TaskService["world"]>, id: string): number {
+    return (w.dependsOn.get(id) ?? []).filter((d) => isOpen(w.taskStatus.get(d) ?? "completed")).length;
   }
 
   // ---------- reading ----------
@@ -185,7 +212,7 @@ export class TaskService {
     auth: AuthContext,
     requestId: string,
     caps: Capabilities,
-    q: { assigneeId?: string; teamId?: string; status?: string[]; priority?: string; overdue?: boolean; blocked?: boolean; mine?: boolean; search?: string; dueFrom?: string; dueTo?: string; limit?: number; offset?: number },
+    q: { assigneeId?: string; teamId?: string; status?: string[]; priority?: string; overdue?: boolean; blocked?: boolean; mine?: boolean; search?: string; dueFrom?: string; dueTo?: string; objectiveId?: string; keyResultId?: string; unaligned?: boolean; waiting?: boolean; limit?: number; offset?: number },
   ): { tasks: TaskSummary[]; total: number; limit: number; offset: number } {
     const ctx = this.ctx(auth, requestId);
     const w = this.world(ctx);
@@ -198,6 +225,10 @@ export class TaskService {
       if (q.assigneeId && !as.some((a) => a.assignee_membership_id === q.assigneeId)) return false;
       if (q.teamId && !(t.team_id === q.teamId || as.some((a) => a.assignee_team_id === q.teamId))) return false;
       if (q.overdue && !(t.due_at !== null && isOpen(t.status) && t.due_at < w.today)) return false;
+      if (q.objectiveId && t.objective_id !== q.objectiveId) return false;
+      if (q.keyResultId && t.key_result_id !== q.keyResultId) return false;
+      if (q.unaligned && (t.objective_id !== null || !isOpen(t.status))) return false;
+      if (q.waiting && this.waitingOn(w, t.id) === 0) return false;
       if (needle && !t.title.toLowerCase().includes(needle)) return false;
       return true;
     });
@@ -214,18 +245,48 @@ export class TaskService {
     return this.toDetail(w, caps, t, ctx.membershipId);
   }
 
-  private toDetail(w: ReturnType<TaskService["world"]>, caps: Capabilities, t: TaskRow, me: string): TaskDetail {
+  private toDetail(w: ReturnType<TaskService["world"]>, caps: Capabilities, t: TaskRow, me: string, ctx?: TenantCtx): TaskDetail {
     const editAll = this.canEditAll(w, caps, t, me);
     const doing = this.doing(w, t, me);
+    const c = ctx ?? w.ctx;
+    // objective titles only for objectives the caller may see
+    const linkable = t.objective_id ? this.o.okr.mayLink(c, caps, t.objective_id, t.key_result_id) : { ok: false as const };
+    const linkInfo = t.objective_id && linkable.ok ? this.o.okr.linkTitles(c, t.objective_id, t.key_result_id) : null;
+    const view = (id: string): DependencyView => {
+      const other = w.tasks.find(id);
+      const visible = !!other && !other.archived_at && this.canSee(w, caps, other, me);
+      return { id, title: visible ? other!.title : "A task you cannot see", status: visible ? other!.status : w.taskStatus.get(id) ?? "unknown", visible };
+    };
+    const hasOutcome = t.outcome_summary !== null || t.outcome_value !== null || t.outcome_quality !== null;
     return {
       ...this.summary(w, t),
       description: t.description,
       parentTaskId: t.parent_task_id,
       createdAt: t.created_at,
       updatedAt: t.updated_at,
-      can: { edit: editAll, editEstimate: editAll || doing, update: editAll || doing, assign: this.canAssign(w, caps, t), comment: true },
+      can: {
+        edit: editAll,
+        editEstimate: editAll || doing,
+        update: editAll || doing,
+        assign: this.canAssign(w, caps, t),
+        comment: true,
+        link: editAll,
+        recordOutcome: (editAll || doing) && (t.status === "completed" || t.status === "under_review"),
+        review: this.canReview(w, caps, t, me),
+      },
       nextStatuses: [...(TRANSITIONS[t.status as Status] ?? [])],
+      links: { objective: linkInfo ? linkInfo.objective : null, keyResult: linkInfo ? linkInfo.keyResult : null, hidden: !!t.objective_id && !linkable.ok },
+      dependsOn: (w.dependsOn.get(t.id) ?? []).map(view),
+      blocking: (w.blocking.get(t.id) ?? []).map(view),
+      outcome: hasOutcome ? { summary: t.outcome_summary ?? "", value: t.outcome_value, quality: t.outcome_quality, reviewedAt: t.outcome_reviewed_at, reviewedBy: t.outcome_reviewed_by ? this.who(w, t.outcome_reviewed_by) : null } : null,
     };
+  }
+  /** A reviewer: `task.review` over the people doing the task, and not the only person who did it. */
+  private canReview(w: ReturnType<TaskService["world"]>, caps: Capabilities, t: TaskRow, me: string): boolean {
+    if (t.status !== "completed") return false;
+    if (!this.inScope(w, t, caps.scope("task.review"))) return false;
+    const doers = (w.assigns.get(t.id) ?? []).filter((a) => a.role === "assignee" && a.assignee_membership_id !== null).map((a) => a.assignee_membership_id);
+    return !(doers.length > 0 && doers.every((d) => d === me));
   }
 
   updates(auth: AuthContext, requestId: string, caps: Capabilities, id: string): UpdateView[] {
@@ -281,7 +342,7 @@ export class TaskService {
     return this.toDetail(fresh, caps, t, me);
   }
 
-  update(auth: AuthContext, requestId: string, caps: Capabilities, id: string, input: { title?: string; description?: string; priority?: string; importanceWeight?: number; startDate?: string | null; dueAt?: string | null; estimatedMinutes?: number | null; teamId?: string | null }): TaskDetail {
+  update(auth: AuthContext, requestId: string, caps: Capabilities, id: string, input: { title?: string; description?: string; priority?: string; importanceWeight?: number; startDate?: string | null; dueAt?: string | null; estimatedMinutes?: number | null; teamId?: string | null; objectiveId?: string | null; keyResultId?: string | null }): TaskDetail {
     const ctx = this.ctx(auth, requestId);
     const w = this.world(ctx);
     const me = ctx.membershipId;
@@ -300,6 +361,7 @@ export class TaskService {
       dueAt: input.dueAt !== undefined ? cleanDate(input.dueAt, "The due date") : t.due_at,
       estimatedMinutes: input.estimatedMinutes !== undefined ? this.estimate(input.estimatedMinutes) : t.estimated_minutes,
       teamId: input.teamId !== undefined ? input.teamId : t.team_id,
+      ...this.resolveLinks(ctx, caps, t, input),
     };
     if (next.startDate && next.dueAt && next.dueAt < next.startDate) throw new HttpError(400, "invalid_date", "The due date cannot be before the start date.");
     if (next.teamId && next.teamId !== t.team_id) {
@@ -307,14 +369,140 @@ export class TaskService {
       if (!team) throw notFound();
       if (team.archived_at) throw new HttpError(409, "archived", "That team is archived.");
     }
-    if (!isOpen(t.status) && fields.some((f) => f !== "estimatedMinutes" && f !== "description")) throw new HttpError(409, "task_closed", "This task is finished or cancelled. Reopen it before changing it.");
-    const prev = { title: t.title, description: t.description, priority: t.priority, importanceWeight: t.importance_weight, startDate: t.start_date, dueAt: t.due_at, estimatedMinutes: t.estimated_minutes, teamId: t.team_id };
+    if (!isOpen(t.status) && fields.some((f) => f !== "estimatedMinutes" && f !== "description" && f !== "objectiveId" && f !== "keyResultId")) throw new HttpError(409, "task_closed", "This task is finished or cancelled. Reopen it before changing it.");
+    const prev = { title: t.title, description: t.description, priority: t.priority, importanceWeight: t.importance_weight, startDate: t.start_date, dueAt: t.due_at, estimatedMinutes: t.estimated_minutes, teamId: t.team_id, objectiveId: t.objective_id, keyResultId: t.key_result_id };
     const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => next[k] !== prev[k]);
     if (changed.length === 0) return this.toDetail(w, caps, t, me);
     const now = this.now();
     this.o.store.transaction(() => {
       w.tasks.updateFields({ id, ...next, now });
+      if (changed.includes("objectiveId") || changed.includes("keyResultId")) w.tasks.setLinks(id, next.objectiveId, next.keyResultId, now);
       this.o.audit.record(w.tdb, ctx, { action: "task.update", entityType: "task", entityId: id, summary: `Changed the task "${next.title}" (${changed.join(", ")})`, before: Object.fromEntries(changed.map((k) => [k, k === "description" ? "(text)" : prev[k]])), after: Object.fromEntries(changed.map((k) => [k, k === "description" ? "(text)" : next[k]])) });
+    });
+    const fresh = this.world(ctx);
+    return this.toDetail(fresh, caps, fresh.tasks.find(id)!, me);
+  }
+
+  /** Which objective and key result a change leaves the task linked to. The caller must be able to see what they link. */
+  private resolveLinks(ctx: TenantCtx, caps: Capabilities, t: TaskRow, input: { objectiveId?: string | null; keyResultId?: string | null }): { objectiveId: string | null; keyResultId: string | null } {
+    if (input.objectiveId === undefined && input.keyResultId === undefined) return { objectiveId: t.objective_id, keyResultId: t.key_result_id };
+    let objectiveId = input.objectiveId !== undefined ? input.objectiveId : t.objective_id;
+    let keyResultId = input.keyResultId !== undefined ? input.keyResultId : input.objectiveId !== undefined && input.objectiveId !== t.objective_id ? null : t.key_result_id;
+    if (keyResultId) {
+      const owner = this.o.okr.objectiveOfKeyResult(ctx, keyResultId);
+      if (!owner) throw notFound();
+      if (objectiveId && input.objectiveId && input.objectiveId !== owner) throw new HttpError(400, "link_mismatch", "That key result belongs to a different objective.");
+      objectiveId = owner;
+    }
+    if (objectiveId && !this.o.okr.mayLink(ctx, caps, objectiveId, keyResultId).ok) throw notFound();
+    if (!objectiveId) keyResultId = null;
+    return { objectiveId, keyResultId };
+  }
+
+  // ---------- dependencies, outcome and review (stage 4.2) ----------
+
+  addDependency(auth: AuthContext, requestId: string, caps: Capabilities, id: string, dependsOnId: string): TaskDetail {
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const me = ctx.membershipId;
+    const t = w.tasks.find(id);
+    const other = w.tasks.find(dependsOnId);
+    if (!t || t.archived_at || !this.canSee(w, caps, t, me) || !other || other.archived_at || !this.canSee(w, caps, other, me)) throw notFound();
+    if (!this.canEditAll(w, caps, t, me)) throw new HttpError(403, "permission_denied", "Only the person who created this task, or their manager, can set what it waits for.");
+    if (id === dependsOnId) throw new HttpError(400, "self_dependency", "A task cannot wait for itself.");
+    if (!isOpen(t.status)) throw new HttpError(409, "task_closed", "This task is finished or cancelled. Reopen it first.");
+    if ((w.dependsOn.get(id) ?? []).includes(dependsOnId)) throw new HttpError(409, "already_dependent", "That dependency already exists.");
+    if (this.reaches(w, dependsOnId, id)) throw new HttpError(409, "dependency_loop", `"${other.title}" already waits for this task (directly or through other tasks), so this would make a loop.`);
+    this.o.store.transaction(() => {
+      w.tasks.insertDependency(id, dependsOnId, me, this.now());
+      this.o.audit.record(w.tdb, ctx, { action: "task.dependency_add", entityType: "task", entityId: id, summary: `"${t.title}" now waits for "${other.title}"`, after: { dependsOnId } });
+    });
+    const fresh = this.world(ctx);
+    return this.toDetail(fresh, caps, fresh.tasks.find(id)!, me);
+  }
+
+  removeDependency(auth: AuthContext, requestId: string, caps: Capabilities, id: string, dependsOnId: string): TaskDetail {
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const me = ctx.membershipId;
+    const t = w.tasks.find(id);
+    if (!t || t.archived_at || !this.canSee(w, caps, t, me)) throw notFound();
+    if (!this.canEditAll(w, caps, t, me)) throw new HttpError(403, "permission_denied", "Only the person who created this task, or their manager, can set what it waits for.");
+    if (!(w.dependsOn.get(id) ?? []).includes(dependsOnId)) throw notFound();
+    this.o.store.transaction(() => {
+      w.tasks.deleteDependency(id, dependsOnId);
+      this.o.audit.record(w.tdb, ctx, { action: "task.dependency_remove", entityType: "task", entityId: id, summary: `"${t.title}" no longer waits for another task`, before: { dependsOnId } });
+    });
+    const fresh = this.world(ctx);
+    return this.toDetail(fresh, caps, fresh.tasks.find(id)!, me);
+  }
+
+  /** Whether `from` waits (directly or through other tasks) for `target`. */
+  private reaches(w: ReturnType<TaskService["world"]>, from: string, target: string): boolean {
+    const seen = new Set<string>();
+    const stack = [from];
+    while (stack.length > 0) {
+      const cur = stack.pop()!;
+      if (cur === target) return true;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      stack.push(...(w.dependsOn.get(cur) ?? []));
+    }
+    return false;
+  }
+
+  /**
+   * Records what the task achieved. The summary is required; a measured value is optional, and, when the task supports a
+   * key result and the caller asks for it, it is also recorded as that key result's actual value (history source
+   * "task_outcome"). Finishing a task never moves an objective by itself: only recorded values do.
+   */
+  recordOutcome(auth: AuthContext, requestId: string, caps: Capabilities, id: string, input: { summary: string; value?: number | null; recordOnKeyResult?: boolean }): TaskDetail {
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const me = ctx.membershipId;
+    const t = w.tasks.find(id);
+    if (!t || t.archived_at || !this.canSee(w, caps, t, me)) throw notFound();
+    if (!(this.canEditAll(w, caps, t, me) || this.doing(w, t, me))) throw new HttpError(403, "permission_denied", "Only the people doing this task, the person who created it, or their manager can record its outcome.");
+    if (t.status !== "completed" && t.status !== "under_review") throw new HttpError(409, "not_finished", "Record the outcome once the task is finished or under review.");
+    const summary = cleanLong(input.summary, 2000, "The outcome");
+    if (summary.length === 0) throw new HttpError(400, "outcome_required", "Say in a sentence what the task achieved.");
+    const value = input.value === undefined || input.value === null ? null : input.value;
+    if (value !== null && (!Number.isFinite(value) || Math.abs(value) > 1e12)) throw new HttpError(400, "invalid_number", "The measured value must be a number.");
+    const alsoKr = input.recordOnKeyResult === true;
+    if (alsoKr) {
+      if (value === null) throw new HttpError(400, "value_required", "Give the measured value to record it on the key result.");
+      if (!t.key_result_id) throw new HttpError(409, "no_key_result", "This task is not linked to a key result.");
+      if (!this.o.okr.mayRecord(ctx, caps, t.key_result_id)) throw new HttpError(403, "permission_denied", "You cannot record values for this key result, or its objective is not active.");
+    }
+    this.o.store.transaction(() => {
+      w.tasks.setOutcome(id, summary, value, this.now());
+      this.o.audit.record(w.tdb, ctx, { action: "task.outcome", entityType: "task", entityId: id, summary: `Recorded the outcome of the task "${t.title}"`, after: { value, onKeyResult: alsoKr } });
+      this.o.events.record(w.tdb, ctx, { eventType: "task.outcome_recorded", entityType: "task", entityId: id, dedupeKey: `task.outcome:${id}:${this.now()}`, payload: { taskId: id, title: t.title, value } });
+      if (alsoKr) this.o.okr.recordProgress(auth, requestId, caps, t.key_result_id!, { value: value!, note: `From the task "${t.title}": ${summary}`.slice(0, 1000) }, "task_outcome");
+    });
+    const fresh = this.world(ctx);
+    return this.toDetail(fresh, caps, fresh.tasks.find(id)!, me);
+  }
+
+  /** A reviewer's 1 to 5 rating of the finished work. Not for the only person who did it. */
+  review(auth: AuthContext, requestId: string, caps: Capabilities, id: string, input: { quality: number; note?: string }): TaskDetail {
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const me = ctx.membershipId;
+    const t = w.tasks.find(id);
+    if (!t || t.archived_at || !this.canSee(w, caps, t, me)) throw notFound();
+    if (t.status !== "completed") throw new HttpError(409, "not_finished", "Only finished tasks can be reviewed.");
+    if (!this.canReview(w, caps, t, me)) throw new HttpError(403, "permission_denied", "You can review finished work of people in your scope, but not your own.");
+    if (!Number.isInteger(input.quality) || input.quality < 1 || input.quality > 5) throw new HttpError(400, "invalid_quality", "The quality rating is a whole number from 1 to 5.");
+    const note = cleanLong(input.note, 1000, "The note") || null;
+    this.o.store.transaction(() => {
+      w.tasks.setReview(id, input.quality, me, this.now());
+      const uid = newId();
+      w.tasks.insertUpdate({ id: uid, taskId: id, author: me, type: "review", fromStatus: null, toStatus: null, progressPct: null, minutes: null, body: `Rated ${input.quality} of 5${note ? `: ${note}` : ""}`, now: this.now() });
+      this.o.audit.record(w.tdb, ctx, { action: "task.review", entityType: "task", entityId: id, summary: `Rated the outcome of the task "${t.title}" ${input.quality} of 5`, after: { quality: input.quality } });
+      this.o.events.record(w.tdb, ctx, { eventType: "task.reviewed", entityType: "task", entityId: id, dedupeKey: `task.reviewed:${uid}`, payload: { taskId: id, title: t.title, quality: input.quality } });
+      const doers = (w.assigns.get(id) ?? []).filter((a) => a.role === "assignee" && a.assignee_membership_id !== null && a.assignee_membership_id !== me).map((a) => a.assignee_membership_id!);
+      if (doers.length > 0) this.o.notifications.notify(w.tdb, { recipients: doers, type: "task.reviewed", title: `${w.names.get(me) ?? "A reviewer"} reviewed your finished task`, body: `${t.title}: ${input.quality} of 5`, entityType: "task", entityId: id, dedupeKey: `task.reviewed:${uid}` });
     });
     const fresh = this.world(ctx);
     return this.toDetail(fresh, caps, fresh.tasks.find(id)!, me);
@@ -415,6 +603,7 @@ export class TaskService {
         if (!TRANSITIONS[t.status as Status]?.includes(to)) throw new HttpError(409, "invalid_transition", `A task that is ${t.status.replace("_", " ")} cannot go straight to ${to.replace("_", " ")}.`, { allowed: TRANSITIONS[t.status as Status] });
         if (to === "blocked" && !note) throw new HttpError(400, "reason_required", "Say what is blocking the task.");
         const completed = to === "completed";
+        if (completed && this.waitingOn(w, id) > 0) throw new HttpError(409, "waiting_on_tasks", `This task waits for ${this.waitingOn(w, id)} other ${this.waitingOn(w, id) === 1 ? "task" : "tasks"} that ${this.waitingOn(w, id) === 1 ? "is" : "are"} not finished yet.`, { waitingOn: this.waitingOn(w, id) });
         const progress = completed ? 100 : t.status === "completed" ? Math.min(t.progress_pct, 90) : t.progress_pct;
         w.tasks.setStatus({ id, status: to, progressPct: progress, completedAt: completed ? now : null, blockedReason: to === "blocked" ? note : null, now });
         w.tasks.insertUpdate({ id: uid, taskId: id, author: me, type: "status_change", fromStatus: t.status, toStatus: to, progressPct: progress, minutes: null, body: note, now });
@@ -544,7 +733,7 @@ export class TaskService {
     const blocked = open.filter((t) => t.status === "blocked");
     const underWay = open.filter((t) => t.status === "in_progress");
     const unscheduled = open.filter((t) => t.due_at === null && t.status !== "blocked" && t.status !== "in_progress");
-    const order = suggestOrder(open.map((t) => ({ id: t.id, status: t.status, priority: t.priority, importanceWeight: t.importance_weight, dueAt: t.due_at })), w.today);
+    const order = suggestOrder(open.map((t) => ({ id: t.id, status: t.status, priority: t.priority, importanceWeight: t.importance_weight, dueAt: t.due_at, waitingOn: this.waitingOn(w, t.id), aligned: t.objective_id !== null })), w.today);
     const byId = new Map(open.map((t) => [t.id, t]));
     const since = addDays(w.today, -14);
     const achievements = mine.filter((t) => t.status === "completed" && t.completed_at !== null && t.completed_at.slice(0, 10) >= since).sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? "")).slice(0, 10);

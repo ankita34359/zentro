@@ -3,7 +3,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { NAV_ITEMS } from "@/routes/navigation";
-import { HEALTH_OK, json, renderApp, stubFetch, stubMatchMedia } from "./helpers";
+import { envelope, HEALTH_OK, json, renderApp, stubFetch, stubMatchMedia } from "./helpers";
 
 beforeEach(() => {
   stubMatchMedia(false);
@@ -82,7 +82,7 @@ describe("routes", () => {
     expect(document.title).toBe("Overview · Zentro");
   });
 
-  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work"))("renders $label with an empty state that says what to do", async (n) => {
+  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs"))("renders $label with an empty state that says what to do", async (n) => {
     renderApp(n.path);
     await screen.findByRole("heading", { level: 1, name: n.label });
     expect(screen.getByRole("heading", { level: 2 })).toBeTruthy(); // the empty-state headline
@@ -114,9 +114,18 @@ describe("routes", () => {
     expect(screen.getByRole("link", { name: /Profile/ }).getAttribute("href")).toBe("/settings/profile");
   });
 
-  it("keeps sub-paths inside their section (deep links work)", async () => {
-    renderApp("/okrs/123/edit");
+  it("renders OKRs & Goals as a real page (stage 3.1) with an honest empty state, and keeps sub-paths inside their section", async () => {
+    stubFetch((url) => (url.startsWith("/api/objectives") ? envelope([]) : json(HEALTH_OK)));
+    renderApp("/okrs");
     await screen.findByRole("heading", { level: 1, name: "OKRs & Goals" });
+    expect(document.title).toBe("OKRs & Goals · Zentro");
+    expect(await screen.findByRole("heading", { level: 2, name: "No objectives yet" })).toBeTruthy();
+    expect(screen.queryByText(/Planned for stage/)).toBeNull();
+  });
+
+  it("keeps sub-paths inside their section (deep links work)", async () => {
+    renderApp("/kpis/123/edit");
+    await screen.findByRole("heading", { level: 1, name: "KPIs" });
   });
 
   it("shows a 404 page inside the shell for an unknown address, with a way back", async () => {

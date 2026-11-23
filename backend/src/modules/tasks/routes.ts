@@ -32,13 +32,13 @@ export function registerTaskRoutes(registry: RouteRegistry, deps: { permissions:
     method: "get",
     path: "/api/tasks",
     access: { kind: "permission", key: "task.view" },
-    summary: "Tasks you may see: ones you created, do or watch, plus those of people or teams in your `task.view` scope. Query: `assigneeId`, `teamId`, `status` (comma list), `priority`, `overdue`, `blocked`, `mine` (tasks you do), `search`, `dueFrom`, `dueTo`, `limit` (default 100, at most 300), `offset`. Returns `{tasks, total, limit, offset}`",
-    schema: { query: z.object({ assigneeId: uuid.optional(), teamId: uuid.optional(), status: z.string().max(120).optional(), priority: z.enum(PRIORITIES).optional(), overdue: flag.optional(), blocked: flag.optional(), mine: flag.optional(), search: z.string().max(100).optional(), dueFrom: day.optional(), dueTo: day.optional(), limit: z.coerce.number().int().min(1).max(300).optional(), offset: z.coerce.number().int().min(0).optional() }).strict() },
+    summary: "Tasks you may see: ones you created, do or watch, plus those of people or teams in your `task.view` scope. Query: `assigneeId`, `teamId`, `status` (comma list), `priority`, `overdue`, `blocked`, `mine` (tasks you do), `search`, `dueFrom`, `dueTo`, `objectiveId`, `keyResultId`, `unaligned` (open tasks supporting no objective), `waiting` (tasks waiting for others), `limit` (default 100, at most 300), `offset`. Returns `{tasks, total, limit, offset}`",
+    schema: { query: z.object({ assigneeId: uuid.optional(), teamId: uuid.optional(), status: z.string().max(120).optional(), priority: z.enum(PRIORITIES).optional(), overdue: flag.optional(), blocked: flag.optional(), mine: flag.optional(), search: z.string().max(100).optional(), dueFrom: day.optional(), dueTo: day.optional(), objectiveId: uuid.optional(), keyResultId: uuid.optional(), unaligned: flag.optional(), waiting: flag.optional(), limit: z.coerce.number().int().min(1).max(300).optional(), offset: z.coerce.number().int().min(0).optional() }).strict() },
     handler: (_req, res, v) => {
-      const q = v.query as { assigneeId?: string; teamId?: string; status?: string; priority?: string; overdue?: string; blocked?: string; mine?: string; search?: string; dueFrom?: string; dueTo?: string; limit?: number; offset?: number };
+      const q = v.query as { assigneeId?: string; teamId?: string; status?: string; priority?: string; overdue?: string; blocked?: string; mine?: string; search?: string; dueFrom?: string; dueTo?: string; objectiveId?: string; keyResultId?: string; unaligned?: string; waiting?: string; limit?: number; offset?: number };
       const status = q.status ? q.status.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
       if (status?.some((s) => !(STATUSES as readonly string[]).includes(s))) return sendData(res, { tasks: [], total: 0, limit: 0, offset: 0 });
-      sendData(res, call(res, (a, r, c) => tasks.list(a, r, c, { ...q, status, overdue: q.overdue === "true", blocked: q.blocked === "true", mine: q.mine === "true" })));
+      sendData(res, call(res, (a, r, c) => tasks.list(a, r, c, { ...q, status, overdue: q.overdue === "true", blocked: q.blocked === "true", mine: q.mine === "true", unaligned: q.unaligned === "true", waiting: q.waiting === "true" })));
     },
   });
   registry.add({
@@ -64,8 +64,8 @@ export function registerTaskRoutes(registry: RouteRegistry, deps: { permissions:
     path: "/api/tasks/:id",
     access: { kind: "permission", key: "task.view" },
     takesEntityId: true,
-    summary: "Change a task's details: `{title?, description?, priority?, importanceWeight?, startDate?, dueAt?, estimatedMinutes?, teamId?}`. The creator and `task.edit` over the people doing it change everything; an assignee changes the estimate only (403 otherwise). A finished or cancelled task must be reopened first (409 task_closed). Audited",
-    schema: { params: idParams, body: z.object({ title: z.string().min(1).max(400).optional(), description: z.string().max(8000).optional(), priority: z.enum(PRIORITIES).optional(), importanceWeight: z.number().int().min(1).max(5).optional(), startDate: day.nullable().optional(), dueAt: day.nullable().optional(), estimatedMinutes: z.number().int().min(1).max(100000).nullable().optional(), teamId: uuid.nullable().optional() }).strict() },
+    summary: "Change a task's details: `{title?, description?, priority?, importanceWeight?, startDate?, dueAt?, estimatedMinutes?, teamId?, objectiveId?, keyResultId?}` (the last two link the task to an objective or key result the caller may see; a key result implies its objective; null unlinks; 404 for one the caller cannot see). The creator and `task.edit` over the people doing it change everything; an assignee changes the estimate only (403 otherwise). A finished or cancelled task must be reopened first (409 task_closed). Audited",
+    schema: { params: idParams, body: z.object({ title: z.string().min(1).max(400).optional(), description: z.string().max(8000).optional(), priority: z.enum(PRIORITIES).optional(), importanceWeight: z.number().int().min(1).max(5).optional(), startDate: day.nullable().optional(), dueAt: day.nullable().optional(), estimatedMinutes: z.number().int().min(1).max(100000).nullable().optional(), teamId: uuid.nullable().optional(), objectiveId: uuid.nullable().optional(), keyResultId: uuid.nullable().optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => tasks.update(a, r, c, id(v), v.body as Parameters<TaskService["update"]>[4]))),
   });
   registry.add({
@@ -103,6 +103,42 @@ export function registerTaskRoutes(registry: RouteRegistry, deps: { permissions:
     summary: "Add to a task's history (append only): `{type: status_change|progress|time_log|blocker, toStatus?, progressPct?, minutesLogged?, note?}`. Allowed for the people doing the task, its creator and `task.edit` over them. A status change follows the workflow (409 invalid_transition) and `blocked` needs a note; `progress` is 0 to 99 (use completed for done); time is 1 to 1440 minutes. Notifies the creator of a blocker or completion; audited for status changes",
     schema: { params: idParams, body: z.object({ type: z.enum(["status_change", "progress", "time_log", "blocker"]), toStatus: z.enum(STATUSES).optional(), progressPct: z.number().int().min(0).max(100).optional(), minutesLogged: z.number().int().min(1).max(1440).optional(), note: z.string().max(2000).optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => tasks.addUpdate(a, r, c, id(v), v.body as Parameters<TaskService["addUpdate"]>[4])), 201),
+  });
+  registry.add({
+    method: "post",
+    path: "/api/tasks/:id/dependencies",
+    access: { kind: "permission", key: "task.view" },
+    takesEntityId: true,
+    summary: "Make this task wait for another: `{dependsOnId}`. Both tasks must be visible to the caller, who must be the creator or hold `task.edit` over the people doing this one (403). 400 self_dependency, 409 dependency_loop, already_dependent, task_closed. The waiting task cannot be completed until the other is finished or cancelled (409 waiting_on_tasks). Audited",
+    schema: { params: idParams, body: z.object({ dependsOnId: uuid }).strict() },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => tasks.addDependency(a, r, c, id(v), (v.body as { dependsOnId: string }).dependsOnId)), 201),
+  });
+  registry.add({
+    method: "delete",
+    path: "/api/tasks/:id/dependencies/:depId",
+    access: { kind: "permission", key: "task.view" },
+    takesEntityId: true,
+    summary: "Remove a dependency (same permission as adding one). 404 when there is no such dependency. Audited",
+    schema: { params: z.object({ id: uuid, depId: uuid }) },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => tasks.removeDependency(a, r, c, id(v), (v.params as { depId: string }).depId))),
+  });
+  registry.add({
+    method: "post",
+    path: "/api/tasks/:id/outcome",
+    access: { kind: "permission", key: "task.view" },
+    takesEntityId: true,
+    summary: "Record what a finished (or under-review) task achieved: `{summary, value?, recordOnKeyResult?}`. The people doing the task, its creator and `task.edit` over them may. With `recordOnKeyResult` and a `value`, the value is also recorded as the linked key result's actual value in the same transaction (needs `okr.update_progress` over it; history source task_outcome). A new outcome clears an earlier review. 409 not_finished, no_key_result. Audited",
+    schema: { params: idParams, body: z.object({ summary: z.string().min(1).max(2000), value: z.number().nullable().optional(), recordOnKeyResult: z.boolean().optional() }).strict() },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => tasks.recordOutcome(a, r, c, id(v), v.body as Parameters<TaskService["recordOutcome"]>[4])), 201),
+  });
+  registry.add({
+    method: "post",
+    path: "/api/tasks/:id/review",
+    access: { kind: "permission", key: "task.review" },
+    takesEntityId: true,
+    summary: "Rate the quality of a finished task, 1 to 5: `{quality, note?}`. Needs `task.review` over the people who did it, and a reviewer is never the only person who did the work (403). 409 not_finished. Notifies the people who did it. Audited",
+    schema: { params: idParams, body: z.object({ quality: z.number().int().min(1).max(5), note: z.string().max(1000).optional() }).strict() },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => tasks.review(a, r, c, id(v), v.body as { quality: number; note?: string })), 201),
   });
   registry.add({
     method: "get",

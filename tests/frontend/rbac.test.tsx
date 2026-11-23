@@ -36,8 +36,9 @@ describe("the sidebar follows what the person may do (a convenience; the server 
     setMe(ME_NO_ROLE);
     server();
     renderApp("/overview");
-    const labels = await sidebarLabels((l) => l.length >= 6);
-    expect(labels).toEqual(["Overview", "OKRs & Goals", "My Work", "Team Performance", "Performance Intelligence", "Settings"]);
+    const labels = await sidebarLabels((l) => l.length >= 5);
+    expect(labels).toEqual(["Overview", "My Work", "Team Performance", "Performance Intelligence", "Settings"]);
+    expect(labels).not.toContain("OKRs & Goals"); // needs okr.view
     expect(labels).not.toContain("Organization");
     expect(labels).not.toContain("Leadership");
   });
@@ -55,10 +56,10 @@ describe("the sidebar follows what the person may do (a convenience; the server 
 });
 
 describe("a person with no role and the pages they can still open", () => {
-  it("OKRs, Team Performance and Performance Intelligence show only the placeholder: the browser asks the server for nothing but who they are and the health check", async () => {
+  it("Team Performance and Performance Intelligence show only the placeholder: the browser asks the server for nothing but who they are and the health check", async () => {
     setMe(ME_NO_ROLE);
     const f = server();
-    for (const [path, title] of [["/okrs", "OKRs & Goals"], ["/team-performance", "Team Performance"], ["/performance", "Performance Intelligence"]] as const) {
+    for (const [path, title] of [["/team-performance", "Team Performance"], ["/performance", "Performance Intelligence"]] as const) {
       const { unmount } = renderApp(path);
       expect(await screen.findByRole("heading", { level: 1, name: title })).toBeTruthy();
       expect(screen.getByText(/Planned for stage \d\.\d/)).toBeTruthy(); // no data, no numbers: an honest "not built yet"

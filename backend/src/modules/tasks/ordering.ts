@@ -6,6 +6,10 @@ export interface Rankable {
   priority: string;
   importanceWeight: number;
   dueAt: string | null;
+  /** Open tasks this one has to wait for (stage 4.2). */
+  waitingOn?: number;
+  /** The task is linked to an objective or key result (stage 4.2). */
+  aligned?: boolean;
 }
 
 export interface Ranked {
@@ -51,6 +55,15 @@ export function suggestOrder(tasks: readonly Rankable[], today: string): Ranked[
     if (t.status === "in_progress") {
       score += 50;
       reasons.push("Already under way");
+    }
+    if (t.aligned) {
+      score += 25;
+      reasons.push("Supports an objective");
+    }
+    if ((t.waitingOn ?? 0) > 0) {
+      score -= 2000; // cannot be finished yet, but can still be prepared: after workable tasks, before blocked ones
+      reasons.length = 0;
+      reasons.push(t.waitingOn === 1 ? "Waiting for another task to finish first" : `Waiting for ${t.waitingOn} other tasks to finish first`);
     }
     if (t.status === "blocked") {
       score -= 5000; // always after everything that can be worked on

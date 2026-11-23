@@ -36,7 +36,7 @@ describe("Settings → Demo data (stage 2.8)", () => {
     expect(calls(f, "/api/demo/load", "POST")).toHaveLength(0); // it asks first
     expect(screen.getByText(/adds about 60 fictional people/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Yes, load demo data" }));
-    expect(await screen.findByText(/Demo data loaded: 64 people, 6 departments, 12 teams and 150 tasks/)).toBeTruthy();
+    expect(await screen.findByText(/Demo data loaded: 64 people, 6 departments, 12 teams, 150 tasks and \d+ objectives/)).toBeTruthy();
     await waitFor(() => expect(screen.getByText("Demo data loaded", { selector: "span" })).toBeTruthy());
   });
 

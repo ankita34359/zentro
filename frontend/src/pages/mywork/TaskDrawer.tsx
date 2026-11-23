@@ -17,6 +17,7 @@ import {
   addComment, addTaskUpdate, assignTask, deleteComment, getComments, getTask, getUpdates, minutesLabel, PRIORITY_LABEL, STATUS_LABEL, unassignTask, updateTask,
   type TaskDetail, type UpdateEntry,
 } from "@/services/tasks";
+import { AlignmentSection } from "./AlignmentSection";
 import { dueText, TaskStatusBadge } from "./taskUi";
 
 const field = "h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs";
@@ -43,7 +44,7 @@ export function TaskDrawer({ id, today, onClose }: { id: string | null; today: s
   );
 }
 
-const REFRESH = ["task", "task-updates", "task-comments", "tasks", "my-work", "notifications"];
+const REFRESH = ["task", "task-updates", "task-comments", "tasks", "my-work", "notifications", "objectives", "objective", "objective-history", "overview"];
 
 function Body({ id, today }: { id: string; today: string }) {
   const client = useQueryClient();
@@ -120,6 +121,7 @@ function Body({ id, today }: { id: string; today: string }) {
         {t.description && <p className="whitespace-pre-wrap text-body">{t.description}</p>}
         {t.can.update && <WorkSection t={t} busy={run.isPending} act={act} />}
         <PeopleSection t={t} busy={run.isPending} act={act} />
+        <AlignmentSection t={t} busy={run.isPending} act={act} />
         {(t.can.edit || t.can.editEstimate) && <EditSection t={t} busy={run.isPending} act={act} />}
         <CommentsSection id={id} canComment={t.can.comment} onProblem={setProblem} />
         <HistorySection id={id} />

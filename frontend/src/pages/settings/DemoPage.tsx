@@ -37,11 +37,11 @@ export default function DemoPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = () => {
-    for (const k of ["demo", "structure", "people", "tree", "tasks", "my-work", "overview", "audit", "members"]) void client.invalidateQueries({ queryKey: [k] });
+    for (const k of ["demo", "structure", "people", "tree", "tasks", "my-work", "overview", "audit", "members", "objectives", "objective", "linkable"]) void client.invalidateQueries({ queryKey: [k] });
   };
   const load = useMutation({
     mutationFn: loadDemo,
-    onSuccess: (d) => { setConfirm(null); setProblem(null); setBlockers([]); setNotice(`Demo data loaded: ${d.counts.people} people, ${d.counts.departments} departments, ${d.counts.teams} teams and ${d.counts.tasks} tasks.`); refresh(); },
+    onSuccess: (d) => { setConfirm(null); setProblem(null); setBlockers([]); setNotice(`Demo data loaded: ${d.counts.people} people, ${d.counts.departments} departments, ${d.counts.teams} teams, ${d.counts.tasks} tasks and ${d.counts.objectives ?? 0} objectives.`); refresh(); },
     onError: (e) => { setConfirm(null); setNotice(null); setProblem(problemText(e)); },
   });
   const remove = useMutation({

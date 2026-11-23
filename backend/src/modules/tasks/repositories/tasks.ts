@@ -21,8 +21,15 @@ export interface TaskRow {
   is_demo: number;
   created_at: string;
   updated_at: string;
+  objective_id: string | null;
+  key_result_id: string | null;
+  outcome_summary: string | null;
+  outcome_value: number | null;
+  outcome_quality: number | null;
+  outcome_reviewed_at: string | null;
+  outcome_reviewed_by: string | null;
 }
-const TASK_COLS = "id, title, description, status, priority, importance_weight, progress_pct, start_date, due_at, estimated_minutes, actual_minutes, completed_at, blocked_reason, team_id, parent_task_id, created_by_membership_id, archived_at, is_demo, created_at, updated_at";
+const TASK_COLS = "id, title, description, status, priority, importance_weight, progress_pct, start_date, due_at, estimated_minutes, actual_minutes, completed_at, blocked_reason, team_id, parent_task_id, created_by_membership_id, archived_at, is_demo, created_at, updated_at, objective_id, key_result_id, outcome_summary, outcome_value, outcome_quality, outcome_reviewed_at, outcome_reviewed_by";
 
 export interface AssignmentRow {
   id: string;
@@ -40,6 +47,7 @@ export interface UpdateRow { id: string; task_id: string; author_membership_id: 
 export interface CommentRow { id: string; task_id: string; author_membership_id: string; body: string; edited_at: string | null; deleted_at: string | null; created_at: string }
 export interface DailyUpdateRow { id: string; membership_id: string; update_date: string; summary: string; blockers: string | null; submitted_at: string; updated_at: string }
 
+export interface DependencyRow { task_id: string; depends_on_task_id: string; created_at: string }
 export interface TaskFilter { status?: string[]; priority?: string; dueFrom?: string; dueTo?: string; includeArchived?: boolean }
 
 /** Tasks and everything attached to them, for ONE organization (the tenant handle supplies the organization id). */
@@ -92,6 +100,29 @@ export class TasksRepository {
     this.tdb.run("UPDATE tasks SET actual_minutes = actual_minutes + @minutes, updated_at = @now WHERE organization_id = @organization_id AND id = @id", { id, minutes, now });
   }
   /** Open tasks (not finished, not cancelled, not archived) due on or before a day: the reminder job reads these. */
+  setLinks(id: string, objectiveId: string | null, keyResultId: string | null, now: string): void {
+    this.tdb.run("UPDATE tasks SET objective_id = @objectiveId, key_result_id = @keyResultId, updated_at = @now WHERE organization_id = @organization_id AND id = @id", { id, objectiveId, keyResultId, now });
+  }
+  setOutcome(id: string, summary: string, value: number | null, now: string): void {
+    // a new outcome clears an earlier review: the reviewer rates what is recorded now
+    this.tdb.run("UPDATE tasks SET outcome_summary = @summary, outcome_value = @value, outcome_quality = NULL, outcome_reviewed_at = NULL, outcome_reviewed_by = NULL, updated_at = @now WHERE organization_id = @organization_id AND id = @id", { id, summary, value, now });
+  }
+  setReview(id: string, quality: number, by: string, now: string): void {
+    this.tdb.run("UPDATE tasks SET outcome_quality = @quality, outcome_reviewed_at = @now, outcome_reviewed_by = @by, updated_at = @now WHERE organization_id = @organization_id AND id = @id", { id, quality, by, now });
+  }
+
+  // ----- dependencies -----
+
+  dependencies(): DependencyRow[] {
+    return this.tdb.all<DependencyRow>("SELECT task_id, depends_on_task_id, created_at FROM task_dependencies WHERE organization_id = @organization_id ORDER BY created_at, rowid");
+  }
+  insertDependency(taskId: string, dependsOnId: string, by: string, now: string): void {
+    this.tdb.run("INSERT INTO task_dependencies (organization_id, task_id, depends_on_task_id, created_by_membership_id, created_at) VALUES (@organization_id, @taskId, @dependsOnId, @by, @now)", { taskId, dependsOnId, by, now });
+  }
+  deleteDependency(taskId: string, dependsOnId: string): number {
+    return this.tdb.run("DELETE FROM task_dependencies WHERE organization_id = @organization_id AND task_id = @taskId AND depends_on_task_id = @dependsOnId", { taskId, dependsOnId }).changes;
+  }
+
   openDueBy(day: string): TaskRow[] {
     return this.tdb.all<TaskRow>(`SELECT ${TASK_COLS} FROM tasks WHERE organization_id = @organization_id AND archived_at IS NULL AND status NOT IN ('completed', 'cancelled') AND due_at IS NOT NULL AND due_at <= @day ORDER BY due_at, id`, { day });
   }
