@@ -233,7 +233,7 @@ export class DemoService {
         for (const p of periods) {
           const row = scoring.period(p.id)!;
           const collector = new Collector(tdb, { id: row.id, start: row.start_date, end: row.end_date, open: row.status === "open" }, today);
-          for (const person of company.people) this.o.performance.runFor(tdb, ctx, collector, row, personId.get(person.key)!, person.name, "scheduled", true);
+          for (const person of company.people) this.o.performance.runFor(tdb, ctx, collector, row, personId.get(person.key)!, person.name, row.status === "open" ? "scheduled" : "period_close", true);
         }
       }
 

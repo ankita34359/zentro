@@ -47,6 +47,42 @@ export function registerPerformanceRoutes(registry: RouteRegistry, deps: { permi
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => performance.updatePeriod(a, r, c, id(v), v.body as Parameters<PerformanceService["updatePeriod"]>[4]))),
   });
   registry.add({
+    method: "post",
+    path: "/api/performance/periods/:id/close",
+    access: { kind: "permission", key: "performance.manage_periods" },
+    takesEntityId: true,
+    summary: "Close a period: everyone is scored one last time as of its end (a `period_close` run, added only when something differs from the last run), the scorecards become final and the nightly update stops touching it. 409 not_open, not_started. Reopen it until it is locked. Audited",
+    schema: { params: idParams },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => performance.closePeriod(a, r, c, id(v)))),
+  });
+  registry.add({
+    method: "post",
+    path: "/api/performance/periods/:id/reopen",
+    access: { kind: "permission", key: "performance.manage_periods" },
+    takesEntityId: true,
+    summary: "Reopen a closed period (409 period_locked once locked, not_closed when it is open). Runs are kept; the next calculation adds a provisional run if anything changed. Audited",
+    schema: { params: idParams },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => performance.reopenPeriod(a, r, c, id(v)))),
+  });
+  registry.add({
+    method: "post",
+    path: "/api/performance/periods/:id/lock",
+    access: { kind: "permission", key: "performance.manage_periods" },
+    takesEntityId: true,
+    summary: "Lock a closed period for good: its scores cannot be recalculated (409 period_locked) and no new KPI value can be recorded inside it (a correction needs the supersede route). 409 not_closed, already_locked. Audited",
+    schema: { params: idParams },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => performance.lockPeriod(a, r, c, id(v)))),
+  });
+  registry.add({
+    method: "get",
+    path: "/api/performance/trends",
+    access: { kind: "baseline" },
+    takesEntityId: true,
+    summary: "One person's scores across periods, oldest first (at most 12), each with the change since the period before, and with `?from` and `?to` (period ids) the difference between those two periods part by part. Everyone sees their own; others inside `performance.view_scores`; the parts only with `performance.view_components` (or for yourself). A period where a part had no data shows no difference, never a drop to zero. `subjectId` defaults to the caller; 404 when not visible",
+    schema: { query: z.object({ subjectId: uuid.optional(), from: uuid.optional(), to: uuid.optional() }).strict() },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => performance.trends(a, r, c, v.query as { subjectId?: string; from?: string; to?: string }))),
+  });
+  registry.add({
     method: "get",
     path: "/api/performance/scorecards",
     access: { kind: "baseline" },

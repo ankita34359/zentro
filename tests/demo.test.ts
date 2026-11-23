@@ -526,8 +526,9 @@ describe("Demo scores (stage 5.2)", () => {
     const { owner } = await setup();
     const load = await post(t.app, "/api/demo/load", undefined, owner);
     expect(load.status, JSON.stringify(load.body)).toBe(201);
-    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; isDemo: boolean; scorecards: number }[];
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; isDemo: boolean; status: string; scorecards: number }[];
     expect(periods.filter((p) => p.isDemo)).toHaveLength(2);
+    expect(periods.filter((p) => p.isDemo).map((p) => p.status).sort()).toEqual(["closed", "open"]); // last quarter is closed, this one is open
     const cur = periods.find((p) => p.isDemo && p.scorecards > 0)!;
     const cards = (await get(t.app, `/api/performance/scorecards?periodId=${cur.id}`, owner)).body.data as { isDemo: boolean; total: number | null; status: string }[];
     expect(cards.length).toBeGreaterThanOrEqual(50);

@@ -34,10 +34,10 @@ export interface AuditFilter {
 export class AuditRepository {
   constructor(private readonly tdb: TenantDb) {}
 
-  insert(r: { id: string; actorUserId: string | null; actorMembershipId: string | null; action: string; entityType: string; entityId: string | null; summary: string; beforeJson: string | null; afterJson: string | null; requestId: string | null; now: string }): void {
+  insert(r: { id: string; actorType?: "user" | "system"; actorUserId: string | null; actorMembershipId: string | null; action: string; entityType: string; entityId: string | null; summary: string; beforeJson: string | null; afterJson: string | null; requestId: string | null; now: string }): void {
     this.tdb.run(
-      "INSERT INTO audit_logs (id, organization_id, actor_user_id, actor_membership_id, actor_type, action, entity_type, entity_id, summary, before_json, after_json, request_id, created_at) VALUES (@id, @organization_id, @actorUserId, @actorMembershipId, 'user', @action, @entityType, @entityId, @summary, @beforeJson, @afterJson, @requestId, @now)",
-      r,
+      "INSERT INTO audit_logs (id, organization_id, actor_user_id, actor_membership_id, actor_type, action, entity_type, entity_id, summary, before_json, after_json, request_id, created_at) VALUES (@id, @organization_id, @actorUserId, @actorMembershipId, @actorType, @action, @entityType, @entityId, @summary, @beforeJson, @afterJson, @requestId, @now)",
+      { ...r, actorType: r.actorType ?? "user" },
     );
   }
 

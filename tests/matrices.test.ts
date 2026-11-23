@@ -71,7 +71,7 @@ describe("permission matrix: every role template × every route that needs a per
     // stage 5.2 adds the performance reads: everyone reads their OWN score and what it is made of (docs/permission-model.md 2.1);
     // each of these answers only with the caller's own scorecards plus those inside the scope their role grants
     // (`performance.view_scores`/`view_components`), which tests/scorecards.test.ts checks for every role.
-    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/overview", "/api/performance/periods", "/api/performance/scorecards", "/api/performance/scorecards/:id", "/api/performance/scorecards/for", "/api/performance/scores/:id", "/api/preferences"]);
+    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/overview", "/api/performance/periods", "/api/performance/scorecards", "/api/performance/scorecards/:id", "/api/performance/scorecards/for", "/api/performance/scores/:id", "/api/performance/trends", "/api/preferences"]);
   });
 
   it("every role can use the baseline routes without any permission", async () => {
@@ -214,6 +214,10 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/performance/models/:id/activate": { params: { id: modelA } },
       "/api/performance/models/preview": { params: {}, body: { modelId: modelA, values: { okr: 50 } } },
       "/api/performance/periods/:id": { params: { id: periodA }, body: { name: "Hacked by B" } },
+      "/api/performance/periods/:id/close": { params: { id: periodA } },
+      "/api/performance/periods/:id/reopen": { params: { id: periodA } },
+      "/api/performance/periods/:id/lock": { params: { id: periodA } },
+      "/api/performance/trends": { params: {}, body: { subjectId: personA.membershipId } },
       "/api/performance/scorecards/for": { params: {}, body: { periodId: periodA, subjectId: personA.membershipId } },
       "/api/performance/scorecards/recalculate": { params: {}, body: { periodId: periodA } },
       "/api/performance/scorecards/:id": { params: { id: cardA } },

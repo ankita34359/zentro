@@ -10,12 +10,14 @@ import { todayIn } from "../tasks/dates.js";
 import { Collector, type PeriodInfo } from "./collector.js";
 import { canonicalJson } from "./engine/canonical.js";
 import { computeScore, ENGINE_VERSION } from "./engine/engine.js";
+import { roundHalfUp1 } from "./engine/math.js";
 import type { ComponentResult, Explanation, ModelDef, ScoreInputs, ScoreResult } from "./engine/types.js";
-import { seedTemplates, toModelDef } from "./models.js";
+import { seedTemplates } from "./models.js";
+import { runScore, type RunOutcome, type Trigger } from "./runner.js";
 import type { ModelRow, PeriodRow, ScoreComponentRow, ScoreRow, ScorecardRow } from "./repositories/scoring.js";
 
 export const PERIOD_TYPES = ["month", "quarter", "year", "custom"] as const;
-export type Trigger = "scheduled" | "manual" | "period_close" | "recalculation";
+export type { Trigger } from "./runner.js";
 
 export interface PeriodView { id: string; name: string; periodType: string; startDate: string; endDate: string; status: "open" | "closed" | "locked"; closedAt: string | null; isDemo: boolean; scorecards: number }
 export interface ScoreSummary { scoreId: string; runNumber: number; status: "final" | "provisional" | "insufficient"; total: number | null; band: string | null; confidence: number; confidenceLabel: string; weightCoverage: number; modelName: string; modelVersion: number; computedAt: string; trigger: string }
@@ -34,6 +36,18 @@ export interface ScoreDetail extends ScoreSummary {
 }
 export interface ScorecardDetail { scorecardId: string; subject: { id: string; name: string }; period: PeriodView; latest: ScoreDetail | null; runs: ScoreSummary[]; can: { recalculate: boolean; components: boolean } }
 export interface VerifyResult { matches: boolean; expected: { total: number | null; status: string }; actual: { total: number | null; status: string }; engineVersion: string; modelVersion: number; mismatches: string[] }
+
+export interface TrendComponent { key: string; label: string; state: "ok" | "insufficient" | "missing"; score: number | null; delta: number | null }
+export interface TrendPoint { periodId: string; periodName: string; startDate: string; endDate: string; periodStatus: string; scoreId: string; runNumber: number; status: ScoreSummary["status"]; total: number | null; band: string | null; confidence: number; confidenceLabel: string; model: string; totalDelta: number | null; components: TrendComponent[] }
+export interface Comparison {
+  from: { periodId: string; name: string; total: number | null; status: string; model: string };
+  to: { periodId: string; name: string; total: number | null; status: string; model: string };
+  totalDelta: number | null;
+  /** True when the two periods were scored with different models: the difference may not be like for like. */
+  modelChanged: boolean;
+  components: { key: string; label: string; from: number | null; to: number | null; delta: number | null; note: string | null }[];
+}
+export interface TrendResult { subject: { id: string; name: string }; componentsHidden: boolean; points: TrendPoint[]; comparison: Comparison | null }
 
 const isDay = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
@@ -118,15 +132,10 @@ export class PerformanceService {
 
   // ---------- model resolution and running ----------
 
-  /** The active model for a person as of the period end: their designation's, else their role family's, else the default. */
-  resolveModel(models: ModelRow[], designationId: string | null, familyId: string | null): ModelRow | undefined {
-    const active = models.filter((m) => m.status === "active" && m.subject_type === "membership");
-    return (designationId ? active.find((m) => m.designation_id === designationId) : undefined) ?? (familyId ? active.find((m) => m.role_family_id === familyId && m.designation_id === null) : undefined) ?? active.find((m) => m.is_default === 1 && m.is_demo === 0);
-  }
-
-  /** Demo hook (stage 5.3 closes the older demo period here). */
-  prepareDemoPeriods(_tdb: TenantDb, _ctx: TenantCtx, _periodIds: string[], _today: string): void {
-    // nothing to prepare yet
+  /** Demo hook: the older demo period is closed (its scores are final-dated and its history shows), the current one stays open. */
+  prepareDemoPeriods(tdb: TenantDb, ctx: TenantCtx, periodIds: string[], _today: string): void {
+    const older = periodIds[0];
+    if (older) this.o.store.scorecards(tdb).setPeriodStatus(older, "closed", ctx.membershipId, this.now());
   }
 
   /** The first time anything is scored the standard models are added (an organization that never opened Scoring still works). */
@@ -136,42 +145,9 @@ export class PerformanceService {
     this.o.audit.record(w.tdb, ctx, { action: "scoring.seed", entityType: "scoring_model", entityId: null, summary: "Added the standard scoring models" });
   }
 
-  /**
-   * Scores one person for a period and stores a new run when the inputs or the outcome changed since the last one. `collector`
-   * is built once for the period and reused for many people. Returns the run (new or the unchanged latest).
-   */
-  runFor(tdb: TenantDb, ctx: TenantCtx | null, collector: Collector, period: PeriodRow, m: string, name: string, trigger: Trigger, isDemo = false): { scoreId: string; created: boolean; changedFrom: number | null } | null {
-    const cards = this.o.store.scorecards(tdb);
-    const models = this.o.store.scoring(tdb);
-    const rows = models.models();
-    const model = this.resolveModel(rows, collector.designationOn(m), collector.roleFamilyOn(m));
-    if (!model) return null;
-    // the engine scores the CANONICAL form of the snapshot and the model (the very text that is stored), so a later verification reproduces it exactly
-    const def = JSON.parse(canonicalJson(toModelDef(model, models.components(model.id)))) as ModelDef;
-    const inputs = JSON.parse(canonicalJson(collector.inputsFor(m, name))) as ScoreInputs;
-    const result = computeScore(inputs, def);
-    const { asOf: _asOf, ...stable } = inputs;
-    void _asOf;
-    const outcome = { total: result.total, status: result.status, components: result.components.map((c) => [c.key, c.state, c.rawValue]) };
-    const hash = sha(canonicalJson({ inputs: stable, model: { id: model.id, def }, engine: ENGINE_VERSION, outcome }));
-    const key = `m:${m}`;
-    let card = cards.scorecardFor(key, period.id);
-    const last = card ? cards.latestHash(card.id) : undefined;
-    if (card && last && last.hash === hash && card.scoring_model_id === model.id) return { scoreId: card.latest_score_id!, created: false, changedFrom: null };
-    const now = this.now();
-    if (!card) {
-      const id = newId();
-      cards.insertScorecard({ id, subjectKey: key, membershipId: m, periodId: period.id, modelId: model.id, isDemo, now });
-      card = cards.scorecard(id)!;
-    }
-    const scoreId = newId();
-    const run = (last?.run ?? 0) + 1;
-    cards.insertScore({ id: scoreId, scorecardId: card.id, run, modelId: model.id, modelVersion: model.version, engineVersion: ENGINE_VERSION, status: result.status, total: result.total, confidence: result.confidence, weightCoverage: result.weightCoverage, hash, trigger, explanationJson: JSON.stringify(result.explanation), inputsJson: canonicalJson(inputs), modelJson: canonicalJson(def), by: ctx?.membershipId ?? null, now });
-    for (const c of result.components) {
-      cards.insertScoreComponent({ id: newId(), scoreId, key: c.key, label: c.label, providerKey: c.providerKey, raw: c.rawValue, normalized: c.score, weight: c.weight, effective: c.effectiveWeight, points: c.points, state: c.state, sample: c.sampleSize, minSample: c.minSample, coverage: c.coverage, inputsJson: JSON.stringify(c.contributors), notesJson: JSON.stringify(c.notes) });
-    }
-    cards.pointScorecard(card.id, scoreId, model.id, period.status === "open" ? "open" : "final");
-    return { scoreId, created: true, changedFrom: last?.run ?? null };
+  /** One person's run (see `runScore`). */
+  runFor(tdb: TenantDb, ctx: TenantCtx | null, collector: Collector, period: PeriodRow, m: string, name: string, trigger: Trigger, isDemo = false): RunOutcome | null {
+    return runScore({ cards: this.o.store.scorecards(tdb), models: this.o.store.scoring(tdb), now: this.now() }, collector, period, m, name, trigger, { by: ctx?.membershipId ?? null, isDemo });
   }
 
   /** People scored by default: everyone who is part of the organization (live), inside the given set when one is given. */
@@ -181,6 +157,7 @@ export class PerformanceService {
     const w = this.world(ctx);
     const period = w.cards.period(input.periodId);
     if (!period) throw notFound();
+    if (period.status === "locked") throw new HttpError(409, "period_locked", `"${period.name}" is locked. Its scores can no longer be recalculated.`);
     const scope = caps.scope("performance.recalculate");
     const live = w.people.people().filter((p) => p.archived_at === null && p.status !== "left");
     let targets = live;
@@ -207,6 +184,129 @@ export class PerformanceService {
       this.o.audit.record(w.tdb, ctx, { action: "performance.recalculate", entityType: "performance_period", entityId: period.id, summary: `Calculated scores for ${targets.length} ${targets.length === 1 ? "person" : "people"} for "${period.name}": ${scored} new ${scored === 1 ? "run" : "runs"}, ${unchanged} unchanged${skipped ? `, ${skipped} without a model` : ""}`, after: { scored, unchanged, skipped } });
     });
     return { periodId: period.id, scored, unchanged, skipped };
+  }
+
+  // ---------- closing, reopening and locking ----------
+
+  private livePeople(w: { people: ReturnType<AuthStore["people"]> }) {
+    return w.people.people().filter((p) => p.archived_at === null && p.status !== "left");
+  }
+
+  /**
+   * Closing a period: everyone is scored one last time as of the period's end (a "period close" run, only when something
+   * differs from the last run), the scorecards become final, and the nightly update stops touching the period. It can be
+   * reopened until it is locked.
+   */
+  closePeriod(auth: AuthContext, requestId: string, caps: Capabilities, id: string): PeriodView & { calculated: { scored: number; unchanged: number; skipped: number } } {
+    this.requirePeriods(caps);
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const p = w.cards.period(id);
+    if (!p) throw notFound();
+    if (p.status !== "open") throw new HttpError(409, "not_open", `"${p.name}" is already ${p.status}.`);
+    if (p.start_date > w.today) throw new HttpError(409, "not_started", `"${p.name}" starts on ${p.start_date}, so it cannot be closed yet.`);
+    const people = this.livePeople(w);
+    const out = { scored: 0, unchanged: 0, skipped: 0 };
+    this.o.store.transaction(() => {
+      this.ensureModels(ctx, w);
+      w.cards.setPeriodStatus(id, "closed", ctx.membershipId, this.now());
+      const closed = w.cards.period(id)!;
+      const collector = new Collector(w.tdb, { id: closed.id, start: closed.start_date, end: closed.end_date, open: false }, w.today);
+      for (const person of people) {
+        const r = this.runFor(w.tdb, ctx, collector, closed, person.id, person.display_name, "period_close");
+        if (!r) out.skipped += 1;
+        else if (r.created) out.scored += 1;
+        else out.unchanged += 1;
+      }
+      w.cards.setScorecardStatuses(id, "final");
+      this.o.audit.record(w.tdb, ctx, { action: "performance.period_close", entityType: "performance_period", entityId: id, summary: `Closed the performance period "${p.name}": ${out.scored} final ${out.scored === 1 ? "run" : "runs"} added, ${out.unchanged} unchanged${out.skipped ? `, ${out.skipped} without a model` : ""}`, before: { status: "open" }, after: { status: "closed", ...out } });
+    });
+    return { ...this.periodView(w.cards.period(id)!, w.cards.scorecards(id).length), calculated: out };
+  }
+
+  reopenPeriod(auth: AuthContext, requestId: string, caps: Capabilities, id: string): PeriodView {
+    this.requirePeriods(caps);
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const p = w.cards.period(id);
+    if (!p) throw notFound();
+    if (p.status === "locked") throw new HttpError(409, "period_locked", `"${p.name}" is locked and cannot be reopened.`);
+    if (p.status !== "closed") throw new HttpError(409, "not_closed", `"${p.name}" is already open.`);
+    this.o.store.transaction(() => {
+      w.cards.setPeriodStatus(id, "open", null, this.now());
+      w.cards.setScorecardStatuses(id, "open");
+      this.o.audit.record(w.tdb, ctx, { action: "performance.period_reopen", entityType: "performance_period", entityId: id, summary: `Reopened the performance period "${p.name}"`, before: { status: "closed" }, after: { status: "open" } });
+    });
+    return this.periodView(w.cards.period(id)!, w.cards.scorecards(id).length);
+  }
+
+  lockPeriod(auth: AuthContext, requestId: string, caps: Capabilities, id: string): PeriodView {
+    this.requirePeriods(caps);
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const p = w.cards.period(id);
+    if (!p) throw notFound();
+    if (p.status === "locked") throw new HttpError(409, "already_locked", `"${p.name}" is already locked.`);
+    if (p.status !== "closed") throw new HttpError(409, "not_closed", `Close "${p.name}" before locking it.`);
+    this.o.store.transaction(() => {
+      w.cards.setPeriodStatus(id, "locked", ctx.membershipId, this.now());
+      this.o.audit.record(w.tdb, ctx, { action: "performance.period_lock", entityType: "performance_period", entityId: id, summary: `Locked the performance period "${p.name}": its scores and its KPI values can no longer change`, before: { status: "closed" }, after: { status: "locked" } });
+    });
+    return this.periodView(w.cards.period(id)!, w.cards.scorecards(id).length);
+  }
+
+  // ---------- trends and comparing two periods ----------
+
+  trends(auth: AuthContext, requestId: string, caps: Capabilities, q: { subjectId?: string; from?: string; to?: string }): TrendResult {
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const subject = q.subjectId ?? ctx.membershipId;
+    if (!w.names.has(subject) || !this.access(caps, ctx.membershipId, subject).scores) throw notFound();
+    const acc = this.access(caps, ctx.membershipId, subject);
+    const periods = new Map(w.cards.periods().map((p) => [p.id, p]));
+    const models = new Map(w.models.models().map((m) => [m.id, m]));
+    const cards = w.cards.scorecardsOfSubject(`m:${subject}`).filter((c) => c.latest_score_id && periods.has(c.period_id)).sort((a, b) => periods.get(a.period_id)!.start_date.localeCompare(periods.get(b.period_id)!.start_date)).slice(-12);
+    const points: TrendPoint[] = [];
+    const parts = new Map<string, ScoreComponentRow[]>();
+    for (const c of cards) {
+      const s = w.cards.score(c.latest_score_id!);
+      if (!s) continue;
+      const period = periods.get(c.period_id)!;
+      const comps = acc.components ? w.cards.componentsOf(s.id) : [];
+      parts.set(period.id, comps);
+      const prev = points[points.length - 1];
+      const prevComps = prev ? parts.get(prev.periodId) ?? [] : [];
+      const model = models.get(s.scoring_model_id);
+      points.push({
+        periodId: period.id, periodName: period.name, startDate: period.start_date, endDate: period.end_date, periodStatus: period.status, scoreId: s.id, runNumber: s.run_number, status: s.status as TrendPoint["status"], total: s.total_score, band: this.bandOf(s),
+        confidence: Math.round(s.confidence * 100) / 100, confidenceLabel: labelOf(s.confidence), model: `${model?.name ?? "Model"} v${s.model_version}`,
+        totalDelta: prev && prev.total !== null && s.total_score !== null ? roundHalfUp1(s.total_score - prev.total) : null,
+        components: comps.map((k) => {
+          const before = prevComps.find((x) => x.component_key === k.component_key);
+          return { key: k.component_key, label: k.label, state: k.data_state as TrendComponent["state"], score: k.normalized_score, delta: before && before.normalized_score !== null && k.normalized_score !== null ? roundHalfUp1(k.normalized_score - before.normalized_score) : null };
+        }),
+      });
+    }
+    let comparison: Comparison | null = null;
+    if (q.from || q.to) {
+      const a = points.find((x) => x.periodId === q.from);
+      const b = points.find((x) => x.periodId === q.to);
+      if (!a || !b) throw notFound();
+      const keys = [...new Map([...(parts.get(a.periodId) ?? []), ...(parts.get(b.periodId) ?? [])].map((k) => [k.component_key, k.label])).entries()];
+      comparison = {
+        from: { periodId: a.periodId, name: a.periodName, total: a.total, status: a.status, model: a.model }, to: { periodId: b.periodId, name: b.periodName, total: b.total, status: b.status, model: b.model },
+        totalDelta: a.total !== null && b.total !== null ? roundHalfUp1(b.total - a.total) : null, modelChanged: a.model !== b.model,
+        components: keys.map(([key, label]) => {
+          const x = (parts.get(a.periodId) ?? []).find((k) => k.component_key === key);
+          const y = (parts.get(b.periodId) ?? []).find((k) => k.component_key === key);
+          const from = x?.normalized_score ?? null;
+          const to = y?.normalized_score ?? null;
+          const note = !x || !y ? "Not part of both models" : from === null && to === null ? "No data in either period" : from === null ? `No data in ${a.periodName}` : to === null ? `No data in ${b.periodName}` : null;
+          return { key, label, from, to, delta: from !== null && to !== null ? roundHalfUp1(to - from) : null, note };
+        }),
+      };
+    }
+    return { subject: { id: subject, name: w.names.get(subject) ?? "Former member" }, componentsHidden: !acc.components, points, comparison };
   }
 
   // ---------- reading ----------

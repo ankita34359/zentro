@@ -146,6 +146,11 @@ export class MeasurementService {
     if (!Number.isFinite(input.value) || Math.abs(input.value) > 1e12) throw new HttpError(400, "invalid_number", "The value must be a number.");
     const valueStatus = input.valueStatus ?? "recorded";
     if (!["recorded", "estimated", "disputed"].includes(valueStatus)) throw new HttpError(400, "invalid_value", "A value is recorded, estimated or disputed.");
+    // a locked performance period takes no NEW values (stage 5.3); a correction of a value already there is still allowed, with its reason
+    if (!input.supersedes) {
+      const locked = this.o.store.scorecards(w.tdb).periods().find((p) => p.status === "locked" && p.start_date <= periodEndOf(freq, input.periodStart) && p.end_date >= input.periodStart);
+      if (locked) throw new HttpError(409, "period_locked", `The performance period "${locked.name}" is locked, so a new value for ${periodLabel(freq, input.periodStart)} cannot be added. Correct a value that is already there instead.`);
+    }
     const note = (input.note ?? "").trim();
     if (note.length > 1000) throw new HttpError(400, "invalid_text", "The note is at most 1000 characters.");
     const key = subjectKeyOf(subject);

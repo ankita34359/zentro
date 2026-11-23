@@ -284,7 +284,9 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | --- | --- | --- | --- |
 | GET | `/api/performance/periods` | baseline (everyone) | Newest first, with how many scorecards the caller may open (live, 5.2) |
 | POST / PATCH | `/api/performance/periods[/:id]` | `performance.manage_periods` | Name unique; dates real and ordered; only while open (live, 5.2) |
-| POST | `/api/performance/periods/:id/close` | `performance.manage_periods` | Triggers final recalculation |
+| POST | `/api/performance/periods/:id/close` | `performance.manage_periods` | Final run for everyone as of the period end (`period_close`), scorecards become final (live, 5.3); 409 `not_open`, `not_started` |
+| POST | `/api/performance/periods/:id/reopen` | `performance.manage_periods` | closed → open; runs kept; 409 `period_locked`, `not_closed` (live, 5.3) |
+| POST | `/api/performance/periods/:id/lock` | `performance.manage_periods` | closed → locked for good: no recalculation, no new KPI value inside it (corrections still allowed) (live, 5.3) |
 | GET | `/api/performance/scorecards` | baseline: own always; others inside `performance.view_scores` | `?periodId` (required) `&search`; latest run per person (live, 5.2) |
 | GET | `/api/performance/scorecards/for` | same | `?periodId&subjectId` (default the caller); 404 when none or not theirs to see |
 | GET | `/api/performance/scorecards/:id` | same | Latest run plus run history (newest first) |
@@ -293,7 +295,7 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | POST | `/api/performance/scorecards/recalculate` | `performance.recalculate` (scope) | `{periodId, subjectId?}`: one person, or everyone in scope (at most 400); a run is added only when the inputs or the outcome changed; `{scored, unchanged, skipped}` |
 | GET | `/api/performance/compare` | `performance.compare` (scope) | `?roleFamilyId&periodId&subjectType`; `422 cohort_mismatch` across families |
 | POST / GET | `/api/performance/comparisons[/:id]` | `performance.compare` | Saved snapshots |
-| GET | `/api/performance/trends` | own or scope | `?subject&periodIds` per-component deltas across periods |
+| GET | `/api/performance/trends` | baseline: own always; others inside `performance.view_scores`, parts need `view_components` | `?subjectId&from&to`: scores across periods with the change since the one before; `from`/`to` (period ids) add a part-by-part comparison. A period with no data gives no change, never a drop to zero (live, 5.3) |
 | GET / POST | `/api/performance/models` | `performance.view_components` / `performance.configure` | Scoring models |
 | PATCH | `/api/performance/models/:id` | `performance.configure` | Creates a new version |
 | POST | `/api/performance/models/:id/activate` | `performance.configure` | Validates weights sum to 100 |

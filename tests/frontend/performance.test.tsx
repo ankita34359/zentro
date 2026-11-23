@@ -30,6 +30,7 @@ const server = (periods: unknown[] = [PERIOD], extra: (url: string, init?: Reque
     if (path === "/api/performance/scores/s2") return envelope(SCORE());
     if (path === "/api/performance/scores/s1") return envelope(SCORE({ scoreId: "s1", runNumber: 1, total: 80, isLatest: false }));
     if (path === "/api/performance/scores/s2/verify") return envelope({ matches: true, expected: { total: 84.3, status: "provisional" }, actual: { total: 84.3, status: "provisional" }, engineVersion: "1", modelVersion: 1, mismatches: [] });
+    if (path === "/api/performance/trends") return envelope({ subject: { id: "me-1", name: "Emma Employee" }, componentsHidden: false, points: [], comparison: null });
     if (path === "/api/notifications") return envelope({ notifications: [], unreadCount: 0, nextCursor: null });
     return json(HEALTH_OK);
   });
@@ -117,5 +118,55 @@ describe("Performance Intelligence (stage 5.2)", () => {
     const periods = await screen.findByRole("region", { name: "Periods" });
     expect(within(periods).getByText("Q4 2026")).toBeTruthy();
     expect(within(periods).queryByRole("button", { name: /New period|Calculate/ })).toBeNull();
+  });
+
+  it("closing a period asks first, explains what it does, then closes; a closed one offers Reopen and Lock; a locked one offers neither", async () => {
+    setMe(withCaps({ "performance.manage_periods": ["all_in_scope"] }));
+    const closed = { ...PERIOD, id: "p0", name: "Q3 2026", status: "closed" };
+    const locked = { ...PERIOD, id: "p9", name: "Q2 2026", status: "locked" };
+    const f = server([PERIOD, closed, locked], (url, init) => {
+      if (url === "/api/performance/periods/p1/close" && init?.method === "POST") return envelope({ ...PERIOD, status: "closed", calculated: { scored: 4, unchanged: 1, skipped: 0 } });
+      return undefined;
+    });
+    renderApp("/performance?tab=periods");
+    const periods = await screen.findByRole("region", { name: "Periods" });
+    expect(within(periods).queryByRole("button", { name: "Reopen Q2 2026" })).toBeNull(); // locked: nothing to do
+    expect(within(periods).queryByRole("button", { name: "Lock Q2 2026" })).toBeNull();
+    expect(within(periods).queryByRole("button", { name: "Calculate scores for Q2 2026" })).toBeNull();
+    expect(within(periods).getByRole("button", { name: "Reopen Q3 2026" })).toBeTruthy();
+    expect(within(periods).getByRole("button", { name: "Lock Q3 2026" })).toBeTruthy();
+    await userEvent.click(within(periods).getByRole("button", { name: "Close Q4 2026" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Confirm: close Q4 2026" });
+    expect(within(dialog).getByText(/final score for everyone/)).toBeTruthy();
+    expect(f.mock.calls.some((c) => String(c[0]).endsWith("/close"))).toBe(false); // nothing happens before the answer
+    await userEvent.click(within(dialog).getByRole("button", { name: "Yes, close Q4 2026" }));
+    expect(await screen.findByText(/Q4 2026 is closed\. Final scores were calculated: 4 new runs/)).toBeTruthy();
+    expect(f.mock.calls.some((c) => c[0] === "/api/performance/periods/p1/close" && (c[1] as RequestInit).method === "POST")).toBe(true);
+    // Lock asks too, and warns that it is permanent
+    await userEvent.click(within(periods).getByRole("button", { name: "Lock Q3 2026" }));
+    expect(within(await screen.findByRole("alertdialog", { name: "Confirm: lock Q3 2026" })).getByText(/Locking is permanent/)).toBeTruthy();
+  });
+
+  it("the trend lists each period with the change, shows 'No comparison' when a period had no data, and compares two periods part by part", async () => {
+    setMe(withCaps({}));
+    const pt = (id: string, name: string, total: number | null, delta: number | null, status = "final") => ({ periodId: id, periodName: name, startDate: "2026-01-01", endDate: "2026-03-31", periodStatus: "closed", scoreId: `s-${id}`, runNumber: 1, status, total, band: null, confidence: 1, confidenceLabel: "high", model: "Employee v1", totalDelta: delta, components: [] });
+    const points = [pt("pa", "Q2 2026", null, null, "insufficient"), pt("pb", "Q3 2026", 70, null), pt("p1", "Q4 2026", 90, 20, "provisional")];
+    server([PERIOD], (url) => {
+      if (!url.startsWith("/api/performance/trends")) return undefined;
+      if (url.includes("from=pb&to=p1")) return envelope({ subject: { id: "me-1", name: "Emma" }, componentsHidden: false, points, comparison: { from: { periodId: "pb", name: "Q3 2026", total: 70, status: "final", model: "Employee v1" }, to: { periodId: "p1", name: "Q4 2026", total: 90, status: "provisional", model: "Employee v2" }, totalDelta: 20, modelChanged: true, components: [{ key: "okr", label: "OKR achievement", from: 70, to: 90, delta: 20, note: null }, { key: "kpi", label: "KPI achievement", from: null, to: 90, delta: null, note: "No data in Q3 2026" }] } });
+      return envelope({ subject: { id: "me-1", name: "Emma" }, componentsHidden: false, points, comparison: null });
+    });
+    renderApp("/performance");
+    const over = await screen.findByRole("region", { name: "Over time" });
+    const table = within(over).getByRole("table", { name: "Score by period" });
+    expect(within(table).getByText("Not scored")).toBeTruthy(); // never "0.0"
+    expect(within(table).getByText("+20.0")).toBeTruthy();
+    expect(within(table).getAllByText("No comparison").length).toBe(2);
+    await userEvent.selectOptions(within(over).getByLabelText("Compare"), "pb");
+    await userEvent.selectOptions(within(over).getByLabelText("With"), "p1");
+    const cmp = await within(over).findByRole("region", { name: "Comparison" });
+    expect(within(cmp).getByText(/Q3 2026 70\.0 → Q4 2026 90\.0/)).toBeTruthy();
+    expect(within(cmp).getByText(/may not be like for like/)).toBeTruthy();
+    expect(within(cmp).getByText("No data in Q3 2026")).toBeTruthy();
   });
 });

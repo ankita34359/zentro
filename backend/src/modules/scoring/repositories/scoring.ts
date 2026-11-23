@@ -98,6 +98,14 @@ export class ScorecardRepository {
   scorecards(periodId?: string): ScorecardRow[] {
     return this.tdb.all<ScorecardRow>(`SELECT ${CARD_COLS} FROM performance_scorecards WHERE organization_id = @organization_id AND (@periodId IS NULL OR period_id = @periodId) ORDER BY created_at, rowid`, { periodId: periodId ?? null });
   }
+  /** Every scorecard of one subject, across periods. */
+  scorecardsOfSubject(subjectKey: string): ScorecardRow[] {
+    return this.tdb.all<ScorecardRow>(`SELECT ${CARD_COLS} FROM performance_scorecards WHERE organization_id = @organization_id AND subject_key = @subjectKey ORDER BY created_at, rowid`, { subjectKey });
+  }
+  /** Only the scorecard's own label (open or final) changes when a period is closed or reopened: never a run. */
+  setScorecardStatuses(periodId: string, status: string): void {
+    this.tdb.run("UPDATE performance_scorecards SET status = @status WHERE organization_id = @organization_id AND period_id = @periodId", { periodId, status });
+  }
   scorecard(id: string): ScorecardRow | undefined {
     return this.tdb.get<ScorecardRow>(`SELECT ${CARD_COLS} FROM performance_scorecards WHERE organization_id = @organization_id AND id = @id`, { id });
   }

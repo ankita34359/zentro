@@ -73,3 +73,27 @@ export const recalculate = (b: { periodId: string; subjectId?: string }) => api<
 export const getScore = (id: string) => api<ScoreDetail>(`/api/performance/scores/${id}`);
 export const verifyScore = (id: string) => api<VerifyResult>(`/api/performance/scores/${id}/verify`, { method: "POST" });
 export const TRIGGER_WORD: Record<string, string> = { scheduled: "Nightly", manual: "Calculated by hand", period_close: "Period closed", recalculation: "Recalculated" };
+
+// ---------- closing, trends (stage 5.3) ----------
+export interface TrendComponent { key: string; label: string; state: DataState; score: number | null; delta: number | null }
+export interface TrendPoint { periodId: string; periodName: string; startDate: string; endDate: string; periodStatus: string; scoreId: string; runNumber: number; status: "final" | "provisional" | "insufficient"; total: number | null; band: string | null; confidence: number; confidenceLabel: string; model: string; totalDelta: number | null; components: TrendComponent[] }
+export interface Comparison {
+  from: { periodId: string; name: string; total: number | null; status: string; model: string };
+  to: { periodId: string; name: string; total: number | null; status: string; model: string };
+  totalDelta: number | null;
+  modelChanged: boolean;
+  components: { key: string; label: string; from: number | null; to: number | null; delta: number | null; note: string | null }[];
+}
+export interface TrendResult { subject: { id: string; name: string }; componentsHidden: boolean; points: TrendPoint[]; comparison: Comparison | null }
+export const closePeriod = (id: string) => api<PeriodView & { calculated: { scored: number; unchanged: number; skipped: number } }>(`/api/performance/periods/${id}/close`, { method: "POST" });
+export const reopenPeriod = (id: string) => api<PeriodView>(`/api/performance/periods/${id}/reopen`, { method: "POST" });
+export const lockPeriod = (id: string) => api<PeriodView>(`/api/performance/periods/${id}/lock`, { method: "POST" });
+export const getTrends = (q: { subjectId?: string; from?: string; to?: string }) => {
+  const p = new URLSearchParams();
+  if (q.subjectId) p.set("subjectId", q.subjectId);
+  if (q.from) p.set("from", q.from);
+  if (q.to) p.set("to", q.to);
+  return api<TrendResult>(`/api/performance/trends${p.toString() ? `?${p.toString()}` : ""}`);
+};
+/** "+20.0", "−3.5", "No change", or "No comparison" when either side had no data (never a drop to zero). */
+export const deltaText = (d: number | null): string => (d === null ? "No comparison" : d === 0 ? "No change" : `${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}`);

@@ -3,6 +3,7 @@ import { housekeepingJob } from "./jobs/housekeeping.js";
 import { taskRemindersJob } from "./jobs/taskReminders.js";
 import { okrHealthJob } from "./jobs/okrHealth.js";
 import { kpiThresholdsJob } from "./jobs/kpiThresholds.js";
+import { scoresRecalculateJob } from "./jobs/scoresRecalculate.js";
 
 /** Every job the tick knows about. Later stages register theirs here. */
 export function defaultJobs(): JobRegistry {
@@ -11,5 +12,6 @@ export function defaultJobs(): JobRegistry {
   r.register(taskRemindersJob);
   r.register(okrHealthJob);
   r.register(kpiThresholdsJob);
+  r.register(scoresRecalculateJob);
   return r;
 }

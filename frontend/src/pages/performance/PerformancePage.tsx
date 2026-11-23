@@ -15,7 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { problemText } from "@/lib/authForm";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
-import { createPeriod, getScorecardFor, getScore, listPeriods, listScorecards, recalculate, STATE_WORD, STATUS_WORD, TRIGGER_WORD, verifyScore, type PeriodView, type ScoreComponent, type ScoreDetail, type ScoreSummary } from "@/services/scoring";
+import { closePeriod, createPeriod, deltaText, getScorecardFor, getScore, getTrends, listPeriods, listScorecards, lockPeriod, recalculate, reopenPeriod, STATE_WORD, STATUS_WORD, TRIGGER_WORD, verifyScore, type PeriodView, type ScoreComponent, type ScoreDetail, type ScoreSummary } from "@/services/scoring";
 
 const STATUS_VARIANT = { final: "onTrack", provisional: "info", insufficient: "dashed" } as const;
 const STATE_VARIANT = { ok: "onTrack", insufficient: "atRisk", missing: "dashed" } as const;
@@ -128,8 +128,69 @@ function Scorecard({ periodId, subjectId }: { periodId: string; subjectId: strin
             </ul>
           </section>
         )}
+        <Trends subjectId={subjectId} />
       </CardContent>
     </Card>
+  );
+}
+
+/** The person's score in each period, oldest first, and a side-by-side comparison of any two of them. */
+function Trends({ subjectId }: { subjectId: string }) {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const base = useQuery({ queryKey: ["performance-trends", subjectId], queryFn: () => getTrends({ subjectId }), retry: false });
+  const cmp = useQuery({ queryKey: ["performance-trends", subjectId, from, to], queryFn: () => getTrends({ subjectId, from, to }), retry: false, enabled: Boolean(from && to && from !== to) });
+  if (base.isPending) return <PageSkeleton />;
+  if (base.isError) return <ErrorState title="The trend could not be loaded" error={base.error} onRetry={() => void base.refetch()} />;
+  const points = base.data.points;
+  if (points.length < 2) return <section aria-label="Over time" className="space-y-1"><h3 className="text-label font-semibold">Over time</h3><p className="text-caption text-muted-foreground">A trend needs scores from at least two periods.</p></section>;
+  const c = cmp.data?.comparison;
+  return (
+    <section aria-label="Over time" className="space-y-3">
+      <h3 className="text-label font-semibold">Over time</h3>
+      <table className="w-full text-label">
+        <caption className="sr-only">Score by period</caption>
+        <thead><tr className="text-left text-caption text-muted-foreground"><th scope="col" className="py-1 font-medium">Period</th><th scope="col" className="py-1 font-medium">Score</th><th scope="col" className="py-1 font-medium">Status</th><th scope="col" className="py-1 text-right font-medium">Change</th></tr></thead>
+        <tbody>
+          {points.map((p) => (
+            <tr key={p.periodId} className="border-t">
+              <th scope="row" className="py-1.5 text-left font-medium">{p.periodName}</th>
+              <td className="py-1.5 tabular-nums">{p.total === null ? "Not scored" : p.total.toFixed(1)}</td>
+              <td className="py-1.5"><Badge variant={STATUS_VARIANT[p.status]}>{STATUS_WORD[p.status]}</Badge></td>
+              <td className="py-1.5 text-right tabular-nums">{deltaText(p.totalDelta)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div role="group" aria-label="Compare two periods" className="grid gap-3 sm:grid-cols-2">
+        <SelectField label="Compare" value={from} onChange={(e) => setFrom(e.target.value)}><option value="">Choose a period</option>{points.map((p) => <option key={p.periodId} value={p.periodId}>{p.periodName}</option>)}</SelectField>
+        <SelectField label="With" value={to} onChange={(e) => setTo(e.target.value)}><option value="">Choose a period</option>{points.map((p) => <option key={p.periodId} value={p.periodId}>{p.periodName}</option>)}</SelectField>
+      </div>
+      {cmp.isError && <ErrorState title="These periods could not be compared" error={cmp.error} onRetry={() => void cmp.refetch()} />}
+      {c && (
+        <div role="region" aria-label="Comparison" className="space-y-2">
+          <p className="text-label">{c.from.name} {c.from.total === null ? "Not scored" : c.from.total.toFixed(1)} → {c.to.name} {c.to.total === null ? "Not scored" : c.to.total.toFixed(1)}: <strong>{deltaText(c.totalDelta)}</strong></p>
+          {c.modelChanged && <p className="text-caption text-muted-foreground">The scoring model changed between these periods ({c.from.model} and {c.to.model}), so the difference may not be like for like.</p>}
+          {c.components.length > 0 && (
+            <table className="w-full text-label">
+              <caption className="sr-only">Difference by part</caption>
+              <thead><tr className="text-left text-caption text-muted-foreground"><th scope="col" className="py-1 font-medium">Part</th><th scope="col" className="py-1 font-medium">{c.from.name}</th><th scope="col" className="py-1 font-medium">{c.to.name}</th><th scope="col" className="py-1 text-right font-medium">Change</th></tr></thead>
+              <tbody>
+                {c.components.map((k) => (
+                  <tr key={k.key} className="border-t">
+                    <th scope="row" className="py-1.5 text-left font-medium">{k.label}</th>
+                    <td className="py-1.5 tabular-nums">{k.from === null ? "No data" : k.from.toFixed(1)}</td>
+                    <td className="py-1.5 tabular-nums">{k.to === null ? "No data" : k.to.toFixed(1)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{k.note ?? deltaText(k.delta)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {base.data.componentsHidden && <p className="text-caption text-muted-foreground">The parts are only shown to the person themself and to people allowed to see the breakdown.</p>}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -241,15 +302,37 @@ function PeriodsTab({ periods, onOpen }: { periods: PeriodView[]; onOpen: (id: s
   const { can } = useAuth();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
-  const calc = useMutation({
-    mutationFn: (periodId: string) => recalculate({ periodId }),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["performance-periods"] }); void qc.invalidateQueries({ queryKey: ["performance-scorecards"] }); void qc.invalidateQueries({ queryKey: ["performance-scorecard"] }); },
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ["performance-periods"] }); void qc.invalidateQueries({ queryKey: ["performance-scorecards"] }); void qc.invalidateQueries({ queryKey: ["performance-scorecard"] }); void qc.invalidateQueries({ queryKey: ["performance-score"] }); void qc.invalidateQueries({ queryKey: ["performance-trends"] }); };
+  const [confirm, setConfirm] = useState<{ period: PeriodView; action: "close" | "reopen" | "lock" } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const calc = useMutation({ mutationFn: (periodId: string) => recalculate({ periodId }), onSuccess: () => { setNotice(null); refresh(); } });
+  const change = useMutation({
+    mutationFn: ({ period, action }: { period: PeriodView; action: "close" | "reopen" | "lock" }) => (action === "close" ? closePeriod(period.id) : action === "reopen" ? reopenPeriod(period.id) : lockPeriod(period.id)),
+    onSuccess: (r, v) => {
+      const scored = (r as { calculated?: { scored: number } }).calculated?.scored ?? 0;
+      setConfirm(null);
+      setNotice(v.action === "close" ? `${v.period.name} is closed. Final scores were calculated: ${scored} new ${scored === 1 ? "run" : "runs"}.` : v.action === "reopen" ? `${v.period.name} is open again.` : `${v.period.name} is locked.`);
+      refresh();
+    },
+    onError: () => setConfirm(null),
   });
+  const SAY = { close: "Closing calculates a final score for everyone as of the last day of the period and stops the nightly update for it. You can reopen it until it is locked.", reopen: "Reopening starts the nightly update again. Every earlier run is kept.", lock: "Locking is permanent: its scores cannot be recalculated, it cannot be reopened, and no new KPI value can be added inside it (existing values can still be corrected, with a reason)." } as const;
   return (
     <section aria-label="Periods" className="space-y-4">
       {can("performance.manage_periods") && <div><Button size="sm" onClick={() => setAdding(true)}><Plus aria-hidden="true" /> New period</Button></div>}
       {adding && <NewPeriod onDone={() => setAdding(false)} />}
       {calc.isError && <FormAlert>{problemText(calc.error)}</FormAlert>}
+      {change.isError && <FormAlert>{problemText(change.error)}</FormAlert>}
+      {notice && <FormNotice>{notice}</FormNotice>}
+      {confirm && (
+        <div role="alertdialog" aria-label={`Confirm: ${confirm.action} ${confirm.period.name}`} className="space-y-3 rounded-lg border bg-muted/40 p-4">
+          <p className="text-body">{SAY[confirm.action]}</p>
+          <div className="flex gap-2">
+            <Button disabled={change.isPending} onClick={() => change.mutate(confirm)}>{change.isPending ? "Working…" : `Yes, ${confirm.action} ${confirm.period.name}`}</Button>
+            <Button variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
+          </div>
+        </div>
+      )}
       {calc.isSuccess && <FormNotice>{`Calculated: ${calc.data.scored} new ${calc.data.scored === 1 ? "run" : "runs"}, ${calc.data.unchanged} unchanged${calc.data.skipped ? `, ${calc.data.skipped} without a model` : ""}.`}</FormNotice>}
       {periods.length === 0 ? <EmptyState illustration="gauge" title="No periods yet">A period is the span of time a score covers, such as a quarter.</EmptyState> : (
         <ul className="divide-y rounded-xl border bg-card">
@@ -261,7 +344,10 @@ function PeriodsTab({ periods, onOpen }: { periods: PeriodView[]; onOpen: (id: s
               </div>
               <Badge variant={p.status === "open" ? "info" : "neutral"}>{p.status === "open" ? "Open" : p.status === "closed" ? "Closed" : "Locked"}</Badge>
               <Button size="sm" variant="outline" aria-label={`Open scorecards for ${p.name}`} onClick={() => onOpen(p.id)}>Scorecards</Button>
-              {can("performance.recalculate") && <Button size="sm" variant="outline" aria-label={`Calculate scores for ${p.name}`} disabled={calc.isPending} onClick={() => calc.mutate(p.id)}><RefreshCw aria-hidden="true" /> Calculate</Button>}
+              {can("performance.recalculate") && p.status !== "locked" && <Button size="sm" variant="outline" aria-label={`Calculate scores for ${p.name}`} disabled={calc.isPending} onClick={() => calc.mutate(p.id)}><RefreshCw aria-hidden="true" /> Calculate</Button>}
+              {can("performance.manage_periods") && p.status === "open" && <Button size="sm" variant="outline" aria-label={`Close ${p.name}`} onClick={() => { setNotice(null); setConfirm({ period: p, action: "close" }); }}>Close</Button>}
+              {can("performance.manage_periods") && p.status === "closed" && <Button size="sm" variant="outline" aria-label={`Reopen ${p.name}`} onClick={() => { setNotice(null); setConfirm({ period: p, action: "reopen" }); }}>Reopen</Button>}
+              {can("performance.manage_periods") && p.status === "closed" && <Button size="sm" variant="outline" aria-label={`Lock ${p.name}`} onClick={() => { setNotice(null); setConfirm({ period: p, action: "lock" }); }}>Lock</Button>}
             </li>
           ))}
         </ul>
