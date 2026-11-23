@@ -153,3 +153,14 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **Designation changes cannot be scheduled for the future** (today or earlier), because the person's current designation is a cached copy of the open row.
 - **Rates and limits:** the directory returns at most 500 people per call (default 200); the chart returns at most 400 nodes per call and deeper levels load on demand.
 - Archiving a person ends their placements and lines today. People who reported to them must be given another manager first (409 `has_reports`).
+
+## Added in stages 4.1, 4.4 and 4.5 (tasks, My Work, notifications)
+
+- **Tasks are not linked to objectives, key results or KPIs yet** (stages 3.1, 4.2 and 3.3), have no dependencies, no recorded outcome or reviewer quality (4.2) and no evidence (4.3). "Completed" means the work is finished, not that it moved a key result.
+- **A person with no role sees their own tasks only through My Work.** Opening a task needs `task.view`, which every template holds for the person's own tasks; a person with no role at all gets 403 on `/api/tasks`.
+- **Daily updates are visible only to their author for now.** Managers see their reports' updates in the team pages (6.2).
+- **Reminders run every 10 minutes on the 5-minute tick** and tell people once per task per due date. They use the organization's time zone, set when the organization is created; there is no screen to change it yet. Quiet hours and external channels (email, Slack) arrive with the integrations stages.
+- **In-app only.** The bell refreshes every minute and when you act; there is no push or sound. Notifications are never deleted, only marked read; the list shows the latest 25.
+- **The suggested order is a fixed rule** (overdue first, then due today, tomorrow, this week, then priority, importance and work already under way; blocked work last). The weights are not configurable, and the AI planner arrives in 7.3.
+- A team assignment lets every current member of the team update the task; a person who leaves the team loses that right on the next request.
+- Comments cannot be edited from the screen (the API allows it); they can be deleted by their author.

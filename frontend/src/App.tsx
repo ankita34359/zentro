@@ -18,7 +18,9 @@ import {
   DesignPage,
   ForgotPasswordPage,
   LoginPage,
+  MyWorkPage,
   NotFoundPage,
+  NotificationSettingsPage,
   OnboardingPage,
   OrganizationPage,
   OverviewPage,
@@ -85,10 +87,12 @@ export function AppRoutes() {
             <Route path="/settings/audit" element={<AuditPage />} />
           </Route>
           <Route path="/settings/profile" element={<ProfilePage />} />
+          <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
+          <Route path="/my-work/*" element={<MyWorkPage />} />
           <Route element={<RequireCapability any={["org.view"]} />}>
             <Route path="/organization/*" element={<OrganizationPage />} />
           </Route>
-          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization").map((n) => (
+          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work").map((n) => (
             <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
           ))}
         </Route>

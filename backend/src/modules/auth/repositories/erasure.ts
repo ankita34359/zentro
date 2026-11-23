@@ -7,7 +7,7 @@ import { PeopleRepository } from "../../people/repositories/people.js";
  * Deleting an organization or an account must cover ALL of them: a test lists the tables that have an
  * `organization_id` column and fails when one is missing here, so a later stage that adds a table cannot forget.
  */
-export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "reporting_relationships", "team_memberships", "department_memberships", "designation_assignments", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
+export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "automation_events", "notification_preferences", "notifications", "daily_updates", "task_comments", "task_updates", "task_assignments", "tasks", "reporting_relationships", "team_memberships", "department_memberships", "designation_assignments", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
 
 export interface MemberCounts {
   /** Other people who have joined and still belong (active or suspended). People who left, and people only invited, do not count: invitations are counted separately. */
@@ -47,6 +47,15 @@ export class ErasureRepository {
   /** The whole organization goes (it has no other members and no pending invitations). */
   deleteOrganizationRows(tdb: TenantDb): void {
     tdb.run("DELETE FROM audit_logs WHERE organization_id = @organization_id"); // the only deletion of audit rows: the whole organization is going away
+    tdb.run("DELETE FROM automation_events WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM notification_preferences WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM notifications WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM daily_updates WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM task_comments WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM task_updates WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM task_assignments WHERE organization_id = @organization_id");
+    tdb.run("UPDATE tasks SET parent_task_id = NULL WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM tasks WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM reporting_relationships WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM team_memberships WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM department_memberships WHERE organization_id = @organization_id");

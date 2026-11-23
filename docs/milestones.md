@@ -69,11 +69,11 @@ The blueprint (this document set) is Milestone 0. Stage 1.1 comes first because 
 
 | ID | Stage | Delivers | Live check | Needs from you | Size |
 | --- | --- | --- | --- | --- | --- |
-| 4.1 | Tasks core | Tasks, assignment to person/team, status workflow, updates, comments, basic My Work list | Create a task, assign it, move it through statuses, comment; as the assignee see it in My Work | | L |
+| 4.1 | Tasks core (built in batch B; owner decisions: statuses follow a workflow, assignees update their own work, creator and managers edit) | Tasks, assignment to person/team, status workflow, updates, comments, basic My Work list | Create a task, assign it, move it through statuses, comment; as the assignee see it in My Work | | L |
 | 4.2 | Links, dependencies, outcomes | Link to objective/key result/KPI, dependencies with cycle check, estimate vs actual, recorded outcome and reviewer quality, unaligned-work report | Link a task to a key result; add a dependency (cycle refused); complete it and record the actual result; see "unaligned tasks" | | L |
 | 4.3 | Evidence | Evidence CRUD, links to objectives/key results/measurements, verification workflow, confidentiality levels, small file upload stored in the database (capped), authenticated download | Attach a link and a small PDF to a task; verify it; try opening the file from another organization (denied); a restricted item is hidden from a normal employee | | L |
-| 4.4 | My Work dashboard | Daily workspace (today/pending/overdue/upcoming/priorities/linked objectives/KPI progress/achievements), daily update form, **rule-based suggested order** | Open My Work as a demo employee; submit a daily update | | M |
-| 4.5 | Notifications and overdue job | In-app notifications, preferences, `automation_events` written for task events, overdue and due-soon jobs on the tick | Wait for a tick: the bell shows overdue tasks; mark read; change a preference | | M |
+| 4.4 | My Work dashboard (built in batch B) | Daily workspace (today/pending/overdue/upcoming/priorities/linked objectives/KPI progress/achievements), daily update form, **rule-based suggested order** | Open My Work as a demo employee; submit a daily update | | M |
+| 4.5 | Notifications and overdue job (built in batch B) | In-app notifications, preferences, `automation_events` written for task events, overdue and due-soon jobs on the tick | Wait for a tick: the bell shows overdue tasks; mark read; change a preference | | M |
 | 4.6 | Task demo seed and checkpoint | Demo tasks, updates, evidence; walk Scenario 3 (daily execution) end to end | Employee updates a task with evidence; the manager sees the update; key result progress changes after the recorded outcome | | S |
 
 ## 6. Milestone 5: Performance engine

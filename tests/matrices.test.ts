@@ -65,7 +65,9 @@ describe("permission matrix: every role template × every route that needs a per
     // and the API holds no organization-wide data route at all that a baseline person could reach: every route that
     // returns lists of people or records is a permission route (this fails if someone adds a data route as baseline)
     const baselineGets = t.registry.list().filter((r) => r.access.kind === "baseline" && r.method === "get").map((r) => r.path).sort();
-    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/organization"]);
+    // (stages 4.4 and 4.5 add the signed-in person's OWN data: my work, daily updates, notifications and preferences. Each
+    // returns only the caller's rows; the tenancy matrix below checks that none of another organization's appears.)
+    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/preferences"]);
   });
 
   it("every role can use the baseline routes without any permission", async () => {
@@ -115,6 +117,10 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const familyA = await mk("/api/role-families", { name: "Alpha Engineers" });
     const designationA = await mk("/api/designations", { name: "Alpha Mentor", roleFamilyId: familyA });
     const dirA = await mk("/api/employees", { name: "Dana Alpha", teamId: teamA, managerId: personA.membershipId });
+    const taskA = await mk("/api/tasks", { title: "Alpha secret task", assigneeIds: [personA.membershipId] });
+    const commentA = await mk(`/api/tasks/${taskA}/comments`, { body: "Alpha secret comment" });
+    const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
+    const notificationA = (t.db.prepare("SELECT id FROM notifications WHERE recipient_membership_id = ?").get(personA.membershipId) as { id: string }).id;
     const rowOf = (table: string, col = "membership_id") => (t.db.prepare(`SELECT id FROM ${table} WHERE ${col} = ?`).get(dirA) as { id: string }).id;
     const reportingA = rowOf("reporting_relationships", "subordinate_membership_id");
     const teamRowA = rowOf("team_memberships");
@@ -154,6 +160,14 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/teams/:id/members/:mid": { params: { id: teamA, mid: teamRowA }, body: { allocationPct: 50 } },
       "/api/departments/:id/members": { params: { id: deptA }, body: { membershipId: dirA } },
       "/api/departments/:id/members/:mid": { params: { id: deptA, mid: deptRowA }, body: { type: "deputy" } },
+      "/api/tasks": { params: {}, body: { title: "Intruder", assigneeIds: [personA.membershipId], teamId: teamA } },
+      "/api/tasks/:id": { params: { id: taskA }, body: { title: "Hacked by B" } },
+      "/api/tasks/:id/assignments": { params: { id: taskA }, body: { assigneeId: personA.membershipId } },
+      "/api/tasks/:id/assignments/:aid/end": { params: { id: taskA, aid: assignmentRowA } },
+      "/api/tasks/:id/updates": { params: { id: taskA }, body: { type: "time_log", minutesLogged: 5 } },
+      "/api/tasks/:id/comments": { params: { id: taskA }, body: { body: "Hacked by B" } },
+      "/api/tasks/:id/comments/:cid": { params: { id: taskA, cid: commentA }, body: { body: "Hacked by B" } },
+      "/api/notifications/:id/read": { params: { id: notificationA } },
     };
     const snapshot = () => JSON.stringify([
       t.db.prepare("SELECT id, revoked_at, accepted_at, code_hash FROM invitations ORDER BY id").all(),
@@ -171,13 +185,19 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, team_id, membership_id, membership_type, allocation_pct, start_date, end_date FROM team_memberships ORDER BY id").all(),
       t.db.prepare("SELECT id, department_id, membership_id, membership_type, start_date, end_date FROM department_memberships ORDER BY id").all(),
       t.db.prepare("SELECT id, membership_id, designation_id, start_date, end_date FROM designation_assignments ORDER BY id").all(),
+      t.db.prepare("SELECT id, title, status, progress_pct, due_at, archived_at FROM tasks ORDER BY id").all(),
+      t.db.prepare("SELECT id, task_id, assignee_membership_id, assignee_team_id, role, unassigned_at FROM task_assignments ORDER BY id").all(),
+      t.db.prepare("SELECT id, task_id, update_type, to_status, body FROM task_updates ORDER BY id").all(),
+      t.db.prepare("SELECT id, task_id, body, edited_at, deleted_at FROM task_comments ORDER BY id").all(),
+      t.db.prepare("SELECT id, recipient_membership_id, read_at, dismissed_at FROM notifications ORDER BY id").all(),
+      t.db.prepare("SELECT COUNT(*) n FROM automation_events").get(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
     ]);
     const before = snapshot();
 
     const idRoutes = t.registry.list().filter((r) => r.takesEntityId);
-    expect(idRoutes.length).toBeGreaterThanOrEqual(30);
+    expect(idRoutes.length).toBeGreaterThanOrEqual(40);
     for (const route of idRoutes) {
       const fx = fixtures[route.path];
       expect(fx, `add a tenancy fixture for ${route.path}`).toBeTruthy(); // a new id route cannot slip through
@@ -186,13 +206,13 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       expect(JSON.stringify(res.body)).not.toMatch(/Alpha|pending-a|member-a/i);
     }
     // lists: nothing of A's appears
-    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && (r.access.kind === "permission" || r.path === "/api/organization" || r.path === "/api/auth/me"));
-    expect(lists.length).toBeGreaterThanOrEqual(8);
+    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && (r.access.kind === "permission" || ["/api/organization", "/api/auth/me", "/api/my-work", "/api/notifications", "/api/preferences", "/api/daily-updates"].includes(r.path)));
+    expect(lists.length).toBeGreaterThanOrEqual(12);
     for (const route of lists) {
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "owner-a@example.com", invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

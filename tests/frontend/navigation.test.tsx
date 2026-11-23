@@ -82,7 +82,7 @@ describe("routes", () => {
     expect(document.title).toBe("Overview · Zentro");
   });
 
-  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization"))("renders $label with an empty state that says what to do", async (n) => {
+  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work"))("renders $label with an empty state that says what to do", async (n) => {
     renderApp(n.path);
     await screen.findByRole("heading", { level: 1, name: n.label });
     expect(screen.getByRole("heading", { level: 2 })).toBeTruthy(); // the empty-state headline
@@ -96,6 +96,14 @@ describe("routes", () => {
     expect(document.title).toBe("Organization · Zentro");
     expect(screen.getByRole("tab", { name: "Chart" }).getAttribute("href")).toBe("/organization");
     expect(screen.getByRole("tab", { name: "People" }).getAttribute("href")).toBe("/organization/people");
+  });
+
+  it("renders My Work as a real page (stages 4.1 and 4.4): Today and All tasks", async () => {
+    renderApp("/my-work");
+    await screen.findByRole("heading", { level: 1, name: "My Work" });
+    expect(document.title).toBe("My Work · Zentro");
+    expect(screen.getByRole("tab", { name: "Today" }).getAttribute("href")).toBe("/my-work");
+    expect(screen.getByRole("tab", { name: "All tasks" }).getAttribute("href")).toBe("/my-work/tasks");
   });
 
   it("renders Settings as a real index (stage 2.2): users and invitations, and profile", async () => {

@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router";
 import { Brand } from "@/components/common/Brand";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
+import { NotificationBell } from "@/components/common/NotificationBell";
 import { StatusPill } from "@/components/common/StatusPill";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { UserMenu } from "@/components/common/UserMenu";
@@ -105,6 +106,7 @@ export function AppShell() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <StatusPill />
+            <NotificationBell />
             <ThemeToggle />
             <UserMenu />
           </div>

@@ -1,4 +1,4 @@
-import { ChevronRight, Network, ScrollText, ShieldCheck, UserCog, Users } from "lucide-react";
+import { Bell, ChevronRight, Network, ScrollText, ShieldCheck, UserCog, Users } from "lucide-react";
 import { Link } from "react-router";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,7 @@ const ITEMS: { to: string; title: string; body: string; icon: typeof Users; any?
   { to: "/settings/roles", title: "Roles", body: "Create and change roles, and see what each one allows.", icon: ShieldCheck, any: ["roles.view"] },
   { to: "/settings/structure", title: "Organization structure", body: "Departments, teams and sub-teams, role families and designations; rename the organization.", icon: Network, any: ["org.view"] },
   { to: "/settings/audit", title: "Audit log", body: "Who changed what and when: roles, assignments, invitations and people.", icon: ScrollText, any: ["audit.view"] },
+  { to: "/settings/notifications", title: "Notifications", body: "Choose which reminders and updates reach your bell.", icon: Bell },
   { to: "/settings/profile", title: "Profile", body: "Your account details, your password, and deleting your account.", icon: UserCog },
 ];
 

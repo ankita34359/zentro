@@ -89,6 +89,14 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 
 `GET /api/organization`'s `memberCount` counts only people who have joined and still belong (not invited, not left).
 
+### 2.7 Stages 4.1, 4.4 and 4.5 details
+
+- **Visibility and writes.** See the table in section 7. In short: you see what you created, do or watch, plus the tasks of people or teams inside your `task.view` scope (a teammate's task for an employee, the tasks of their reports for a manager, everything for the Owner). A task you cannot see is 404. Who may update (status, progress, time, blockers): the people doing it (directly or through a team they are in), its creator, and `task.edit` over the people doing it. Routes that anyone with `task.view` may reach decide this inside the service (403 for someone who can see but not change).
+- **Status workflow.** not_started → in_progress, blocked, cancelled · in_progress → not_started, blocked, under_review, completed, cancelled · blocked → not_started, in_progress, cancelled · under_review → in_progress, completed, cancelled · completed → in_progress (reopen) · cancelled → not_started (reopen). Completing sets progress to 100 and `completedAt`; reopening clears it. Progress on work not started starts it.
+- **Dates** on tasks are whole days (`YYYY-MM-DD`) in the organization's time zone; "today", "overdue" and the reminders use that day.
+- **Notifications and events.** Every change that notifies someone writes the notification, the audit row, the history row and the business event in one transaction. A person is never notified of their own action. `task.overdue` and `task.due_soon` are written by the `tasks.reminders` job (every 10 minutes on the 5-minute tick), once per person per task per due date.
+- **Business events.** `automation_events` rows (`task.created`, `task.assigned`, `task.status_changed`, `task.completed`, `task.overdue`, `task.due_soon`, `daily_update.submitted`) have a unique dedupe key. Nothing reads them before the integrations stage.
+
 ### 2.6 Stage 2.6 and 2.7 details
 
 - **Effective dating.** Team, department, reporting and designation rows have a `startDate` and an optional `endDate`. A row applies on day D when `start <= D` and (`end` is empty or `D < end`): an end date is the first day it no longer applies. A change ends the old row and starts a new one, so nothing is ever overwritten or deleted and "who headed Engineering in Q2" stays answerable. A row dated in the future is stored now and takes effect on that day (the profile lists current and scheduled rows; the chart's `asOf` shows any day).
@@ -225,21 +233,22 @@ Structure endpoints (see the table in section 4): departments, teams, role famil
 
 | Method | Path | Permission | Notes |
 | --- | --- | --- | --- |
-| GET | `/api/tasks` | `task.view` (scope), own always | `?assigneeId&teamId&status&priority&overdue&blocked&objectiveId&dueFrom&dueTo` |
-| POST | `/api/tasks` | `task.create` | Links to objective/key result/KPIs; may assign |
-| GET | `/api/tasks/:id` | `task.view` (scope) | |
-| PATCH | `/api/tasks/:id` | `task.edit` (scope) or assignee for own fields | status, dates, priority, estimate |
-| POST | `/api/tasks/:id/assignments` | `task.assign` (scope) | Raises `task.assigned` |
-| POST | `/api/tasks/:id/updates` | assignee or `task.edit` | progress/status/time log/blocker/outcome; append-only |
-| GET | `/api/tasks/:id/updates` | `task.view` | |
-| GET / POST | `/api/tasks/:id/comments` | `task.view` / `task.view` | |
-| PATCH / DELETE | `/api/tasks/:id/comments/:cid` | author | soft delete |
+| GET | `/api/tasks` **4.1** | `task.view` (scope), own always | `?assigneeId&teamId&status(comma list)&priority&overdue&blocked&mine&search&dueFrom&dueTo&limit&offset` (default 100, at most 300). `{tasks, total, limit, offset}`. You always see tasks you created, do or watch; beyond that the tasks of people or teams in your scope |
+| POST | `/api/tasks` **4.1** | `task.create` | `{title, description?, priority?, importanceWeight?, startDate?, dueAt?, estimatedMinutes?, teamId?, assigneeIds?, assigneeTeamId?}`. Without `task.assign` the creator is the assignee and giving work to anyone else is 403 `outside_scope`; with it assignees must be in the caller's scope. Audited; writes `task.created` and `task.assigned` events and notifies a new assignee |
+| GET | `/api/tasks/:id` **4.1** | `task.view` | Detail with `can` {edit, editEstimate, update, assign, comment} and `nextStatuses`; not visible, missing or another organization's: 404 |
+| PATCH | `/api/tasks/:id` **4.1** | `task.view` + in-service check | The creator and `task.edit` over the people doing it change every field; an assignee only `estimatedMinutes` (else 403). A finished or cancelled task: 409 `task_closed`. Audited by field name |
+| POST | `/api/tasks/:id/assignments` **4.1** | `task.assign` (scope over the person or team) | `{assigneeId \| teamId, role?}`; 409 `already_assigned`, `task_closed`; notifies a new assignee |
+| POST | `/api/tasks/:id/assignments/:aid/end` **4.1** | `task.assign` | Takes a person or team off (the row is kept with its end time); 409 `already_ended` |
+| POST | `/api/tasks/:id/updates` **4.1** | `task.view` + in-service check | `{type: status_change\|progress\|time_log\|blocker, toStatus?, progressPct?, minutesLogged?, note?}`. Allowed for the people doing the task (directly or through a team they belong to), its creator and `task.edit` over them. Status follows the workflow (409 `invalid_transition`); `blocked` needs a note (400 `reason_required`); progress 0 to 99 (400 `use_complete`); time 1 to 1440 minutes. Append-only; the creator is told of a blocker or completion |
+| GET | `/api/tasks/:id/updates` **4.1** | `task.view` | The history, oldest first |
+| GET / POST | `/api/tasks/:id/comments` **4.1** | `task.view` / `task.view` | Anyone who can see the task may comment; the others who work on it are notified |
+| PATCH / DELETE | `/api/tasks/:id/comments/:cid` **4.1** | author only (403 otherwise) | DELETE is a soft delete |
 | POST / DELETE | `/api/tasks/:id/dependencies` | `task.edit` | cycle check |
 | POST | `/api/tasks/:id/review` | `task.review` (scope) | `{outcomeQuality 1-5, note}` |
 | POST | `/api/tasks/:id/evidence` | `evidence.submit` | Link existing or create evidence |
 | GET | `/api/tasks/unaligned` | `task.view` | Tasks without objective or key result |
-| GET | `/api/my-work` | baseline | Today, pending, overdue, upcoming, priorities, linked objectives, KPI progress, recent achievements, rule-based order |
-| POST / GET | `/api/daily-updates` | baseline (own) / `task.view` (scope) | One per person per date; raises `daily_update.submitted` |
+| GET | `/api/my-work` **4.4** | baseline (own data) | `counts`, the groups `overdue`, `dueToday`, `upcoming` (next 7 days), `blocked`, `inProgress`, `unscheduled`, `suggested` (rule-based order, each with `reasons`), `achievements` (completed in the last 14 days) and today's `dailyUpdate`. Linked objectives and KPI progress join when those links exist (3.1, 4.2) |
+| POST / GET | `/api/daily-updates` **4.4** | baseline (own) | POST `{summary, blockers?, date?}`: one per person per day (today or yesterday); sending again replaces it; writes `daily_update.submitted` once per day. GET `?from&to` lists your own only. Seeing other people's updates arrives with the team pages (6.2) |
 | GET / POST | `/api/evidence` | `evidence.view` / `evidence.submit` | `?type&status&relatedId&targetType&targetId` |
 | GET / PATCH | `/api/evidence/:id` | `evidence.view` (scope, confidentiality) | |
 | POST | `/api/evidence/:id/verify` | `evidence.verify` (scope) | `{status, note}` |
@@ -325,9 +334,9 @@ Structure endpoints (see the table in section 4): departments, teams, role famil
 
 | Method | Path | Permission | Notes |
 | --- | --- | --- | --- |
-| GET | `/api/notifications` | own | `?unread` |
-| POST | `/api/notifications/:id/read` / `/read-all` | own | |
-| GET / PUT | `/api/preferences` | own | Notification channels per event, theme, quiet hours display |
+| GET | `/api/notifications` **4.5** | baseline (own) | `?unread=true&limit&cursor`; `{notifications, unreadCount, nextCursor}`, newest first |
+| POST | `/api/notifications/:id/read`, `/api/notifications/read-all` **4.5** | baseline (own) | Someone else's notification or another organization's is 404 |
+| GET / PUT | `/api/preferences` **4.5** | baseline (own) | `{types: [{type, label, description, inApp}]}`; PUT `{types: [{type, inApp}]}` (400 `unknown_type`). A missing row means on. In-app only until the integrations stages add channels |
 | GET | `/api/audit-logs` **2.4** | `audit.view` | `?actorId&entityType&entityId&action&from&to&limit&cursor`, newest first, read only, paged (`meta.page.nextCursor`) |
 | GET | `/api/system/status` | `system.view` | Version, migrations, last tick, job table, outbox backlog, AI/viaSocket configured flags |
 | POST | `/api/export` / GET `/api/export/:id/download` | `data.export` | Per-table JSON bundle; async |
