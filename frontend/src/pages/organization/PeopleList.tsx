@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { FormAlert, FormField } from "@/components/common/FormField";
+import { SelectField } from "@/components/common/SelectField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -190,65 +191,47 @@ function AddPersonForm({ onDone }: { onDone: () => void }) {
           <FormField label="Name" value={name} onChange={(e) => setName(e.target.value)} error={nameError} autoComplete="off" />
           <FormField label="Work email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
           <FormField label="Employee code (optional)" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
-          <label className="space-y-1.5 text-label font-medium">
-            Designation
-            <select className={field} value={designationId} onChange={(e) => setDesignationId(e.target.value)}>
+          <SelectField label="Designation" value={designationId} onChange={(e) => setDesignationId(e.target.value)}>
               <option value="">None</option>
               {(s?.designations ?? []).filter((d) => !d.archived).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="space-y-1.5 text-label font-medium">
-            Team
-            <select className={field} value={teamId} onChange={(e) => { setTeamId(e.target.value); if (e.target.value) setDepartmentId(""); }}>
+          </SelectField>
+          <SelectField label="Team" value={teamId} onChange={(e) => { setTeamId(e.target.value); if (e.target.value) setDepartmentId(""); }}>
               <option value="">None</option>
               {(s?.teams ?? []).filter((t) => !t.archived).map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="space-y-1.5 text-label font-medium">
-            Department (when no team)
-            <select className={field} value={departmentId} disabled={Boolean(teamId)} onChange={(e) => setDepartmentId(e.target.value)}>
+          </SelectField>
+          <SelectField label="Department (when no team)" value={departmentId} disabled={Boolean(teamId)} onChange={(e) => setDepartmentId(e.target.value)}>
               <option value="">None</option>
               {(s?.departments ?? []).filter((d) => !d.archived).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="space-y-1.5 text-label font-medium">
-            Reports to
-            <select className={field} value={managerId} onChange={(e) => setManagerId(e.target.value)}>
+          </SelectField>
+          <SelectField label="Reports to" value={managerId} onChange={(e) => setManagerId(e.target.value)}>
               <option value="">No manager</option>
               {(people.data?.people ?? []).filter((p) => !p.archived).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.displayName}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="space-y-1.5 text-label font-medium">
-            Employment type
-            <select className={field} value={type} onChange={(e) => setType(e.target.value)}>
+          </SelectField>
+          <SelectField label="Employment type" value={type} onChange={(e) => setType(e.target.value)}>
               <option value="">Not set</option>
               {Object.entries(EMPLOYMENT_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
               ))}
-            </select>
-          </label>
-          <label className="space-y-1.5 text-label font-medium">
-            Start date
-            <input type="date" className={field} value={start} onChange={(e) => setStart(e.target.value)} />
-          </label>
+          </SelectField>
+          <FormField label="Start date" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
           <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
             <Button type="submit" disabled={create.isPending}>
               {create.isPending ? "Adding…" : "Add person"}

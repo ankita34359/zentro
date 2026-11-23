@@ -329,3 +329,10 @@ SQLite has no Row Level Security. The replacement is layered and tested rather t
 | AI parity | Same question as employee vs manager: tool results differ by scope and contain no out-of-scope ids (see [agent-specifications](agent-specifications.md)). |
 | Revocation | Removing a membership or role assignment denies the very next request from an existing session. |
 | No title logic | Greps `backend/src` for role template names. |
+
+## 7d. What stage 2.6 built (the hierarchy behind the scope modes)
+
+- **The resolver now reads real tables.** `DbHierarchy` (`modules/people/hierarchy.ts`) answers the four questions of `HierarchyProvider` from `team_memberships`, `department_memberships`, `reporting_relationships` and the structure tables, as of a day, and only ever returns people who still belong. It is built per request, so a change applies on the next request. `noHierarchy` stays for unit tests; `createApp({ hierarchy })` still accepts a fake.
+- **Roles for one department or team.** Assigning a role with `scopeType: department|team` (and `scopeId`) makes every grant of that role intersect with that department's or team's people. The assigner needs `roles.manage` over that department or team (organization-wide assignment needs `all_in_scope`; 403 `cannot_grant_scope`), and administrator checks (last-administrator guard) still count only organization-wide assignments.
+- **Who may change what.** `people.manage`: details, designation, archive (scope over the person). `hierarchy.manage`: reporting lines, team and department membership, moves (scope over the person and the team or department). The Manager template holds `people.manage` over `reports` but not `hierarchy.manage`; the Department Head and CEO templates hold both organization-wide.
+- **Sensitive details** (work email, employee code, employment type and dates) follow `people.view_sensitive` over the person, or `people.manage` over them, or being yourself.
