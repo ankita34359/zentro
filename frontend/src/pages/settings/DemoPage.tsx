@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, FlaskConical, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useSwitchedSession } from "@/components/common/DemoBanner";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -24,10 +24,13 @@ export default function DemoPage() {
   const client = useQueryClient();
   const switched = useSwitchedSession();
   const navigate = useNavigate();
-  const [leaving, setLeaving] = useState(false); // set while switching to a demo person: this page stops asking for anything
-  const status = useQuery({ queryKey: ["demo", "status"], queryFn: getDemoStatus, retry: false, enabled: !leaving });
+  // Set the moment a switch to a demo person succeeds: from then on this page asks the server for nothing (the page stays on
+  // screen for a moment while it animates away, and the person being viewed may not see demo data).
+  const leaving = useRef(false);
+  const guarded = <T,>(fn: () => Promise<T>) => (): Promise<T> => (leaving.current ? Promise.reject(new Error("switching person")) : fn());
+  const status = useQuery({ queryKey: ["demo", "status"], queryFn: guarded(getDemoStatus), retry: false });
   const loaded = status.data?.loaded === true;
-  const personas = useQuery({ queryKey: ["demo", "personas"], queryFn: getPersonas, enabled: loaded && !leaving, retry: false });
+  const personas = useQuery({ queryKey: ["demo", "personas"], queryFn: guarded(getPersonas), enabled: loaded, retry: false });
   const [confirm, setConfirm] = useState<null | "load" | "remove">(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [blockers, setBlockers] = useState<Blocker[]>([]);
@@ -54,7 +57,7 @@ export default function DemoPage() {
   const view = useMutation({
     mutationFn: (id: string) => viewAs(id),
     // leave this page first: it asks for demo data, which the person being viewed may not see (a refused request is noise, not harm)
-    onSuccess: (r) => { setLeaving(true); navigate("/overview"); setTimeout(() => switched(r.me), 0); },
+    onSuccess: (r) => { leaving.current = true; navigate("/overview"); setTimeout(() => switched(r.me), 0); },
     onError: (e) => setProblem(problemText(e)),
   });
 
