@@ -65,6 +65,13 @@ describe("creating tasks", () => {
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type = 'task.assigned'").n).toBe(1);
   });
 
+  it("naming nobody means the task is yours, even for someone who may assign work to others", async () => {
+    const s = await setup();
+    const r = await post(t.app, "/api/tasks", { title: "Mine by default" }, s.mgr.cookie);
+    expect(r.body.data.assignees).toMatchObject([{ id: s.mgr.membershipId, role: "assignee" }]);
+    expect((await get(t.app, "/api/my-work", s.mgr.cookie)).body.data.counts.open).toBe(1);
+  });
+
   it("validates titles, dates, priority, importance and estimates, and never trusts an organization id", async () => {
     const s = await setup();
     const bad = (body: Record<string, unknown>) => post(t.app, "/api/tasks", body, s.emp.cookie);

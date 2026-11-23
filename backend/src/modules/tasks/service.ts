@@ -72,7 +72,7 @@ export interface CreateTaskInput {
   dueAt?: string | null;
   estimatedMinutes?: number | null;
   teamId?: string | null;
-  /** People who do the work. Empty: the creator when they cannot assign to others, otherwise the task is unassigned. */
+  /** People who do the work. Empty (and no team): the creator. */
   assigneeIds?: string[];
   assigneeTeamId?: string | null;
 }
@@ -254,9 +254,8 @@ export class TaskService {
     if (input.teamId && (!team || team.archived_at)) throw team ? new HttpError(409, "archived", "That team is archived.") : notFound();
 
     const assignScope = caps.scope("task.assign");
-    const mayAssignOthers = !isEmptyAssign(assignScope);
     let assignees = [...new Set(input.assigneeIds ?? [])];
-    if (assignees.length === 0 && !input.assigneeTeamId && !mayAssignOthers) assignees = [me];
+    if (assignees.length === 0 && !input.assigneeTeamId) assignees = [me]; // no one named: the task is yours
     for (const id of assignees) this.checkAssignee(w, id, me, assignScope);
     let assigneeTeam: string | null = null;
     if (input.assigneeTeamId) {

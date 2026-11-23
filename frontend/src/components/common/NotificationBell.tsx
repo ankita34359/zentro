@@ -38,7 +38,7 @@ export function NotificationBell() {
       <Button variant="ghost" size="icon" aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"} onClick={() => setOpen(true)} className="relative">
         <Bell aria-hidden="true" />
         {unread > 0 && (
-          <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex min-w-[1.1rem] items-center justify-center rounded-full bg-off-track px-1 text-[0.65rem] font-semibold leading-[1.1rem] text-white">
+          <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex min-w-[1.1rem] items-center justify-center rounded-full bg-off-track-ink px-1 text-[0.65rem] font-semibold leading-[1.1rem] text-background">
             {unread > 99 ? "99+" : unread}
           </span>
         )}

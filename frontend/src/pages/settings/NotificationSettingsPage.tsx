@@ -14,16 +14,21 @@ export default function NotificationSettingsPage() {
   const q = useQuery({ queryKey: ["preferences"], queryFn: getPreferences, retry: false });
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // what was just clicked shows at once; the server's answer replaces it (or it is put back when the save fails)
+  const [pending, setPending] = useState<Record<string, boolean>>({});
   const save = useMutation({
     mutationFn: (v: { type: string; inApp: boolean }) => savePreferences([v]),
-    onSuccess: (data) => {
+    onMutate: (v) => setPending((p) => ({ ...p, [v.type]: v.inApp })),
+    onSuccess: (data, v) => {
       setError(null);
       setSaved(true);
       client.setQueryData(["preferences"], data);
+      setPending((p) => { const { [v.type]: _gone, ...rest } = p; return rest; });
     },
-    onError: (e) => {
+    onError: (e, v) => {
       setSaved(false);
       setError(problemText(e));
+      setPending((p) => { const { [v.type]: _gone, ...rest } = p; return rest; });
     },
   });
   return (
@@ -40,7 +45,7 @@ export default function NotificationSettingsPage() {
                   <span className="block text-body font-medium">{t.label}</span>
                   <span className="block text-label text-muted-foreground">{t.description}</span>
                 </label>
-                <input id={`pref-${t.type}`} type="checkbox" className="size-5" checked={t.inApp} disabled={save.isPending} onChange={(e) => save.mutate({ type: t.type, inApp: e.target.checked })} />
+                <input id={`pref-${t.type}`} type="checkbox" className="size-5" checked={pending[t.type] ?? t.inApp} onChange={(e) => save.mutate({ type: t.type, inApp: e.target.checked })} />
               </li>
             ))}
           </ul>
