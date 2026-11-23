@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, CalendarDays, Clock, Users } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock, Target, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { minutesLabel, PRIORITY_LABEL, STATUS_LABEL, type TaskSummary } from "@/services/tasks";
@@ -60,6 +60,13 @@ export function TaskRow({ task, today, onOpen, extra }: { task: TaskSummary; tod
             </span>
           )}
           {task.progressPct > 0 && task.status !== "completed" && <span>{task.progressPct}% done</span>}
+          {task.objectiveId && (
+            <span className="inline-flex items-center gap-1">
+              <Target aria-hidden="true" className="size-3.5" />
+              Supports an objective
+            </span>
+          )}
+          {task.waitingOn > 0 && <span className="text-at-risk-ink">Waiting for {task.waitingOn === 1 ? "another task" : `${task.waitingOn} tasks`}</span>}
           {task.isDemo && <Badge variant="dashed">Demo data</Badge>}
         </span>
         {extra}

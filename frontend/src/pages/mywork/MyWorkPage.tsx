@@ -218,12 +218,13 @@ function AllTasks({ today, onOpen }: { today: string; onOpen: (id: string) => vo
   const [status, setStatus] = useState("");
   const [mine, setMine] = useState(false);
   const [overdue, setOverdue] = useState(false);
-  const filters = { search: search.trim() || undefined, status: status || undefined, mine, overdue };
+  const [unaligned, setUnaligned] = useState(false);
+  const filters = { search: search.trim() || undefined, status: status || undefined, mine, overdue, unaligned };
   const q = useQuery({ queryKey: ["tasks", filters], queryFn: () => listTasks(filters), retry: false, placeholderData: (p) => p });
-  const filtered = Boolean(filters.search || status || mine || overdue);
+  const filtered = Boolean(filters.search || status || mine || overdue || unaligned);
   return (
     <section aria-label="All tasks" className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <input aria-label="Search tasks" type="search" placeholder="Search by title" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs" />
         <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs">
           <option value="">Any status</option>
@@ -234,7 +235,8 @@ function AllTasks({ today, onOpen }: { today: string; onOpen: (id: string) => vo
           ))}
         </select>
         <label className="flex items-center gap-2 text-label"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only tasks I do</label>
-        <label className="flex items-center gap-2 text-label"><input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> Only overdue</label>
+        <label className="flex items-center gap-2 text-label"><input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} />  Only overdue</label>
+        <label className="flex items-center gap-2 text-label"><input type="checkbox" checked={unaligned} onChange={(e) => setUnaligned(e.target.checked)} /> Not linked to an objective</label>
       </div>
       {q.isPending ? (
         <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>

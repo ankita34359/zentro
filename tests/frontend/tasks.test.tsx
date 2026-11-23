@@ -12,7 +12,7 @@ const bodyOf = (call: unknown[]) => JSON.parse(String((call[1] as RequestInit).b
 
 const task = (id: string, title: string, extra: Record<string, unknown> = {}) => ({
   id, title, status: "not_started", priority: "medium", importanceWeight: 3, progressPct: 0, startDate: null, dueAt: null, overdue: false, estimatedMinutes: null, actualMinutes: 0, blockedReason: null,
-  team: null, createdBy: { id: "m1", name: "Ada Lovelace" }, assignees: [{ assignmentId: `a-${id}`, kind: "person", id: "m1", name: "Ada Lovelace", role: "assignee" }], completedAt: null, isDemo: false, ...extra,
+  team: null, createdBy: { id: "m1", name: "Ada Lovelace" }, assignees: [{ assignmentId: `a-${id}`, kind: "person", id: "m1", name: "Ada Lovelace", role: "assignee" }], completedAt: null, isDemo: false, objectiveId: null, keyResultId: null, waitingOn: 0, ...extra,
 });
 const WORK = {
   today: "2026-11-23",
@@ -34,7 +34,7 @@ const WORK = {
 const DETAIL = (over: Record<string, unknown> = {}) => ({
   ...task("t1", "Send the invoice", { dueAt: "2026-11-20", overdue: true, priority: "high", status: "in_progress", progressPct: 20 }),
   description: "Invoice for October", parentTaskId: null, createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-02T00:00:00Z",
-  can: { edit: true, editEstimate: true, update: true, assign: false, comment: true }, nextStatuses: ["not_started", "blocked", "under_review", "completed", "cancelled"], ...over,
+  can: { edit: true, editEstimate: true, update: true, assign: false, comment: true, link: false, recordOutcome: false, review: false }, links: { objective: null, keyResult: null, hidden: false }, dependsOn: [], blocking: [], outcome: null, nextStatuses: ["not_started", "blocked", "under_review", "completed", "cancelled"], ...over,
 });
 const server = (extra: (url: string, init?: RequestInit) => Response | undefined = () => undefined) =>
   stubFetch((url, init) => {
@@ -202,7 +202,7 @@ describe("Task panel", () => {
 
   it("an assignee who may only update sees no edit form for the details; a viewer who cannot update sees no update forms; a task outside the view is a calm message", async () => {
     setMe(withCaps(EMPLOYEE));
-    server((url) => (url === "/api/tasks/t1" ? envelope(DETAIL({ can: { edit: false, editEstimate: false, update: false, assign: false, comment: true } })) : undefined));
+    server((url) => (url === "/api/tasks/t1" ? envelope(DETAIL({ can: { edit: false, editEstimate: false, update: false, assign: false, comment: true, link: false, recordOutcome: false, review: false } })) : undefined));
     renderApp("/my-work?task=t1");
     const dlg = await screen.findByRole("dialog");
     await within(dlg).findByRole("heading", { name: "Send the invoice" });
@@ -219,7 +219,7 @@ describe("Task panel", () => {
 
   it("someone who may assign can add a person and take one off after confirming", async () => {
     const { f, dlg } = await openPanel((url, init) => {
-      if (url === "/api/tasks/t1" && isGet(init)) return envelope(DETAIL({ can: { edit: true, editEstimate: true, update: true, assign: true, comment: true } }));
+      if (url === "/api/tasks/t1" && isGet(init)) return envelope(DETAIL({ can: { edit: true, editEstimate: true, update: true, assign: true, comment: true, link: false, recordOutcome: false, review: false } }));
       if (url.startsWith("/api/employees")) return envelope({ people: [{ id: "m2", displayName: "Bo Dev", status: "active", hasLogin: false, archived: false, designation: null, departments: [], teams: [], managers: [], email: null }], total: 1, limit: 500, offset: 0 });
       if (url === "/api/tasks/t1/assignments" && init?.method === "POST") return envelope(DETAIL(), 201);
       if (url === "/api/tasks/t1/assignments/a-t1/end" && init?.method === "POST") return envelope(DETAIL());

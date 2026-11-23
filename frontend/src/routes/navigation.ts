@@ -43,7 +43,7 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "overview", group: "home", label: "Overview", path: "/overview", icon: LayoutDashboard, description: "How the organization is doing, adapted to what you are allowed to see." },
   { key: "organization", group: "strategy", label: "Organization", path: "/organization", icon: Building2, description: "Departments, teams, people and who reports to whom.", requires: "org.view" },
-  { key: "okrs", group: "strategy", label: "OKRs & Goals", path: "/okrs", icon: Target, description: "Objectives and key results, aligned from the company down to each person." },
+  { key: "okrs", group: "strategy", label: "OKRs & Goals", path: "/okrs", icon: Target, description: "Objectives and key results, aligned from the company down to each person.", requires: "okr.view" },
   { key: "kpis", group: "strategy", label: "KPIs", path: "/kpis", icon: BarChart3, description: "Indicators, targets and their measurement history.", requires: "kpi.view" },
   { key: "my-work", group: "execution", label: "My Work", path: "/my-work", icon: CheckSquare, description: "Your tasks, updates and priorities for today." },
   { key: "team-performance", group: "execution", label: "Team Performance", path: "/team-performance", icon: Users, description: "How teams you lead or belong to are progressing." },
