@@ -8,6 +8,8 @@ import type { ScopeSet } from "../permissions/resolver.js";
 import type { Capabilities } from "../permissions/service.js";
 import { addDays, daysBetween, todayIn } from "../tasks/dates.js";
 import { keyResultAttainment, objectiveAttainment, toPercent, type DataState, type Direction, type ProgressMethod } from "./attainment.js";
+import { healthOf, refreshObjectiveHealth } from "./healthSweep.js";
+import type { Health } from "./health.js";
 import type { KeyResultRow, ObjectiveRow } from "./repositories/okr.js";
 
 export const LEVELS = ["company", "department", "team", "individual"] as const;
@@ -70,6 +72,9 @@ export interface ObjectiveSummary {
   coveragePct: number;
   /** How much of the time window has passed, 0 to 100 (a pace marker; health arrives with stage 3.2). */
   elapsedPct: number;
+  /** How the objective stands against its own time window (see health.ts); null for a cancelled objective. */
+  health: Health | null;
+  healthReason: string;
   archived: boolean;
   isDemo: boolean;
 }
@@ -158,7 +163,11 @@ export class OkrService {
     const names = new Map(people.people().map((p) => [p.id, p.display_name]));
     const depts = new Map(structure.departments().map((d) => [d.id, d]));
     const teams = new Map(structure.teams().map((t) => [t.id, t]));
-    return { tdb, okr, today, people, structure, names, depts, teams, krsByObjective: this.groupKrs(okr.keyResults()) };
+    // objectives I was given as a contributor or reviewer, directly or through my team or department
+    const myTeams = new Set(people.teamRows({ membershipId: ctx.membershipId, asOf: today }).map((r) => r.team_id));
+    const myDepts = new Set(people.deptRows({ membershipId: ctx.membershipId, asOf: today }).map((r) => r.department_id));
+    const assignedToMe = new Set(okr.assignments().filter((a) => a.assignee_membership_id === ctx.membershipId || (a.assignee_team_id !== null && myTeams.has(a.assignee_team_id)) || (a.assignee_department_id !== null && myDepts.has(a.assignee_department_id))).map((a) => a.objective_id));
+    return { tdb, okr, today, people, structure, names, depts, teams, assignedToMe, krsByObjective: this.groupKrs(okr.keyResults()) };
   }
   private groupKrs(rows: KeyResultRow[]): Map<string, KeyResultRow[]> {
     const m = new Map<string, KeyResultRow[]>();
@@ -182,10 +191,14 @@ export class OkrService {
     if (this.inScope(o, caps.scope("okr.view"))) return true;
     if (o.owner_membership_id === me || o.created_by_membership_id === me) return true;
     if ((w.krsByObjective.get(o.id) ?? []).some((k) => k.owner_membership_id === me)) return true;
+    if (w.assignedToMe.has(o.id)) return true;
     return o.visibility === "organization" && o.lifecycle !== "draft";
   }
   private canEdit(caps: Capabilities, o: ObjectiveRow, me: string): boolean {
     return this.inScope(o, caps.scope("okr.edit")) || (o.created_by_membership_id === me && o.level === "individual" && o.owner_membership_id === me);
+  }
+  private canAssign(caps: Capabilities, o: ObjectiveRow): boolean {
+    return this.inScope(o, caps.scope("okr.assign"));
   }
   private canRecord(caps: Capabilities, o: ObjectiveRow, k: KeyResultRow, me: string): boolean {
     return this.inScope(o, caps.scope("okr.update_progress")) || k.owner_membership_id === me || o.owner_membership_id === me;
@@ -206,14 +219,23 @@ export class OkrService {
     const att = objectiveAttainment(krs.map((k) => ({ attainment: keyResultAttainment({ direction: k.direction as Direction, method: k.progress_method as ProgressMethod, start: k.start_value, target: k.target_value, current: k.current_value, weight: k.weight }).value, weight: k.weight })));
     const span = Math.max(1, daysBetween(o.start_date, o.end_date));
     const elapsed = Math.min(1, Math.max(0, daysBetween(o.start_date, w.today) / span));
+    const h = healthOf(o, krs, w.today);
     return {
       id: o.id, title: o.title, level: o.level, objectiveType: o.objective_type, priority: o.priority, lifecycle: o.lifecycle, visibility: o.visibility, published: o.visibility === "organization",
       startDate: o.start_date, endDate: o.end_date, weight: o.weight, owner: this.who(w, o.owner_membership_id),
       department: o.department_id ? { id: o.department_id, name: w.depts.get(o.department_id)?.name ?? "Department" } : null,
       team: o.team_id ? { id: o.team_id, name: w.teams.get(o.team_id)?.name ?? "Team" } : null,
       keyResultCount: krs.length, attainmentPct: toPercent(att.value), dataState: att.dataState, coveragePct: Math.round(att.coverage * 100), elapsedPct: Math.round(elapsed * 100),
+      health: h.health, healthReason: h.reason,
       archived: o.archived_at !== null, isDemo: o.is_demo === 1,
     };
+  }
+
+  /** Stores the objective's health inside the transaction of the change that may have moved it. */
+  private syncHealth(w: ReturnType<OkrService["world"]>, id: string): void {
+    const o = w.okr.objective(id);
+    if (!o) return;
+    refreshObjectiveHealth(w.tdb, o, w.okr.keyResults().filter((k) => k.objective_id === id), w.today, this.now(), w.okr);
   }
 
   list(auth: AuthContext, requestId: string, caps: Capabilities, q: { level?: string; lifecycle?: string; ownerId?: string; teamId?: string; departmentId?: string; mine?: boolean; search?: string; includeArchived?: boolean }): ObjectiveSummary[] {
@@ -315,6 +337,7 @@ export class OkrService {
     this.o.store.transaction(() => {
       w.okr.insertObjective({ id, level, departmentId, teamId, ownerId, title, description, objectiveType, startDate: input.startDate, endDate: input.endDate, priority, lifecycle, weight, createdBy: me, now });
       for (const k of prepared) w.okr.insertKeyResult({ id: newId(), objectiveId: id, ...k, now });
+      this.syncHealth(w, id);
       this.o.audit.record(w.tdb, ctx, { action: "objective.create", entityType: "objective", entityId: id, summary: `Created the ${level} objective "${title}" with ${prepared.length} key ${prepared.length === 1 ? "result" : "results"}`, after: { level, title, lifecycle, startDate: input.startDate, endDate: input.endDate } });
     });
     const fresh = this.world(ctx);
@@ -378,6 +401,7 @@ export class OkrService {
     this.o.store.transaction(() => {
       w.okr.updateObjective({ id, ...next, now });
       if (lifecycle !== undefined && lifecycle !== o.lifecycle) w.okr.setLifecycle(id, lifecycle, now);
+      this.syncHealth(w, id);
       this.o.audit.record(w.tdb, ctx, {
         action: lifecycle !== undefined && lifecycle !== o.lifecycle && changed.length === 1 ? "objective.lifecycle" : "objective.update",
         entityType: "objective",
@@ -439,6 +463,7 @@ export class OkrService {
     const id = newId();
     this.o.store.transaction(() => {
       w.okr.insertKeyResult({ id, objectiveId, ...k, now: this.now() });
+      this.syncHealth(w, objectiveId);
       this.o.audit.record(w.tdb, ctx, { action: "key_result.create", entityType: "key_result", entityId: id, summary: `Added the key result "${k.title}" to the objective "${o.title}"`, after: { title: k.title, start: k.start, target: k.target, direction: k.direction } });
     });
     const fresh = this.world(ctx);
@@ -468,6 +493,7 @@ export class OkrService {
         const a = keyResultAttainment({ direction: k.direction as Direction, method: k.progress_method as ProgressMethod, start: merged.start, target: merged.target, current: k.current_value, weight: merged.weight });
         w.okr.insertHistory({ id: newId(), objectiveId: o.id, keyResultId: id, value: k.current_value, attainment: a.value, source: "target_change", note: `Target changed from ${k.start_value} → ${k.target_value} to ${merged.start} → ${merged.target}`, by: me, supersedesId: null, now });
       }
+      this.syncHealth(w, o.id);
       this.o.audit.record(w.tdb, ctx, { action: "key_result.update", entityType: "key_result", entityId: id, summary: `Changed the key result "${merged.title}" (${changed.join(", ")})`, before: { fields: changed, start: k.start_value, target: k.target_value }, after: { fields: changed, start: merged.start, target: merged.target } });
     });
     const fresh = this.world(ctx);
@@ -494,10 +520,26 @@ export class OkrService {
     this.o.store.transaction(() => {
       w.okr.insertHistory({ id: newId(), objectiveId: o.id, keyResultId: id, value, attainment: a.value, source, note, by: me, supersedesId: prev?.id ?? null, now });
       w.okr.setCurrent(id, value, w.today, now);
+      this.syncHealth(w, o.id);
       this.o.audit.record(w.tdb, ctx, { action: "key_result.progress", entityType: "key_result", entityId: id, summary: `Recorded ${value}${k.unit ? ` ${k.unit}` : ""} for the key result "${k.title}" (${a.value === null ? "no data" : `${toPercent(a.value)}%`})`, before: { value: k.current_value }, after: { value } });
     });
     const fresh = this.world(ctx);
     return this.toDetail(fresh, caps, fresh.okr.objective(o.id)!, me);
+  }
+
+  // ---------- for the alignment service (stage 3.2) ----------
+
+  /** The objective, if the caller may see it, with what they may do to it. */
+  access(ctx: TenantCtx, caps: Capabilities, id: string): { row: ObjectiveRow; summary: ObjectiveSummary; canEdit: boolean; canAssign: boolean } | undefined {
+    const w = this.world(ctx);
+    const o = w.okr.objective(id);
+    if (!o || o.archived_at || !this.canSee(w, caps, o, ctx.membershipId)) return undefined;
+    return { row: o, summary: this.summary(w, o), canEdit: this.canEdit(caps, o, ctx.membershipId), canAssign: this.canAssign(caps, o) };
+  }
+  /** Every live objective the caller may see. */
+  allVisible(ctx: TenantCtx, caps: Capabilities): { row: ObjectiveRow; summary: ObjectiveSummary }[] {
+    const w = this.world(ctx);
+    return w.okr.objectives().filter((o) => this.canSee(w, caps, o, ctx.membershipId)).map((o) => ({ row: o, summary: this.summary(w, o) }));
   }
 
   /** Used by the task outcome (stage 4.2): can this person record a value on this key result? */

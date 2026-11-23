@@ -215,7 +215,9 @@ describe("View as a demo person", () => {
     expect(list.length).toBeGreaterThan(55);
     const ceo = personaBy(list, (p) => p.designation === "Chief Executive Officer");
     const vp = personaBy(list, (p) => p.designation === "Vice President" && p.department === "Engineering");
-    const emp = personaBy(list, (p) => p.designation === "Software Engineer" && p.roles.includes("Employee"));
+    // the company is drawn from the organization's id, so pick an engineer who really has open work (the page for someone with none is empty by design)
+    const withOpenWork = new Set((t.db.prepare("SELECT DISTINCT a.assignee_membership_id AS id FROM task_assignments a JOIN tasks tk ON tk.id = a.task_id WHERE tk.is_demo = 1 AND tk.status NOT IN ('completed', 'cancelled') AND a.unassigned_at IS NULL").all() as { id: string }[]).map((r) => r.id));
+    const emp = personaBy(list, (p) => p.designation === "Software Engineer" && p.roles.includes("Employee") && withOpenWork.has(p.id));
     const total = (await get(t.app, "/api/employees?limit=500", owner)).body.data.total as number;
 
     const asCeo = await asCookie(owner, ceo.id);
@@ -350,5 +352,45 @@ describe("Demo objectives, key results and linked tasks (stages 3.1 and 4.2)", (
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM objectives").n).toBe(1);
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM key_results").n).toBe(1);
     expect((await get(t.app, `/api/objectives/${real}`, owner)).body.data.title).toBe("My real objective");
+  });
+});
+
+describe("Demo alignment and health (stage 3.2)", () => {
+  it("the demo objectives are aligned company → department → team → person with health computed, one is left unaligned for the gaps report, and the first sweep announces nothing", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const tree = (await get(t.app, "/api/objectives/tree", owner)).body.data as { roots: { level: string; title: string; children: { children: unknown[] }[] }[] };
+    expect(tree.roots.filter((r) => r.level === "company")).toHaveLength(3);
+    const depth = (n: { children: { children: unknown[] }[] }): number => 1 + Math.max(0, ...n.children.map((c) => depth(c as never)));
+    expect(Math.max(...tree.roots.map((r) => depth(r as never)))).toBe(4); // company → department → team → personal
+    const gaps = (await get(t.app, "/api/objectives/alignment-gaps", owner)).body.data;
+    expect(gaps.unaligned.map((g: { title: string }) => g.title)).toContain("Plan next year's roadmap");
+    const list = (await get(t.app, "/api/objectives", owner)).body.data as { health: string | null }[];
+    expect(new Set(list.map((o) => o.health)).size).toBeGreaterThanOrEqual(3); // a believable spread
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objectives WHERE is_demo = 1 AND health IS NULL").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_assignments").n).toBeGreaterThanOrEqual(4);
+    t.db.prepare("DELETE FROM scheduled_job_runs WHERE job_name = 'okr.health'").run();
+    await t.tick.run();
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM automation_events WHERE event_type = 'objective.at_risk'").n).toBe(0);
+    // removal takes the links and assignments with it
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_relationships").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_assignments").n).toBe(0);
+  });
+
+  it("a real objective aligned with a demo one, or assigned to a demo team, stops the removal with a plain list", async () => {
+    const { owner } = await setup();
+    const real = await created("/api/objectives", { level: "department", departmentId: await created("/api/departments", { name: "My department" }, owner), title: "My real objective", startDate: "2026-01-01", endDate: "2026-12-31" }, owner);
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const demoCompany = ((await get(t.app, "/api/objectives", owner)).body.data as { id: string; level: string; isDemo: boolean }[]).find((o) => o.isDemo && o.level === "company")!;
+    const al = await request(t.app).put(`/api/objectives/${real}/parent`).set("Origin", ORIGIN).set("Cookie", owner).send({ parentId: demoCompany.id });
+    expect(al.status, JSON.stringify(al.body)).toBe(200);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    expect((blocked.body.error.details.blockers as { kind: string }[]).map((b) => b.kind)).toContain("objective_links");
+    await request(t.app).delete(`/api/objectives/${real}/parent`).set("Origin", ORIGIN).set("Cookie", owner);
+    const demoTeam = (await get(t.app, "/api/organization/structure", owner)).body.data.teams.find((x: { isDemo?: boolean }) => x.isDemo).id as string;
+    expect((await post(t.app, `/api/objectives/${real}/assignments`, { teamId: demoTeam }, owner)).status).toBe(201);
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).body.error.details.blockers.map((b: { kind: string }) => b.kind)).toContain("objective_assignments");
   });
 });

@@ -80,6 +80,11 @@ export interface DemoObjective {
   lifecycle: "draft" | "active" | "completed";
   published: boolean;
   keyResults: DemoKeyResult[];
+  /** The objective this one contributes to (stage 3.2), and how heavily. */
+  parentKey: string | null;
+  parentWeight: number;
+  /** Teams and departments that also work on it. */
+  contributors: { kind: "team" | "department"; key: string; role: "contributor" | "reviewer" }[];
 }
 export interface DemoDailyUpdate { personKey: string; dayOffset: number; summary: string; blockers: string | null }
 export interface DemoCompany {
@@ -304,8 +309,8 @@ export function buildDemoCompany(seed: string): DemoCompany {
   // the people and tasks of earlier versions of the seed do not change. -----
   const kr = (title: string, direction: "increase" | "decrease", start: number, target: number, unit: string | null, ownerKey: string, history: DemoKeyResult["history"], weight = 1, method: DemoKeyResult["method"] = "linear"): DemoKeyResult => ({ title, direction, method, start, target, unit, weight, ownerKey, history });
   const objectives: DemoObjective[] = [];
-  const obj = (o: Omit<DemoObjective, "key">): DemoObjective => {
-    const full = { ...o, key: `o${objectives.length + 1}` };
+  const obj = (o: Omit<DemoObjective, "key" | "parentKey" | "parentWeight" | "contributors">): DemoObjective => {
+    const full: DemoObjective = { ...o, key: `o${objectives.length + 1}`, parentKey: null, parentWeight: 1, contributors: [] };
     objectives.push(full);
     return full;
   };
@@ -364,6 +369,26 @@ export function buildDemoCompany(seed: string): DemoCompany {
       kr("Course modules completed", "increase", 0, 12, "modules", learner.key, [{ dayOffset: -14, value: 3 }]),
     ] });
   }
+
+  // alignment: departments contribute to company objectives, teams to their department's, the personal goal to its team's.
+  // One department objective (the roadmap draft) is left unlinked on purpose, so the gaps report has something real to show.
+  const by = (title: string): DemoObjective => objectives.find((o) => o.title.startsWith(title))!;
+  const align = (child: string, parent: string, weight = 1): void => {
+    by(child).parentKey = by(parent).key;
+    by(child).parentWeight = weight;
+  };
+  align("Ship faster with fewer incidents", "Make Zentro the easiest", 2);
+  align("Redesign the first-run experience", "Make Zentro the easiest", 2);
+  align("Grow the pipeline", "Reach $12M", 3);
+  align("Answer customers faster", "Reach $12M", 1);
+  align("Close the books in five days", "Build a team people want to stay in", 1);
+  align("Make the public API dependable", "Ship faster with fewer incidents", 2);
+  align("Qualify leads within a day", "Grow the pipeline", 1);
+  align("Keep the help centre current", "Answer customers faster", 1);
+  if (learner) align("Get certified in cloud infrastructure", "Make the public API dependable", 1);
+  by("Make Zentro the easiest").contributors.push({ kind: "department", key: "cs", role: "contributor" });
+  by("Ship faster with fewer incidents").contributors.push({ kind: "team", key: "data", role: "contributor" });
+  by("Redesign the first-run experience").contributors.push({ kind: "team", key: "design", role: "contributor" }, { kind: "team", key: "product", role: "reviewer" });
 
   // tasks support the objectives of their team, else their department, else the company
   const OUTCOMES = ["Shipped and verified with the team.", "Delivered to the customer; feedback was positive.", "Completed ahead of the review; notes are in the folder.", "Done. Follow-up work is tracked in a new task."];

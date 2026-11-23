@@ -49,6 +49,8 @@ describe("route registry: every route declares its protection", () => {
     const rows = t.registry.list().map((r) => `${r.method.toUpperCase()} ${r.path} ${r.access.kind}`).sort();
     expect(rows).toEqual([
       "DELETE /api/objectives/:id permission",
+      "DELETE /api/objectives/:id/assignments/:aid permission",
+      "DELETE /api/objectives/:id/parent permission",
       "DELETE /api/tasks/:id/comments/:cid permission",
       "DELETE /api/tasks/:id/dependencies/:depId permission",
       "GET /api/audit-logs permission",
@@ -68,8 +70,11 @@ describe("route registry: every route declares its protection", () => {
       "GET /api/notifications baseline",
       "GET /api/objectives permission",
       "GET /api/objectives/:id permission",
+      "GET /api/objectives/:id/alignment permission",
       "GET /api/objectives/:id/history permission",
+      "GET /api/objectives/alignment-gaps permission",
       "GET /api/objectives/linkable permission",
+      "GET /api/objectives/tree permission",
       "GET /api/organization baseline",
       "GET /api/organization/members permission",
       "GET /api/organization/structure permission",
@@ -132,6 +137,7 @@ describe("route registry: every route declares its protection", () => {
       "POST /api/notifications/:id/read baseline",
       "POST /api/notifications/read-all baseline",
       "POST /api/objectives permission",
+      "POST /api/objectives/:id/assignments permission",
       "POST /api/objectives/:id/key-results permission",
       "POST /api/objectives/:id/publish permission",
       "POST /api/organizations baseline",
@@ -156,6 +162,7 @@ describe("route registry: every route declares its protection", () => {
       "POST /api/teams/:id/archive permission",
       "POST /api/teams/:id/members permission",
       "POST /api/teams/:id/restore permission",
+      "PUT /api/objectives/:id/parent permission",
       "PUT /api/preferences baseline",
       "PUT /api/roles/:id/permissions permission",
     ].sort());

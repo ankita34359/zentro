@@ -8,6 +8,7 @@ import { TEMPLATE_KEYS } from "../permissions/roleTemplates.js";
 import type { Capabilities } from "../permissions/service.js";
 import { addDays, todayIn } from "../tasks/dates.js";
 import { keyResultAttainment } from "../okr/attainment.js";
+import { healthOf } from "../okr/healthSweep.js";
 import { buildDemoCompany, demoEmail, type DemoTask, type RoleChoice } from "./seed.js";
 
 const ROLE_KEY: Record<RoleChoice, string> = {
@@ -151,6 +152,17 @@ export class DemoService {
           }
         }
         keyResultIds.set(o.key, ids);
+      }
+      for (const o of company.objectives) {
+        if (o.parentKey) repo.insertRelationship({ id: newId(), parentId: objectiveId.get(o.parentKey)!, childId: objectiveId.get(o.key)!, weight: o.parentWeight, by: personId.get(o.ownerKey)!, now: at(addDays(today, o.startOffset)) });
+        for (const c of o.contributors) repo.insertObjectiveAssignment({ id: newId(), objectiveId: objectiveId.get(o.key)!, teamId: c.kind === "team" ? teamId.get(c.key)! : null, departmentId: c.kind === "department" ? deptId.get(c.key)! : null, role: c.role, startDate: addDays(today, o.startOffset), by: personId.get(o.ownerKey)!, now: at(addDays(today, o.startOffset)) });
+      }
+      // the stored health starts out correct, so the first hourly sweep does not announce every objective that is behind
+      const okrRepo = this.o.store.okr(tdb);
+      const allKrs = okrRepo.keyResults();
+      for (const o of okrRepo.objectives()) if (o.is_demo === 1) {
+        const h = healthOf(o, allKrs.filter((k) => k.objective_id === o.id), today);
+        okrRepo.setHealth(o.id, h.health, h.reason, now);
       }
 
       const taskId = new Map<string, string>();

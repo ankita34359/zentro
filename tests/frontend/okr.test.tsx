@@ -17,7 +17,7 @@ const KR = (over: Record<string, unknown> = {}) => ({
 });
 const OBJ = (over: Record<string, unknown> = {}) => ({
   id: "o1", title: "Win more customers", level: "company", objectiveType: "strategic", priority: "high", lifecycle: "active", visibility: "scope", published: false, startDate: "2026-01-01", endDate: "2026-12-31", weight: 1,
-  owner: null, department: null, team: null, keyResultCount: 1, attainmentPct: null, dataState: "none", coveragePct: 0, elapsedPct: 90, archived: false, isDemo: false, ...over,
+  owner: null, department: null, team: null, keyResultCount: 1, attainmentPct: null, dataState: "none", coveragePct: 0, elapsedPct: 90, health: "no_data", healthReason: "90% of the time has passed and no key result has a recorded value.", archived: false, isDemo: false, ...over,
 });
 const DETAIL = (over: Record<string, unknown> = {}) => ({
   ...OBJ(), description: "Grow the base", createdBy: { id: "m1", name: "Ada Lovelace" }, keyResults: [KR()],
@@ -31,6 +31,7 @@ const server = (extra: (url: string, init?: RequestInit) => Response | undefined
     if (path === "/api/objectives" && isGet(init)) return envelope([OBJ()]);
     if (path === "/api/objectives/o1" && isGet(init)) return envelope(DETAIL());
     if (path === "/api/objectives/o1/history") return envelope([]);
+    if (path === "/api/objectives/o1/alignment") return envelope({ parent: null, children: [], hiddenChildren: 0, assignments: [], can: { assign: false } });
     if (path === "/api/tasks") return envelope({ tasks: [], total: 0, limit: 50, offset: 0 });
     if (path === "/api/notifications") return envelope({ notifications: [], unreadCount: 0, nextCursor: null });
     return json(HEALTH_OK);
@@ -105,5 +106,40 @@ describe("OKRs & Goals page (stage 3.1)", () => {
     await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/objectives" && (c[1] as RequestInit | undefined)?.method === "POST")).toBe(true));
     const sent = bodyOf(f.mock.calls.find((c) => c[0] === "/api/objectives" && (c[1] as RequestInit | undefined)?.method === "POST")!);
     expect(sent).toMatchObject({ level: "company", title: "Win more customers", keyResults: [{ title: "Signed deals", direction: "increase", startValue: 0, targetValue: 10 }] });
+  });
+
+  it("shows the health in words, with its reason in the panel", async () => {
+    setMe(withCaps(ALL));
+    server();
+    renderApp("/okrs?objective=o1");
+    const panel = await screen.findByRole("dialog");
+    expect(await within(panel).findByText(/90% of the time has passed and no key result has a recorded value/)).toBeTruthy();
+    expect(within(panel).getAllByText("No data").length).toBeGreaterThan(0);
+    expect(await within(panel).findByText("Nothing contributes to it yet.")).toBeTruthy();
+  });
+
+  it("the Alignment tab shows each objective under the one it contributes to, with its health and what it adds", async () => {
+    setMe(withCaps(ALL));
+    server((url) => (url === "/api/objectives/tree" ? envelope({ total: 2, roots: [{ id: "o1", title: "Win more customers", level: "company", lifecycle: "active", health: "at_risk", attainmentPct: 50, dataState: "ok", owner: null, weight: null, contributionPct: null, unaligned: false, hiddenChildren: 0, children: [{ id: "o2", title: "Grow the pipeline", level: "department", lifecycle: "active", health: "on_track", attainmentPct: 80, dataState: "ok", owner: null, weight: 3, contributionPct: 60, unaligned: false, hiddenChildren: 1, children: [] }] }] }) : undefined));
+    renderApp("/okrs?view=tree");
+    const tree = await screen.findByRole("tree", { name: "Objectives by alignment" });
+    expect(within(tree).getByText("Win more customers")).toBeTruthy();
+    expect(within(tree).getByText("At risk")).toBeTruthy();
+    expect(within(tree).getByText("Grow the pipeline")).toBeTruthy();
+    expect(within(tree).getByText(/adds 60 points to its parent/)).toBeTruthy();
+    expect(within(tree).getByText(/\+1 you cannot see/)).toBeTruthy();
+    await userEvent.click(within(tree).getByRole("button", { name: "Collapse Win more customers" }));
+    expect(within(tree).queryByText("Grow the pipeline")).toBeNull();
+  });
+
+  it("the Gaps tab lists each gap with the reason it is listed", async () => {
+    setMe(withCaps(ALL));
+    server((url) => (url === "/api/objectives/alignment-gaps" ? envelope({ unaligned: [{ id: "o9", title: "Orphan goal", level: "team", reason: "It does not contribute to any higher objective." }], notBrokenDown: [], unmeasurable: [], noData: [], behindPace: [], overdue: [], unalignedTasks: 3 }) : undefined));
+    renderApp("/okrs?view=gaps");
+    const group = await screen.findByRole("region", { name: "Not aligned to anything" });
+    expect(within(group).getByText("Orphan goal")).toBeTruthy();
+    expect(within(group).getByText("It does not contribute to any higher objective.")).toBeTruthy();
+    expect(within(await screen.findByRole("region", { name: "Cannot be measured" })).getByText("None")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Work with no objective" })).getByText("3")).toBeTruthy();
   });
 });

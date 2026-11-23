@@ -13,14 +13,15 @@ import { problemText } from "@/lib/authForm";
 import { timeAgo } from "@/lib/format";
 import { ApiError } from "@/services/api";
 import {
-  addKeyResult, archiveObjective, getObjective, getObjectiveHistory, LEVEL_LABEL, LIFECYCLE_LABEL, publishObjective, recordProgress, SOURCE_LABEL, updateObjective, valueText,
+  addKeyResult, archiveObjective, HEALTH_LABEL, getObjective, getObjectiveHistory, LEVEL_LABEL, LIFECYCLE_LABEL, publishObjective, recordProgress, SOURCE_LABEL, updateObjective, valueText,
   type KeyResult, type ObjectiveDetail,
 } from "@/services/okr";
 import { listTasks } from "@/services/tasks";
-import { Attainment, LifecycleBadge, whereText } from "./okrUi";
+import { AlignmentSection } from "./AlignmentSection";
+import { Attainment, HealthBadge, LifecycleBadge, whereText } from "./okrUi";
 
 const field = "h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs";
-const REFRESH = ["objectives", "objective", "objective-history", "overview", "audit", "linkable", "tasks"];
+const REFRESH = ["objectives", "objective", "objective-history", "alignment", "overview", "audit", "linkable", "tasks"];
 
 /** The right-hand panel with one objective. `id` null = closed. */
 export function ObjectiveDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
@@ -78,6 +79,7 @@ function Body({ id }: { id: string }) {
           <h2 className="text-heading font-semibold">{o.title}</h2>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <LifecycleBadge lifecycle={o.lifecycle} />
+            <HealthBadge health={o.health} />
             <Badge variant="neutral">{whereText(o)}</Badge>
             {o.published && <Badge variant="info">Published</Badge>}
             {o.archived && <Badge variant="dashed">Archived</Badge>}
@@ -94,6 +96,7 @@ function Body({ id }: { id: string }) {
         {notice && <FormNotice>{notice}</FormNotice>}
         {problem && <FormAlert>{problem}</FormAlert>}
         <Attainment pct={o.attainmentPct} dataState={o.dataState} coveragePct={o.coveragePct} elapsedPct={o.elapsedPct} label={`Progress of ${o.title}`} />
+        {o.health && <p className="text-label text-muted-foreground"><strong className="text-foreground">{HEALTH_LABEL[o.health]}.</strong> {o.healthReason}</p>}
         <dl className="grid gap-3 text-label sm:grid-cols-2">
           <Fact label="Level">{LEVEL_LABEL[o.level]}</Fact>
           <Fact label="Runs">{o.startDate} to {o.endDate}</Fact>
@@ -105,6 +108,7 @@ function Body({ id }: { id: string }) {
         {o.description && <p className="whitespace-pre-wrap text-body">{o.description}</p>}
         <KeyResults o={o} busy={run.isPending} act={act} />
         {o.can.edit && <AddKeyResult o={o} busy={run.isPending} act={act} />}
+        <AlignmentSection o={o} busy={run.isPending} act={act} />
         <LinkedTasks id={id} />
         {(o.can.edit || o.can.publish || o.can.archive) && <ManageSection o={o} busy={run.isPending} act={act} onGone={() => undefined} />}
         <History id={id} />

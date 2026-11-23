@@ -123,6 +123,9 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const taskA2 = await mk("/api/tasks", { title: "Alpha secret second task", assigneeIds: [personA.membershipId] });
     expect((await post(t.app, `/api/tasks/${taskA2}/dependencies`, { dependsOnId: taskA }, ownerA)).status).toBe(201);
     const objectiveA = await mk("/api/objectives", { level: "team", teamId: teamA, title: "Alpha secret objective", startDate: "2026-01-01", endDate: "2026-12-31", keyResults: [{ title: "Alpha secret key result", targetValue: 100 }] });
+    const parentA = await mk("/api/objectives", { level: "company", title: "Alpha secret parent objective", startDate: "2026-01-01", endDate: "2026-12-31" });
+    expect((await post(t.app, `/api/objectives/${objectiveA}/assignments`, { teamId: teamA }, ownerA)).status).toBe(201);
+    const objectiveAssignmentA = (t.db.prepare("SELECT id FROM objective_assignments WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
     const notificationA = (t.db.prepare("SELECT id FROM notifications WHERE recipient_membership_id = ?").get(personA.membershipId) as { id: string }).id;
@@ -180,6 +183,10 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/objectives/:id": { params: { id: objectiveA }, body: { title: "Hacked by B" } },
       "/api/objectives/:id/publish": { params: { id: objectiveA }, body: { published: true } },
       "/api/objectives/:id/history": { params: { id: objectiveA } },
+      "/api/objectives/:id/alignment": { params: { id: objectiveA } },
+      "/api/objectives/:id/parent": { params: { id: objectiveA }, body: { parentId: parentA } },
+      "/api/objectives/:id/assignments": { params: { id: objectiveA }, body: { assigneeId: personA.membershipId } },
+      "/api/objectives/:id/assignments/:aid": { params: { id: objectiveA, aid: objectiveAssignmentA } },
       "/api/objectives/:id/key-results": { params: { id: objectiveA }, body: { title: "Hacked by B", targetValue: 10 } },
       "/api/key-results/:id": { params: { id: keyResultA }, body: { title: "Hacked by B" } },
       "/api/key-results/:id/progress": { params: { id: keyResultA }, body: { value: 5 } },
@@ -211,6 +218,9 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT task_id, depends_on_task_id FROM task_dependencies ORDER BY task_id").all(),
       t.db.prepare("SELECT id, title, lifecycle, visibility, archived_at, level FROM objectives ORDER BY id").all(),
       t.db.prepare("SELECT id, objective_id, title, target_value, current_value FROM key_results ORDER BY id").all(),
+      t.db.prepare("SELECT id, parent_objective_id, child_objective_id, contribution_weight, ended_at FROM objective_relationships ORDER BY id").all(),
+      t.db.prepare("SELECT id, objective_id, assignee_membership_id, assignee_team_id, role, end_date FROM objective_assignments ORDER BY id").all(),
+      t.db.prepare("SELECT id, health, health_reason FROM objectives ORDER BY id").all(),
       t.db.prepare("SELECT id, key_result_id, value, source FROM objective_progress_history ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM automation_events").get(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
@@ -234,7 +244,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", objectiveA, keyResultA, taskA2, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

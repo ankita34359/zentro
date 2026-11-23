@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Target, Trash2 } from "lucide-react";
+import { ListTree, Plus, SearchCheck, Target, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
+import { cn } from "@/lib/cn";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { FormAlert, FormField } from "@/components/common/FormField";
@@ -17,7 +18,8 @@ import { createObjective, LEVEL_LABEL, listObjectives, type KeyResultInput } fro
 import { listPeople } from "@/services/people";
 import { getStructure } from "@/services/structure";
 import { ObjectiveDrawer } from "./ObjectiveDrawer";
-import { Attainment, LifecycleBadge, whereText } from "./okrUi";
+import { AlignmentTree, GapsReport } from "./AlignmentViews";
+import { Attainment, HealthBadge, LifecycleBadge, whereText } from "./okrUi";
 
 const area = "w-full rounded-lg border border-input bg-card px-3 py-2 text-body text-foreground shadow-xs";
 const selectCls = "h-10 w-full rounded-lg border border-input bg-card px-3 text-body text-foreground shadow-xs";
@@ -36,7 +38,13 @@ export default function OkrPage() {
   const [search, setSearch] = useState("");
   const filters = { level: level || undefined, lifecycle: lifecycle || undefined, mine, search: search.trim() || undefined };
   const q = useQuery({ queryKey: ["objectives", filters], queryFn: () => listObjectives(filters), retry: false, placeholderData: (p) => p });
+  const view = params.get("view") === "tree" ? "tree" : params.get("view") === "gaps" ? "gaps" : "list";
   const openId = params.get("objective");
+  const tab = (v: "list" | "tree" | "gaps", label: string, Icon: typeof Target) => (
+    <Link to={{ search: (() => { const n = new URLSearchParams(params); if (v === "list") n.delete("view"); else n.set("view", v); return n.toString() ? `?${n.toString()}` : ""; })() }} role="tab" aria-selected={view === v} className={cn("-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-label font-medium", view === v ? "border-primary text-primary-ink" : "border-transparent text-muted-foreground hover:text-foreground")}>
+      <Icon aria-hidden="true" className="size-4" /> {label}
+    </Link>
+  );
   const open = (id: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("objective", id); return n; });
   const close = () => setParams((p) => { const n = new URLSearchParams(p); n.delete("objective"); return n; }, { replace: true });
   const canCreate = can("okr.create");
@@ -51,7 +59,14 @@ export default function OkrPage() {
         actions={canCreate ? <Button size="sm" onClick={() => setAdding(true)}><Plus aria-hidden="true" /> New objective</Button> : undefined}
       />
       {adding && canCreate && <NewObjectiveForm onDone={() => setAdding(false)} onCreated={(id) => { setAdding(false); open(id); }} />}
-      <section aria-label="Objectives" className="space-y-4">
+      <div role="tablist" aria-label="OKR views" className="mb-5 flex overflow-x-auto border-b">
+        {tab("list", "Objectives", Target)}
+        {tab("tree", "Alignment", ListTree)}
+        {tab("gaps", "Gaps", SearchCheck)}
+      </div>
+      {view === "tree" && <AlignmentTree onOpen={open} />}
+      {view === "gaps" && <GapsReport onOpen={open} />}
+      {view === "list" && <section aria-label="Objectives" className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <input aria-label="Search objectives" type="search" placeholder="Search by title" value={search} onChange={(e) => setSearch(e.target.value)} className={selectCls} />
           <select aria-label="Level" value={level} onChange={(e) => setLevel(e.target.value)} className={selectCls}>
@@ -84,6 +99,7 @@ export default function OkrPage() {
                     <Target aria-hidden="true" className="size-4 shrink-0 text-primary-ink" />
                     <span className="min-w-0 flex-1 text-body font-semibold">{o.title}</span>
                     <LifecycleBadge lifecycle={o.lifecycle} />
+                    <HealthBadge health={o.health} />
                   </span>
                   <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
                     <span>{whereText(o)}</span>
@@ -99,7 +115,7 @@ export default function OkrPage() {
             ))}
           </ul>
         )}
-      </section>
+      </section>}
       <ObjectiveDrawer id={openId} onClose={close} />
     </>
   );
