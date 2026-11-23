@@ -2,9 +2,30 @@
 
 Resume file. A fresh session should be able to continue from this page alone, plus `ZENTRO_MASTER_PROMPT.md` (source of truth; its "Showcase overrides" section wins) and `docs/`.
 
-Last updated: 2026-11-23 · Blueprint approved · Milestone 1 (stages 1.1 to 1.5) complete · Stages 2.1 (auth core), 2.2 (reset and invitations), 2.3 (RBAC engine, Delete my account, restore-at-start-up) and 2.4 (role editor, assignments, audit) complete and live-checked by the owner; 2.4 merged to `main` · live on `31fb6ff` · and 2.5 (organization structure) complete and live-checked by the owner; 2.5 merged to `main` · live on `cb85ef4` · CI workflow and branch protection on `main` · live at https://zentro.embarko.app
+Last updated: 2026-11-23 (autonomous build queue: batches A to D) · Blueprint approved · Milestone 1 (stages 1.1 to 1.5) complete · Stages 2.1 (auth core), 2.2 (reset and invitations), 2.3 (RBAC engine, Delete my account, restore-at-start-up) and 2.4 (role editor, assignments, audit) complete and live-checked by the owner; 2.4 merged to `main` · live on `31fb6ff` · and 2.5 (organization structure) complete and live-checked by the owner; 2.5 merged to `main` · live on `cb85ef4` · CI workflow and branch protection on `main` · live at https://zentro.embarko.app
 
 ---
+
+## Autonomous build queue (2026-11-23, owner's standing approval to build, deploy and merge)
+
+The owner asked for batches A to D, each on its own branch `claude/batch-<letter>`, each opened as a PR, merged after `checks` pass, then deployed with `scripts/embarko-deploy.sh zentro`. Where the docs left a choice I used the recommended answer and recorded it here.
+
+**Decisions made without asking (recommended answers)**
+- **People without a login are "directory people"** (a membership with no user, status `active`). Inviting someone still creates their own person; linking an existing directory person to an invitation is not built (known limitation).
+- **One primary manager at a time:** adding a new primary line ends the old one on the start day. Secondary lines count for the `reports` scope; dotted and project lines are display only.
+- **A new department head or team lead replaces the old one,** who stays on as a member from the same day (history kept).
+- **Department and team scopes of "Assign role" are enabled in 2.6**, with `cannot_grant_scope` for an assigner who does not manage that scope.
+- **The chart is one vertical ARIA tree for every screen size** (no horizontal boxes-and-lines drawing).
+- **Directory people are visible to `people.view`;** work email, employee code, employment type and dates follow `people.view_sensitive`, or `people.manage`, or being yourself.
+- **Task dates are whole days in the organization's time zone; status follows a workflow;** assignees update their own work and set estimates, creators and `task.edit` holders change everything; the suggested order is a fixed rule with reasons.
+- **Notifications are in-app only;** the `tasks.reminders` job runs every 10 minutes on the tick and tells each person once per task per due date; preferences are per kind (missing row = on).
+- **The business-event log (`automation_events`) is written from 4.1 on** (same transaction as the change, unique dedupe key); nothing reads it before stage 8.
+
+**Batch A (stages 2.6 and 2.7): DEPLOYED.** PR #16 merged as `0e08839`; live `0e08839`, migrations 8 of 8, backup `pre-0008-2026-11-23T08-09-54-001Z.db`. Rehearsal on real builds of `6703f44` and the branch: 23 of 23 checks (backup, upgrade, rollback, restore, second start). Real Chromium (desktop and phone, light and dark): 94 of 95 on the first run (the one failure was the expected console 401 on the signed-out login page, filtered afterwards). 482 tests on Node 20.20.2.
+
+**Batch B (stages 4.1, 4.4, 4.5): built on `claude/batch-b`**, migration `0009_tasks_and_notifications.sql`. What was built: tasks with a status workflow, assignments (people and teams, history kept), append-only updates (status, progress, time, blockers), comments (soft delete), visibility by scope, audit in the same transaction; My Work (Today with counts, rule-based suggested order with reasons, grouped tasks, achievements, daily update; All tasks) and the task panel; the bell, notification preferences and the `tasks.reminders` job (overdue and due soon, once per person per task per due date); the business-event log. 525 tests on Node 20.20.2. Rehearsal on real builds of `0e08839` and the branch: 34 of 34 checks (backup, upgrade, a task flow, the reminder job and its dedupe, rollback, restore, second start). Real Chromium, desktop and phone, light and dark: 84 of 84 checks, with a contrast check that now converts every colour through a canvas (so oklch tokens are measured, not skipped). Two real findings fixed on the way: the bell badge used white on the rose token (changed to the ink token with the background colour for text), and the notification checkboxes only changed after the server answered (now optimistic). Deploy result is recorded in the next batch's entry.
+
+**Blocked and skipped (need a secret, a key or an owner decision):** nothing so far.
 
 ## Current status
 
@@ -74,11 +95,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 
 **M1 Foundation** · `[x]` 1.1 Deploy spike (live, checked by the owner and by me) · `[x]` 1.2 Backend foundation (live, checked by the owner) · `[x]` 1.3 Frontend foundation (live, checked by the owner) · `[x]` 1.4 Visual design and motion (added at the owner's request; live on `fce10f1`, checked by the owner) · `[x]` 1.5 Performance hygiene (added at the owner's request; live on `dfc4401`, checked by the owner)
 
-**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[x]` 2.3 RBAC engine (live on `5422c57`, checked by the owner; includes Delete my account and the restore-at-start-up setting) · `[x]` 2.4 Roles UI (live on `31fb6ff`, checked by the owner; the last-administrator refusal was not clicked on live, to avoid risking the Owner account, and is covered by the automated tests and the browser test) · `[x]` 2.5 Organization structure (live on `cb85ef4`, checked by the owner) · `[ ]` 2.6 People and reporting · `[ ]` 2.7 Organization chart · `[ ]` 2.8 Demo data framework
+**M2 Auth and organization** · `[x]` 2.1 Auth core (live on `ea52494`, checked by the owner) · `[x]` 2.2 Reset and invitations (live on `fe85552`, checked by the owner) · `[x]` 2.3 RBAC engine (live on `5422c57`, checked by the owner; includes Delete my account and the restore-at-start-up setting) · `[x]` 2.4 Roles UI (live on `31fb6ff`, checked by the owner; the last-administrator refusal was not clicked on live, to avoid risking the Owner account, and is covered by the automated tests and the browser test) · `[x]` 2.5 Organization structure (live on `cb85ef4`, checked by the owner) · `[x]` 2.6 People and reporting (batch A, live on `0e08839`) · `[x]` 2.7 Organization chart (batch A, live on `0e08839`) · `[ ]` 2.8 Demo data framework
 
 **M3 OKR and KPI** · `[ ]` 3.1 Objectives and key results · `[ ]` 3.2 Alignment and health · `[ ]` 3.3 KPI definitions · `[ ]` 3.4 KPI measurements and trends · `[ ]` 3.5 OKR/KPI polish
 
-**M4 Tasks and evidence** · `[ ]` 4.1 Tasks core · `[ ]` 4.2 Links, dependencies, outcomes · `[ ]` 4.3 Evidence · `[ ]` 4.4 My Work dashboard · `[ ]` 4.5 Notifications and overdue job · `[ ]` 4.6 Task demo seed and checkpoint
+**M4 Tasks and evidence** · `[x]` 4.1 Tasks core (batch B) · `[ ]` 4.2 Links, dependencies, outcomes · `[ ]` 4.3 Evidence · `[x]` 4.4 My Work dashboard (batch B) · `[x]` 4.5 Notifications and overdue job (batch B) · `[ ]` 4.6 Task demo seed and checkpoint
 
 **M5 Performance** · `[ ]` 5.1 Scoring engine · `[ ]` 5.2 Scorecards from real data · `[ ]` 5.3 History and recalculation · `[ ]` 5.4 Peer and department comparison · `[ ]` 5.5 Mentorship · `[ ]` 5.6 Leadership accountability and reviews
 
@@ -127,6 +148,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done and live-checked.
 | 2026-11-23 | 2.4 deployed, checked, merged | Deployed as `31fb6ff` (migrations 6 of 6, backup `pre-0006-2026-11-22T16-33-42-429Z.db` taken at start-up). Owner's click test passed (steps 1 to 5, 7, 9; step 6 skipped on live on purpose). 2.4 ticked and merged into `main` with the owner's approval. |
 | 2026-11-23 | CI and branch protection | PR #13 merged (`.github/workflows/ci.yml`: typecheck, build, tests and `npm audit --omit=dev --audit-level=high` on every PR into `main`, Node 20.20.2, about 2.5 minutes, free because the repository is public). Branch protection ruleset "Protect main" turned on by the owner: PR required, check `checks` must pass, no force pushes or deletions. Proven with a throwaway PR (#14, closed unmerged): the merge was refused while `checks` was still running. |
 | 2026-11-23 | 2.5 built | Branch `claude/stage-2-5` from `main` (`d5e6297`: contains 2.4 and the CI workflow). Departments, teams, sub-teams, role families, designations, organization rename; migration 0007 rehearsed locally with the automatic backup, a rollback and a restore. **Not deployed, not merged.** Waiting for the owner's "yes, deploy". Details in "Stage 2.5" below. |
+| 2026-11-23 | Batch A deployed | Stages 2.6 and 2.7 merged (PR #16) and deployed as `0e08839` (migrations 8 of 8, pre-migration backup taken). Details in "Autonomous build queue" above. |
+| 2026-11-23 | Batch B built | Stages 4.1, 4.4 and 4.5 on `claude/batch-b` (migration 0009). 524 tests pass on Node 20.20.2. |
 | 2026-11-23 | 2.5 deployed, checked, merged | Deployed as `cb85ef4` (migrations 7 of 7, backup `pre-0007-2026-11-23T07-00-22-639Z.db` taken at start-up). Owner's click test passed. 2.5 ticked; PR into protected `main` opened and merged with the owner's approval after `checks` passed. Next: stage 2.6 (people and reporting lines), needs its own plan and approval. |
 | 2026-11-23 | 2.3 built | Branch `claude/stage-2-3` from `main` (`8ebb100`, contains stage 2.2 / PR #8). Plan approved by the owner after the backup answer. Built and tested on Node 20.20.2; real upgrade and backup-restore rehearsal done locally. **Not deployed, not merged.** Waiting for the owner's "yes, deploy". Details in "Stage 2.3" below. |
 | 2026-11-22 | 2.2 built | Branch `claude/stage-2-2` from `main` (`f3b361d`, contains stage 2.1 / PR #7). Reset and invitations built and tested on Node 20.20.2. **Not deployed, not merged.** Waiting for "yes, deploy". Needs nothing from the owner. Details in "Stage 2.2" below. |

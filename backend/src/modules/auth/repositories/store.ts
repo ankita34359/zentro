@@ -6,6 +6,9 @@ import { AuthTokensRepository } from "./authTokens.js";
 import { AuditRepository } from "../../audit/repositories/audit.js";
 import { StructureRepository } from "../../organization/repositories/structure.js";
 import { PeopleRepository } from "../../people/repositories/people.js";
+import { TasksRepository } from "../../tasks/repositories/tasks.js";
+import { NotificationsRepository } from "../../notifications/repositories/notifications.js";
+import { AutomationEventsRepository } from "../../automation/repositories/events.js";
 import { ErasureRepository } from "./erasure.js";
 import { InvitationsRepository } from "./invitations.js";
 import { SessionsRepository } from "./sessions.js";
@@ -27,6 +30,9 @@ export interface AuthStore {
   audit(tdb: TenantDb): AuditRepository;
   structure(tdb: TenantDb): StructureRepository;
   people(tdb: TenantDb): PeopleRepository;
+  tasks(tdb: TenantDb): TasksRepository;
+  notifications(tdb: TenantDb): NotificationsRepository;
+  events(tdb: TenantDb): AutomationEventsRepository;
   transaction<T>(fn: () => T): T;
 }
 
@@ -46,6 +52,9 @@ export function createAuthStore(db: Database.Database): AuthStore {
     audit: (tdb) => new AuditRepository(tdb),
     structure: (tdb) => new StructureRepository(tdb),
     people: (tdb) => new PeopleRepository(tdb),
+    tasks: (tdb) => new TasksRepository(tdb),
+    notifications: (tdb) => new NotificationsRepository(tdb),
+    events: (tdb) => new AutomationEventsRepository(tdb),
     transaction: (fn) => db.transaction(fn)(),
   };
 }

@@ -65,7 +65,8 @@ describe("a person with no role and the pages they can still open", () => {
       unmount();
     }
     const urls = new Set(f.mock.calls.map((c) => String(c[0])));
-    expect([...urls].filter((u) => u !== "/api/auth/me" && u !== "/healthz")).toEqual([]); // no organization data was requested
+    // no organization data was requested: only who they are, the health check, and their OWN notification count for the bell (stage 4.5)
+    expect([...urls].filter((u) => u !== "/api/auth/me" && u !== "/healthz" && u !== "/api/notifications?limit=25")).toEqual([]);
   });
 });
 

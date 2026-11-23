@@ -29,6 +29,11 @@ import { ChartService } from "./modules/people/chartService.js";
 import { registerChartRoutes } from "./modules/people/chartRoutes.js";
 import { HierarchyService } from "./modules/people/hierarchyService.js";
 import { PeopleService } from "./modules/people/service.js";
+import { EventWriter } from "./modules/automation/events.js";
+import { NotificationService } from "./modules/notifications/service.js";
+import { registerNotificationRoutes } from "./modules/notifications/routes.js";
+import { TaskService } from "./modules/tasks/service.js";
+import { registerTaskRoutes } from "./modules/tasks/routes.js";
 import { registerPeopleRoutes } from "./modules/people/routes.js";
 import { registerRoleRoutes } from "./modules/permissions/routes.js";
 import { createAuthGuards } from "./modules/auth/guards.js";
@@ -76,6 +81,9 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const peopleService = new PeopleService({ store, auth, audit });
   const hierarchyService = new HierarchyService({ store, auth, audit });
   const chartService = new ChartService({ store, auth });
+  const events = new EventWriter(store);
+  const notifications = new NotificationService(store, auth);
+  const taskService = new TaskService({ store, auth, audit, events, notifications });
   const admin = new AdminService({ store, auth, permissions, audit });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
   const delivery = opts.delivery ?? noDelivery;
@@ -88,6 +96,8 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerStructureRoutes(registry, { auth, permissions, structure });
   registerPeopleRoutes(registry, { permissions, people: peopleService, hierarchy: hierarchyService });
   registerChartRoutes(registry, { permissions, chart: chartService });
+  registerTaskRoutes(registry, { permissions, tasks: taskService });
+  registerNotificationRoutes(registry, { notifications });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
 

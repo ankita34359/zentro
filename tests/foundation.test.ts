@@ -16,7 +16,7 @@ describe("/healthz", () => {
       ready: true,
       version: "test",
       node: process.versions.node,
-      migrations: { applied: 8, total: 8 },
+      migrations: { applied: 9, total: 9 },
       registration: "closed",
       lastTick: null,
     });
@@ -64,6 +64,7 @@ describe("cron tick route", () => {
     const rows = t.db.prepare("SELECT job_name, status FROM scheduled_job_runs ORDER BY job_name").all();
     expect(rows).toEqual([
       { job_name: "platform.housekeeping", status: "ok" },
+      { job_name: "tasks.reminders", status: "ok" },
       { job_name: "tick", status: "ok" },
     ]);
   });

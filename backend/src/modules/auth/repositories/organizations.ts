@@ -31,6 +31,11 @@ export class OrganizationsRepository {
     return (this.db.prepare("SELECT id FROM organizations ORDER BY created_at").all() as { id: string }[]).map((r) => r.id);
   }
 
+  /** Every live organization with its time zone (start-up steps and scheduled jobs that must visit each tenant). */
+  listAll(): { id: string; timezone: string }[] {
+    return this.db.prepare("SELECT id, timezone FROM organizations WHERE archived_at IS NULL ORDER BY created_at").all() as { id: string; timezone: string }[];
+  }
+
   slugTaken(slug: string): boolean {
     return this.db.prepare("SELECT 1 AS x FROM organizations WHERE slug = @slug").get({ slug }) !== undefined;
   }
