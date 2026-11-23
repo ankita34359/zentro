@@ -5,6 +5,7 @@ import { PermissionsCatalogRepository, RoleGrantsRepository } from "../../permis
 import { AuthTokensRepository } from "./authTokens.js";
 import { AuditRepository } from "../../audit/repositories/audit.js";
 import { StructureRepository } from "../../organization/repositories/structure.js";
+import { PeopleRepository } from "../../people/repositories/people.js";
 import { ErasureRepository } from "./erasure.js";
 import { InvitationsRepository } from "./invitations.js";
 import { SessionsRepository } from "./sessions.js";
@@ -25,6 +26,7 @@ export interface AuthStore {
   grants(tdb: TenantDb): RoleGrantsRepository;
   audit(tdb: TenantDb): AuditRepository;
   structure(tdb: TenantDb): StructureRepository;
+  people(tdb: TenantDb): PeopleRepository;
   transaction<T>(fn: () => T): T;
 }
 
@@ -43,6 +45,7 @@ export function createAuthStore(db: Database.Database): AuthStore {
     grants: (tdb) => new RoleGrantsRepository(tdb),
     audit: (tdb) => new AuditRepository(tdb),
     structure: (tdb) => new StructureRepository(tdb),
+    people: (tdb) => new PeopleRepository(tdb),
     transaction: (fn) => db.transaction(fn)(),
   };
 }

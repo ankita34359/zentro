@@ -23,7 +23,13 @@ import { registerStructureRoutes } from "./modules/organization/routes.js";
 import { AuditService } from "./modules/audit/service.js";
 import { registerAuditRoutes } from "./modules/audit/routes.js";
 import { PermissionService } from "./modules/permissions/service.js";
-import { noHierarchy, type HierarchyProvider } from "./modules/permissions/resolver.js";
+import type { HierarchyProvider } from "./modules/permissions/resolver.js";
+import { DbHierarchy } from "./modules/people/hierarchy.js";
+import { ChartService } from "./modules/people/chartService.js";
+import { registerChartRoutes } from "./modules/people/chartRoutes.js";
+import { HierarchyService } from "./modules/people/hierarchyService.js";
+import { PeopleService } from "./modules/people/service.js";
+import { registerPeopleRoutes } from "./modules/people/routes.js";
 import { registerRoleRoutes } from "./modules/permissions/routes.js";
 import { createAuthGuards } from "./modules/auth/guards.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
@@ -48,7 +54,7 @@ export interface AppOptions {
   guards?: Guards;
   /** Where invitation and reset links go besides the administrator's screen. Stage 2.2 default: nowhere (administrators copy links). Stage 8 supplies email. */
   delivery?: LinkDelivery;
-  /** Teams, departments and reporting lines. Stages 2.5 and 2.6 supply the real one; tests inject a fake. Default: none exist yet. */
+  /** Teams, departments and reporting lines. The default reads the real tables (stage 2.6); tests may inject a fake. */
   hierarchy?: HierarchyProvider;
 }
 
@@ -62,10 +68,14 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const registry = new RouteRegistry();
 
   const store = createAuthStore(opts.db);
-  const permissions = new PermissionService(store, opts.hierarchy ?? noHierarchy);
+  const fake = opts.hierarchy;
+  const permissions = new PermissionService(store, fake ? () => fake : (tdb) => new DbHierarchy(store.people(tdb), store.structure(tdb)));
   const audit = new AuditService(store);
   const auth = new AuthService({ store, permissions, audit, config: opts.config, log: opts.log });
   const structure = new StructureService({ store, auth, audit });
+  const peopleService = new PeopleService({ store, auth, audit });
+  const hierarchyService = new HierarchyService({ store, auth, audit });
+  const chartService = new ChartService({ store, auth });
   const admin = new AdminService({ store, auth, permissions, audit });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
   const delivery = opts.delivery ?? noDelivery;
@@ -76,6 +86,8 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerRoleRoutes(registry, { auth, permissions, admin });
   registerAuditRoutes(registry, { auth, audit });
   registerStructureRoutes(registry, { auth, permissions, structure });
+  registerPeopleRoutes(registry, { permissions, people: peopleService, hierarchy: hierarchyService });
+  registerChartRoutes(registry, { permissions, chart: chartService });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
 

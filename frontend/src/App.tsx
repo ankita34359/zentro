@@ -20,6 +20,7 @@ import {
   LoginPage,
   NotFoundPage,
   OnboardingPage,
+  OrganizationPage,
   OverviewPage,
   ProfilePage,
   RegisterPage,
@@ -84,7 +85,10 @@ export function AppRoutes() {
             <Route path="/settings/audit" element={<AuditPage />} />
           </Route>
           <Route path="/settings/profile" element={<ProfilePage />} />
-          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings").map((n) => (
+          <Route element={<RequireCapability any={["org.view"]} />}>
+            <Route path="/organization/*" element={<OrganizationPage />} />
+          </Route>
+          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization").map((n) => (
             <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
           ))}
         </Route>

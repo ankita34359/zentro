@@ -138,8 +138,18 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 ## Added in stage 2.5 (organization structure)
 
 - **Structure exists but nobody is in it yet.** People cannot be put in a department or team, and departments and teams have no head or lead, until stage 2.6. Archiving a department or team therefore only checks for active sub-items, not for members (2.6 adds that check).
-- **The department and team scopes of Assign role stay disabled** until 2.6, and `my teams` / `reports` grants still reach nobody (or only the person alone) until then.
+- **(Resolved in 2.6.)** The department and team scopes of Assign role are enabled and `my teams` / `reports` grants reach real people.
 - **No drag and drop and no chart.** The structure is edited with forms and drawn as indented lists; the organization chart is stage 2.7.
 - **Depth cap of 8 levels** (departments, and teams inside a department) is enforced in code, not by the database; a manual database edit could exceed it.
 - **Designations and role families are not used by anything yet.** KPIs, comparisons and people records (2.6, 3.3, 5.4) will reference them.
 - Names are unique among active siblings, case-insensitively; an archived item's name becomes free again, and restoring it then needs another name.
+
+## Added in stages 2.6 and 2.7 (people, reporting lines, chart)
+
+- **A person with no login cannot be linked to a login later.** Inviting someone creates their own person. A directory person added without a login stays without one; linking an existing directory person to an invitation is not built yet.
+- **Moving a team to another department does not move its people's department membership.** Team members keep the department rows they had; use Move on a person (or end the department row) to change them.
+- **The chart is one vertical tree** that works from a phone to a wide screen (arrow keys, expand and collapse, a side panel). There is no separate horizontal "boxes and lines" drawing and no export or print view. Secondary, dotted and project lines are shown in the profile, not drawn on the chart.
+- **A move or manager change dated in the past is accepted** (the old row ends on that day) so history can be corrected, but rows already ended in between are not re-written; check the History tab after a back-dated change.
+- **Designation changes cannot be scheduled for the future** (today or earlier), because the person's current designation is a cached copy of the open row.
+- **Rates and limits:** the directory returns at most 500 people per call (default 200); the chart returns at most 400 nodes per call and deeper levels load on demand.
+- Archiving a person ends their placements and lines today. People who reported to them must be given another manager first (409 `has_reports`).

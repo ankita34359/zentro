@@ -50,7 +50,7 @@ describe("upgrading a stage 2.4 database to 2.5 (migration 0007)", () => {
     migrate(db, upTo(6));
     await seed24(db);
     expect(hasTable(db, "departments")).toBe(false);
-    const result = migrate(db, migrationsDir);
+    const result = migrate(db, upTo(7));
     expect(result.applied).toEqual(["0007_organization_structure.sql"]);
     expect(result.backupFile).toMatch(/pre-0007-.*\.db$/);
     expect(fs.existsSync(result.backupFile!)).toBe(true);
@@ -74,7 +74,7 @@ describe("upgrading a stage 2.4 database to 2.5 (migration 0007)", () => {
     const { db } = openDatabase(dataDir);
     migrate(db, upTo(6));
     await seed24(db);
-    const up = migrate(db, migrationsDir);
+    const up = migrate(db, upTo(7));
     const backup = path.basename(up.backupFile!);
     const copy = new Database(up.backupFile!, { readonly: true });
     expect((copy.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check).toBe("ok");
@@ -94,7 +94,7 @@ describe("upgrading a stage 2.4 database to 2.5 (migration 0007)", () => {
     const safety = new Database(path.join(dataDir, "backups", restore.preRestoreBackup!), { readonly: true });
     expect((safety.prepare("SELECT COUNT(*) n FROM departments").get() as { n: number }).n).toBe(1); // the work after the upgrade is kept in the safety backup
     safety.close();
-    expect(migrate(reopened, migrationsDir).applied).toEqual(["0007_organization_structure.sql"]);
+    expect(migrate(reopened, upTo(7)).applied).toEqual(["0007_organization_structure.sql"]);
     const login = await post(appOn(reopened).app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD });
     expect(login.status).toBe(200);
     reopened.close();
@@ -104,7 +104,7 @@ describe("upgrading a stage 2.4 database to 2.5 (migration 0007)", () => {
     const { db } = openDatabase(tmp());
     migrate(db, upTo(6));
     await seed24(db);
-    migrate(db, migrationsDir);
+    migrate(db, upTo(7));
     const older = migrate(db, upTo(6)); // what the 2.4 build does when it starts on this database
     expect(older.applied).toEqual([]);
     expect(older.unknownApplied).toEqual(["0007"]);

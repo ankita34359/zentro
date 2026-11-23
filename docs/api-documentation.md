@@ -89,6 +89,15 @@ Rate limits (per IP or session): login/register/reset 10 per 15 minutes; token e
 
 `GET /api/organization`'s `memberCount` counts only people who have joined and still belong (not invited, not left).
 
+### 2.6 Stage 2.6 and 2.7 details
+
+- **Effective dating.** Team, department, reporting and designation rows have a `startDate` and an optional `endDate`. A row applies on day D when `start <= D` and (`end` is empty or `D < end`): an end date is the first day it no longer applies. A change ends the old row and starts a new one, so nothing is ever overwritten or deleted and "who headed Engineering in Q2" stays answerable. A row dated in the future is stored now and takes effect on that day (the profile lists current and scheduled rows; the chart's `asOf` shows any day).
+- **Who is a person.** The directory (`/api/employees`) lists everyone who belongs: people with a login, people invited and not yet joined, and people added by an administrator with no login. Role assignment, password reset and removal are for people with a login and stay on the Users page.
+- **Scope.** `my_teams` = the people in the caller's teams; `reports` = the caller plus everyone below them over primary and secondary lines (dotted and project lines are display only), plus the teams they lead and the departments they head; a role given for one department or team reaches that department's (with sub-departments) or team's (with sub-teams) people. The resolver reads the tables on each request, so a change applies on the next request. Writes need `hierarchy.manage` or `people.manage` over the person, and over the team or department for membership changes. Anything outside the scope is 404.
+- **Sensitive fields.** Work email, employee code, employment type and dates are returned only to the person themselves, to people holding `people.view_sensitive` over them, and to people who manage them (`people.manage`).
+- **Audit.** Every change is one transaction with its audit row: `person.create|update|designation|archive|restore|move`, `reporting.add|end`, `team_member.add|change|end`, `department_member.add|change|end`.
+- **Chart.** `GET /api/hierarchy/tree` returns the first `depth` levels (default 2, at most 6, at most 400 nodes per call); deeper levels are fetched by asking again with a node as `root`. The reporting view follows primary lines only; the organization view is department → sub-department / team → sub-team → people, with heads and leads shown.
+
 ### 2.5 Stage 2.5 details
 
 Structure endpoints (see the table in section 4): departments, teams, role families and designations, plus `PATCH /api/organization`. Rules that apply to all of them:
@@ -96,9 +105,9 @@ Structure endpoints (see the table in section 4): departments, teams, role famil
 - **Names** are trimmed, single-spaced, 1 to 80 characters without control characters (400 `invalid_name`), and unique among **active siblings**, ignoring letter case (409 `name_taken`): the same name may exist under a different parent, and an archived item's name is free again. A restore that would collide is refused.
 - **Depth:** departments nest at most 8 levels; teams (sub-teams) nest at most 8 levels inside a department. Moving a subtree is checked against the height of the subtree (400 `depth_exceeded`).
 - **No cycles:** a department or team cannot move under itself or one of its own descendants (409 `would_create_cycle`).
-- **Archive, never delete:** an item with active children cannot be archived (409 `has_active_children`); an archived item cannot be edited (409 `archived`) or receive new children (409 `parent_archived`) until restored. (Stage 2.6 adds "has active members" to the archive rule.)
+- **Archive, never delete:** an item with active children cannot be archived (409 `has_active_children`); an archived item cannot be edited (409 `archived`) or receive new children (409 `parent_archived`) until restored. A department or team that still has people in it cannot be archived either (409 `has_active_members`, from stage 2.6).
 - Every change is one transaction that also writes its audit row (`department.create|rename|update|move|archive|restore`, the same for `team`, `role_family`, `designation`, and `organization.rename`).
-- Writing needs `org.manage` for the whole organization (`all_in_scope`); reading needs `org.view`, and a scoped viewer gets only their teams and the departments above them (`partial: true`). Until stage 2.6 nobody belongs to a team, so only people with `org.view` in `all_in_scope` (Owner, CEO and similar) or `reports` (the person alone) get an answer; the rest get 403 as for any empty scope.
+- Writing needs `org.manage` for the whole organization (`all_in_scope`); reading needs `org.view`, and a scoped viewer gets only their teams and the departments above them (`partial: true`). From stage 2.6 the scope comes from the real hierarchy: `my_teams` reaches the people in the caller's teams, `reports` the people below them, and a role given for one department or team reaches that department's or team's people.
 
 ### 2.3 Stage 2.3 details
 
@@ -133,39 +142,39 @@ Structure endpoints (see the table in section 4): departments, teams, role famil
 | GET / PUT | `/api/organizations/:id/settings/:key` | `org.settings` | Keys: `review_cadence`, `quiet_hours`, `reporting_scope`, `data_sufficiency`, `ai`, `registration`… |
 | GET / POST | `/api/invitations` **2.2** | `invitations.manage` (organization-wide) | POST `{email, name?, roleId?}` creates the (invited) membership and the invitation; the **code is returned once** and only its hash is stored. **2.3:** `roleId` (a role of this organization whose permissions the inviter holds: else `403 cannot_grant_role`; another organization's role is `404`) becomes the person's role when they join. GET lists state: pending, accepted, revoked, expired, and the role; never a code |
 | POST | `/api/invitations/:id/revoke` / `/regenerate` **2.2** | `invitations.manage` | Revoke ends the link; regenerate returns a new code once and kills the old link (works for pending, expired and revoked; not accepted) |
-| GET | `/api/organization/members` **2.2** | `people.manage` | The people list for the Users screen, limited to the caller's scope (replaced by the people API in 2.6) |
+| GET | `/api/organization/members` **2.2** | `people.manage` | The accounts list for the Users screen (people with a login or an invitation), limited to the caller's scope. **2.6:** each role assignment now carries `scopeType` and `scopeName`. The people directory (including people with no login) is `/api/employees` |
 | POST | `/api/people/:membershipId/reset-link` **2.2** | `people.manage` (person must be in the caller's scope) | Administrator-generated reset link: `{token, expiresAt, displayName}` returned once; valid 1 hour; replaces older unused links; only for a person in the caller's own organization who has a login |
 
 ## 4. People, hierarchy, roles
 
 | Method | Path | Permission | Notes |
 | --- | --- | --- | --- |
-| GET | `/api/employees` | `people.view` (scope) | `?search&departmentId&teamId&status&designationId` |
-| POST | `/api/employees` | `people.manage` | Creates a membership (with optional invitation) |
-| GET | `/api/employees/:id` | `people.view` (scope), own always | Sensitive fields need `people.view_sensitive` |
-| PATCH | `/api/employees/:id` | `people.manage` (scope) | |
-| POST | `/api/employees/:id/designation` | `people.manage` | New `designation_assignments` row (history kept) |
-| POST | `/api/employees/:id/archive` / `/restore` | `people.manage` | |
-| GET | `/api/employees/:id/history` | `people.view` (scope) | Designations, teams, departments, managers, roles over time |
-| GET | `/api/hierarchy/tree` | `org.view` | `?view=reporting\|organization&root&depth=2&asOf=` |
-| GET | `/api/hierarchy/reporting` | `org.view` (scope) | `?membershipId` current and past |
-| POST | `/api/hierarchy/reporting` | `hierarchy.manage` (scope) | `{subordinateId, managerId, type, startDate, reason}`; cycle check |
-| PATCH | `/api/hierarchy/reporting/:id` | `hierarchy.manage` | End or adjust (never delete) |
-| POST | `/api/hierarchy/move` | `hierarchy.manage` | Atomic move between teams/departments with effective date |
+| GET | `/api/employees` **2.6** | `people.view` (scope; always yourself) | `?search&departmentId&teamId&designationId&status&includeArchived&limit&offset` (default 200, at most 500). Returns `{people, total, limit, offset}`; `email` only when the caller may see that person's sensitive details |
+| POST | `/api/employees` **2.6** | `people.manage` | `{name, workEmail?, employeeCode?, employmentType?, startDate?, designationId?, departmentId?, teamId?, managerId?}`: a person with no login, optionally placed with a primary manager, in one transaction. A holder whose scope is `reports` must give a manager from their reports, or a team or department they manage (403 `outside_scope`). 409 `employee_code_taken` |
+| GET | `/api/employees/:id` **2.6** | `people.view` (scope; yourself always) | Profile: designation and role family, current departments, teams and managers (with row ids), direct reports, `employment` (only with `people.view_sensitive` or `people.manage` over the person, or for yourself), and `can` {edit, manageHierarchy, archive, restore}. Outside your scope or another organization: 404 |
+| PATCH | `/api/employees/:id` **2.6** | `people.manage` (scope) | `{name?, workEmail?, employeeCode?, employmentType?, startDate?, endDate?}`; a person with a login keeps their own name (409 `has_login`); the audit row names fields, never values |
+| POST | `/api/employees/:id/designation` **2.6** | `people.manage` | `{designationId, startDate?, reason?}`: the old row ends on the start day (history kept); today or earlier only (400 `future_date`, `before_current_start`); 409 `no_change` |
+| POST | `/api/employees/:id/archive`, `/restore` **2.6** | `people.manage` | Only people with no login (409 `has_login`: use Remove on the Users page); refused while people report to them (409 `has_reports`); their placements and lines end today |
+| GET | `/api/employees/:id/history` **2.6** | `people.view` (scope) | Designations, managers, teams, departments and reports over time, newest first |
+| GET | `/api/hierarchy/tree` **2.7** | `org.view` (scope) | `?view=reporting\|organization&root&rootKind&depth=2&asOf=`. Nodes `{kind, id, name, subtitle, detail, childCount, children}`; `children: null` means not loaded: ask again with that node as `root`. A scoped viewer sees only their part (`partial: true`) |
+| GET | `/api/hierarchy/reporting` **2.6** | `org.view` (scope) | `?membershipId` (default: you): current and past lines as subordinate and as manager, only people you may see |
+| POST | `/api/hierarchy/reporting` **2.6** | `hierarchy.manage` (scope) | `{subordinateId, managerId, type?: primary\|secondary\|dotted\|project, startDate?, reason?}`. One primary manager at a time: a new primary ends the old one on the start day. 409 `would_create_cycle` (primary and secondary lines), `already_reporting`; 400 `self_report` |
+| PATCH | `/api/hierarchy/reporting/:id` **2.6** | `hierarchy.manage` | `{endDate?, reason?}`: ends a line (never deleted); 409 `already_ended` |
+| POST | `/api/hierarchy/move` **2.6** | `hierarchy.manage` | `{membershipId, toTeamId?, toDepartmentId?, effectiveDate?, reason?}`: open team and department rows end that day, the new ones start, in one transaction; 409 `no_change`; reporting lines untouched |
 | GET / POST | `/api/departments` | `org.view` / `org.manage` | |
 | GET / PATCH / DELETE | `/api/departments/:id` | `org.view` / `org.manage` | DELETE archives |
 | GET / POST | `/api/teams` | `org.view` / `org.manage` | `departmentId`, `parentTeamId?` |
 | GET / PATCH / DELETE | `/api/teams/:id` | `org.view` / `org.manage` | DELETE archives |
-| POST | `/api/teams/:id/members` | `hierarchy.manage` | `{membershipId, type, allocationPct, startDate}` |
-| PATCH | `/api/teams/:id/members/:mid` | `hierarchy.manage` | End membership, change type |
-| POST / PATCH | `/api/departments/:id/members[/:mid]` | `hierarchy.manage` | head, deputy, member |
+| POST | `/api/teams/:id/members` **2.6** | `hierarchy.manage` | `{membershipId, type?: lead\|deputy_lead\|member, allocationPct?, startDate?}`. A new lead replaces the old one (who stays as a member from that day); the department membership is added when missing; 409 `already_member` |
+| PATCH | `/api/teams/:id/members/:mid` **2.6** | `hierarchy.manage` | `:mid` is the membership row id. `{endDate}` ends it; `{type}` ends the row and starts a new one with the new type from `effectiveDate`; `{allocationPct}` changes in place |
+| POST / PATCH | `/api/departments/:id/members`, `/api/departments/:id/members/:mid` **2.6** | `hierarchy.manage` | head, deputy, member; a new head replaces the old one the same way |
 | CRUD | `/api/designations`, `/api/role-families` | `org.view` / `org.manage` | |
 | GET | `/api/permissions` | `roles.view` | The catalog |
 | GET / POST | `/api/roles` **2.3 / 2.4** | `roles.view` / `roles.manage` | POST `{name, description?, copyFromRoleId?}` creates a custom role (unique name) |
 | GET / PATCH | `/api/roles/:id` **2.3 / 2.4** | `roles.view` / `roles.manage` | PATCH `{name?, description?}`; 403 `role_protected` for the Owner role |
 | PUT | `/api/roles/:id/permissions` **2.4** | `roles.manage` | `{grants: [{permission, mode}], confirmSensitive?}` replaces the grid; cannot add beyond what you hold; sensitive additions need confirmation; last-admin guard |
 | POST | `/api/roles/:id/archive` **2.4** | `roles.manage` | 409 `role_in_use` while people hold it; 403 `role_protected` |
-| GET / POST | `/api/role-assignments` **2.4** | `roles.view` / `roles.manage` | POST `{membershipId, roleId, scopeType?: organization, validFrom?, validTo?}`; department/team scopes arrive in 2.5 |
+| GET / POST | `/api/role-assignments` **2.4** | `roles.view` / `roles.manage` | POST `{membershipId, roleId, scopeType?: organization\|department\|team, scopeId?, validFrom?, validTo?}` (**2.6**: a department or team needs `scopeId`; you can only give a role at a scope you manage, 403 `cannot_grant_scope`; the same role at two scopes is allowed) |
 | POST | `/api/role-assignments/:id/revoke` **2.4** | `roles.manage` | Last-admin guard; you can only revoke a role you could assign |
 | POST | `/api/people/:membershipId/remove` **2.4** | `people.manage` (in scope) | Removes a joined person from the organization; their login stays |
 | GET | `/api/organization/structure` **2.5** | `org.view` (scoped) | The whole structure in one call: `departments`, `teams`, `roleFamilies`, `designations` (archived ones marked `archived: true`), `limits.maxDepth` (8) and `partial` (true when the caller's `org.view` is scoped: only their teams and the departments above them) |

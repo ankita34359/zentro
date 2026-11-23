@@ -1,12 +1,13 @@
 import type Database from "better-sqlite3";
 import type { TenantDb } from "../../../db/tenant.js";
+import { PeopleRepository } from "../../people/repositories/people.js";
 
 /**
  * Every table that holds organization-owned rows, in the order they must be deleted (children before parents).
  * Deleting an organization or an account must cover ALL of them: a test lists the tables that have an
  * `organization_id` column and fails when one is missing here, so a later stage that adds a table cannot forget.
  */
-export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
+export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "reporting_relationships", "team_memberships", "department_memberships", "designation_assignments", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
 
 export interface MemberCounts {
   /** Other people who have joined and still belong (active or suspended). People who left, and people only invited, do not count: invitations are counted separately. */
@@ -36,6 +37,7 @@ export class ErasureRepository {
   /** A person leaves an organization that continues: their roles end and their personal details are removed from the membership. */
   retireMembership(tdb: TenantDb, membershipId: string, now: string): void {
     tdb.run("UPDATE user_role_assignments SET revoked_at = @now WHERE organization_id = @organization_id AND membership_id = @membershipId AND revoked_at IS NULL", { membershipId, now });
+    new PeopleRepository(tdb).endEverythingFor(membershipId, now.slice(0, 10)); // their placements and reporting lines end today (history kept)
     tdb.run(
       "UPDATE organization_memberships SET user_id = NULL, status = 'left', display_name = 'Former member', work_email = NULL, archived_at = @now, updated_at = @now WHERE organization_id = @organization_id AND id = @membershipId",
       { membershipId, now },
@@ -45,6 +47,11 @@ export class ErasureRepository {
   /** The whole organization goes (it has no other members and no pending invitations). */
   deleteOrganizationRows(tdb: TenantDb): void {
     tdb.run("DELETE FROM audit_logs WHERE organization_id = @organization_id"); // the only deletion of audit rows: the whole organization is going away
+    tdb.run("DELETE FROM reporting_relationships WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM team_memberships WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM department_memberships WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM designation_assignments WHERE organization_id = @organization_id");
+    tdb.run("UPDATE organization_memberships SET designation_id = NULL WHERE organization_id = @organization_id"); // the cached designation points at a row about to go
     tdb.run("DELETE FROM designations WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM role_families WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM teams WHERE organization_id = @organization_id"); // sub-teams point at their parent: SQLite checks foreign keys at the end of the statement, so one statement per table is enough

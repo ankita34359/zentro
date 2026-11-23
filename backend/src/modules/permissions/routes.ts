@@ -141,13 +141,14 @@ export function registerRoleRoutes(registry: RouteRegistry, deps: { auth: AuthSe
     path: "/api/role-assignments",
     access: { kind: "permission", key: "roles.manage" },
     summary:
-      "Give a joined person a role: `{membershipId, roleId, scopeType?: organization, validFrom?, validTo?}`. Department and team scopes arrive with stage 2.5 (400 scope_not_available). You can only assign a role whose permissions you hold (403 cannot_grant_role); audited",
+      "Give a joined person a role: `{membershipId, roleId, scopeType?: organization|department|team, scopeId?, validFrom?, validTo?}`. A department or team needs its `scopeId` (404 for another organization's, 409 archived). You can only assign a role whose permissions you hold (403 cannot_grant_role) and only at a scope you manage (403 cannot_grant_scope); audited",
     schema: {
       body: z
         .object({
           membershipId: uuid,
           roleId: uuid,
           scopeType: z.string().max(20).optional(),
+          scopeId: uuid.nullable().optional(),
           validFrom: z.string().datetime({ offset: true }).optional(),
           validTo: z.string().datetime({ offset: true }).nullable().optional(),
         })
@@ -155,7 +156,7 @@ export function registerRoleRoutes(registry: RouteRegistry, deps: { auth: AuthSe
     },
     handler: (_req, res, v) => {
       noStore(res);
-      sendData(res, admin.assignRole(me(res), rid(res), caps(res), v.body as { membershipId: string; roleId: string; scopeType?: string; validFrom?: string; validTo?: string | null }), 201);
+      sendData(res, admin.assignRole(me(res), rid(res), caps(res), v.body as { membershipId: string; roleId: string; scopeType?: string; scopeId?: string | null; validFrom?: string; validTo?: string | null }), 201);
     },
   });
 

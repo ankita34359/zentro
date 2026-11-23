@@ -154,12 +154,14 @@ export class AccountService {
   // ---------- members, for the Users screen ----------
 
   /** The people inside the caller's `people.manage` scope (and always themselves). Replaced by the people API in stage 2.6. */
-  members(auth: AuthContext, requestId: string, caps: Capabilities): Array<{ id: string; displayName: string; email: string | null; status: string; hasLogin: boolean; roles: { key: string; name: string }[]; assignments: { id: string; roleId: string; roleName: string; validTo: string | null }[]; isYou: boolean }> {
+  members(auth: AuthContext, requestId: string, caps: Capabilities): Array<{ id: string; displayName: string; email: string | null; status: string; hasLogin: boolean; roles: { key: string; name: string }[]; assignments: { id: string; roleId: string; roleName: string; validTo: string | null; scopeType: string; scopeName: string | null }[]; isYou: boolean }> {
     const tdb = this.store.tenant(this.auth.tenantCtx(auth, requestId));
     const roles = this.store.roles(tdb).byMembership(this.auth.iso());
     const nowIso = this.auth.iso();
     const assignments = this.store.grants(tdb).assignmentsFor(null, nowIso).filter((a) => a.revoked_at === null && a.valid_from <= nowIso && (a.valid_to === null || a.valid_to >= nowIso));
     const scope = caps.scope("people.manage");
+    const structure = this.store.structure(tdb);
+    const scopeNames = new Map<string, string>([...structure.departments().map((d) => [d.id, d.name] as [string, string]), ...structure.teams().map((x) => [x.id, x.name] as [string, string])]);
     return this.store
       .memberships(tdb)
       .listPeople()
@@ -171,7 +173,7 @@ export class AccountService {
         status: m.status,
         hasLogin: m.user_id !== null,
         roles: roles.get(m.id) ?? [],
-        assignments: assignments.filter((a) => a.membership_id === m.id).map((a) => ({ id: a.id, roleId: a.role_id, roleName: a.role_name, validTo: a.valid_to })),
+        assignments: assignments.filter((a) => a.membership_id === m.id).map((a) => ({ id: a.id, roleId: a.role_id, roleName: a.role_name, validTo: a.valid_to, scopeType: a.scope_type, scopeName: a.scope_id ? scopeNames.get(a.scope_id) ?? null : null })),
         isYou: m.id === auth.membershipId,
       }));
   }
