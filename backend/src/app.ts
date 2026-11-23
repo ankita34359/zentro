@@ -41,6 +41,16 @@ import { OkrService } from "./modules/okr/service.js";
 import { KpiService } from "./modules/kpi/service.js";
 import { registerKpiRoutes } from "./modules/kpi/routes.js";
 import { MeasurementService } from "./modules/kpi/measurements.js";
+import { ModelService } from "./modules/scoring/models.js";
+import { registerModelRoutes } from "./modules/scoring/modelRoutes.js";
+import { PerformanceService } from "./modules/scoring/performance.js";
+import { ReviewService } from "./modules/reviews/service.js";
+import { registerReviewRoutes } from "./modules/reviews/routes.js";
+import { MentorshipService } from "./modules/mentorship/service.js";
+import { registerMentorshipRoutes } from "./modules/mentorship/routes.js";
+import { ComparisonService } from "./modules/scoring/comparison.js";
+import { registerComparisonRoutes } from "./modules/scoring/comparisonRoutes.js";
+import { registerPerformanceRoutes } from "./modules/scoring/performanceRoutes.js";
 import { registerMeasurementRoutes } from "./modules/kpi/measurementRoutes.js";
 import { AlignmentService } from "./modules/okr/alignment.js";
 import { registerAlignmentRoutes } from "./modules/okr/alignmentRoutes.js";
@@ -96,7 +106,8 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const events = new EventWriter(store);
   const notifications = new NotificationService(store, auth);
   const okrService = new OkrService({ store, auth, audit });
-  const demoService = new DemoService({ store, auth, audit });
+  const performanceService = new PerformanceService({ store, auth, audit });
+  const demoService = new DemoService({ store, auth, audit, performance: performanceService });
   const taskService = new TaskService({ store, auth, audit, events, notifications, okr: okrService });
   const admin = new AdminService({ store, auth, permissions, audit });
   // Stage 2.2 sends no email: administrators copy links. Stage 8 swaps `noDelivery` for the outbox-backed delivery.
@@ -116,6 +127,11 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerOkrRoutes(registry, { permissions, okr: okrService });
   const measurementService = new MeasurementService({ store, auth, audit, events });
   registerMeasurementRoutes(registry, { permissions, measurements: measurementService });
+  registerModelRoutes(registry, { permissions, models: new ModelService({ store, auth, audit }) });
+  registerPerformanceRoutes(registry, { permissions, performance: performanceService });
+  registerReviewRoutes(registry, { permissions, reviews: new ReviewService({ store, auth, audit }) });
+  registerMentorshipRoutes(registry, { permissions, mentorship: new MentorshipService({ store, auth, audit }) });
+  registerComparisonRoutes(registry, { permissions, comparison: new ComparisonService({ store, auth, audit }) });
   registerKpiRoutes(registry, { permissions, kpis: new KpiService({ store, auth, audit }) });
   registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService, measurements: measurementService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });

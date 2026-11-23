@@ -1,4 +1,4 @@
-import { addDays } from "../tasks/dates.js";
+import { addDays, daysBetween } from "../tasks/dates.js";
 
 /**
  * The fictional company behind "Load demo data": about 60 people in six departments, with reporting lines, team heads and
@@ -105,6 +105,28 @@ export interface DemoKpi {
   series: { subject: { kind: "person" | "team" | "department" | "organization"; key: string | null }; values: (number | null)[]; correction?: { index: number; value: number; note: string } }[];
 }
 export interface DemoDailyUpdate { personKey: string; dayOffset: number; summary: string; blockers: string | null }
+export interface DemoMentorship {
+  mentorKey: string;
+  menteeKey: string;
+  /** Days from the day of loading (negative = in the past). */
+  startOffset: number;
+  cadenceDays: number;
+  goals: string;
+  activities: { dayOffset: number; type: "one_on_one" | "feedback" | "review" | "unblock" | "training" | "goal_setting"; minutes: number; summary: string }[];
+}
+export interface DemoReview {
+  reviewerKey: string;
+  subjectKey: string;
+  /** "last" is the previous quarter (closed), "current" this one. */
+  quarter: "last" | "current";
+  status: "draft" | "submitted" | "acknowledged";
+  rating: number;
+  sharedSummary: string;
+  developmentFocus: string;
+  privateNotes: string;
+  /** Days after the end of the quarter the review was submitted (for the previous quarter). */
+  daysAfterEnd: number;
+}
 export interface DemoCompany {
   departments: DemoDepartment[];
   teams: DemoTeam[];
@@ -115,6 +137,8 @@ export interface DemoCompany {
   dailyUpdates: DemoDailyUpdate[];
   objectives: DemoObjective[];
   kpis: DemoKpi[];
+  mentorships: DemoMentorship[];
+  reviews: DemoReview[];
 }
 
 /** Small deterministic generator (mulberry32). */
@@ -229,7 +253,7 @@ const BLOCKS = ["Waiting for access to the staging environment.", "Need a decisi
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
 
 /** The whole demo company for a seed (the organization's id). Always the same for the same seed. */
-export function buildDemoCompany(seed: string): DemoCompany {
+export function buildDemoCompany(seed: string, today = "2026-02-14"): DemoCompany {
   const rand = rng(`company:${seed}`);
   const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
   const between = (lo: number, hi: number): number => lo + Math.floor(rand() * (hi - lo + 1));
@@ -472,6 +496,131 @@ export function buildDemoCompany(seed: string): DemoCompany {
   addKpi({ name: "Annual recurring revenue", description: "Recurring revenue at the end of the month, in millions.", category: "financial", unit: "$M", frequency: "monthly", direction: "higher_is_better", aggregation: "last", defaultTarget: 12, warnPct: 75, critPct: 55, assignments: [], series: [{ subject: { kind: "organization", key: null }, values: [8.1, 8.4, 8.9, 9.6, 10.1, 10.4] }] });
   addKpi({ name: "Employee net promoter score", description: "Would people recommend working here (survey, −100 to 100).", category: "people", unit: "points", frequency: "quarterly", direction: "higher_is_better", aggregation: "last", defaultTarget: 50, warnPct: 70, critPct: 40, assignments: [], series: [{ subject: { kind: "organization", key: null }, values: [22, 26, 31, 36] }] });
 
+  // ----- scores (stage 5.2): personal objectives with recorded values, and finished tasks with outcomes, for most people, so the
+  // demo company has real scorecards. Drawn from its OWN random stream, after everything above, so nothing earlier changes. Some
+  // people are left with gaps on purpose (no personal objective, too few tasks) so the "missing" and "not enough data" chips show. -----
+  {
+    const sr = rng(`scores:${seed}`);
+    const spick = <T,>(xs: readonly T[]): T => xs[Math.floor(sr() * xs.length)]!;
+    const sbetween = (lo: number, hi: number): number => lo + Math.floor(sr() * (hi - lo + 1));
+    const quarterStart = (d: string): string => `${d.slice(0, 4)}-${String(Math.floor((Number(d.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`;
+    const q0 = quarterStart(today);
+    const prevEnd = addDays(q0, -1);
+    const prevStart = quarterStart(prevEnd);
+    const off = (d: string): number => daysBetween(today, d);
+    const GOALS: Record<string, string[]> = {
+      eng: ["Raise the quality of my releases", "Cut my review turnaround", "Own a reliability improvement"],
+      pd: ["Ship the research-backed improvements I own", "Raise the quality of my design reviews"],
+      sales: ["Hit my pipeline and conversion goals", "Grow my accounts"],
+      cs: ["Keep my customers happy and answered fast", "Improve my first-contact resolution"],
+      ops: ["Keep my area calm and on time", "Close my month-end tasks early"],
+      exec: ["Keep the leadership agenda on track"],
+    };
+    const unitOf = ["items", "points", "reviews", "accounts"];
+    const teamObj = new Map(objectives.filter((o) => o.teamKey && o.level === "team").map((o) => [o.teamKey!, o]));
+    const deptObj = new Map(objectives.filter((o) => o.level === "department" && o.lifecycle === "active").map((o) => [o.deptKey!, o]));
+    const personal = people.filter((p) => p.key !== ceo.key && sr() < 0.82);
+    for (const person of personal) {
+      const f = 0.4 + sr() * 0.7; // how well this person is doing: 40 % to 110 % of target
+      const targets = [sbetween(10, 30), sbetween(4, 12)];
+      const marks = [off(prevStart) + sbetween(25, 40), off(prevEnd) - sbetween(2, 8), -sbetween(2, 9)].map((d) => Math.min(-1, d));
+      const gap = sr() < 0.15; // a second key result with nothing recorded: shown as "no data yet", never as zero
+      const parent = (person.teamKey ? teamObj.get(person.teamKey) : undefined) ?? deptObj.get(person.deptKey);
+      const o = obj({ level: "individual", deptKey: null, teamKey: null, ownerKey: person.key, title: spick(GOALS[person.deptKey] ?? GOALS.ops!), description: "A personal goal agreed in a one-to-one.", objectiveType: "operational", priority: "medium", startOffset: off(prevStart), endOffset: off(q0) + 89, lifecycle: "active", published: false, keyResults: targets.map((target, k) => kr(k === 0 ? `Goals completed (${spick(unitOf)})` : "Reviews passed first time", "increase", 0, target, null, person.key, k === 1 && gap ? [] : marks.map((d, j) => ({ dayOffset: d, value: Math.round(target * f * ((j + 1) / 3) * 10) / 10 })), 1)) });
+      if (parent) {
+        o.parentKey = parent.key;
+        o.parentWeight = 1;
+      }
+    }
+    // finished tasks, five due in the previous quarter and five in the current one, for a share of the team members; the rest keep a short list
+    const reviewerOf = (p: DemoPerson): string | null => p.managerKey;
+    for (const person of people.filter((p) => p.teamType === "member" && sr() < 0.8)) {
+      const pool = TASK_POOL[person.deptKey] ?? TASK_POOL.ops!;
+      const lateRate = 0.1 + sr() * 0.4;
+      for (let i = 0; i < 10; i += 1) {
+        const prev = i < 5;
+        const lo = prev ? off(prevStart) : off(q0);
+        const hi = prev ? off(prevEnd) : -1;
+        const due = Math.min(-1, sbetween(Math.min(lo, hi), Math.max(lo, hi)));
+        const late = sr() < lateRate;
+        const completed = Math.min(-1, due + (late ? sbetween(1, 6) : -sbetween(0, 3)));
+        const est = spick([120, 240, 480, 960]);
+        const reviewer = reviewerOf(person);
+        tasks.push({
+          key: `t${tasks.length + 1}`, title: `${spick(pool)} (${prev ? "last" : "this"} quarter ${(i % 5) + 1})`, creatorKey: reviewer ?? person.key, assigneeKey: person.key, teamKey: person.teamKey,
+          status: "completed", priority: sr() < 0.2 ? "high" : "medium", importance: sbetween(1, 5), progressPct: 100, dueOffset: due, createdOffset: completed - sbetween(4, 14), completedOffset: completed,
+          estimatedMinutes: est, loggedMinutes: Math.round((est * sbetween(75, 130)) / 100 / 5) * 5, blockedReason: null, comment: null, objectiveKey: null, krIndex: null, dependsOnKey: null,
+          outcome: { summary: spick(OUTCOMES), quality: reviewer && sr() < 0.85 ? sbetween(3, 5) : null, qualityBy: reviewer },
+        });
+      }
+    }
+  }
+
+  // ----- mentorship (stage 5.5): each mentor has two or three mentees from their own department; one mentee has two mentors, and one
+  // mentor logs far fewer sessions than the cadence asks for. Its own random stream, drawn after everything else. -----
+  const mentorships: DemoMentorship[] = [];
+  {
+    const mr = rng(`mentorship:${seed}`);
+    const mpick = <T,>(xs: readonly T[]): T => xs[Math.floor(mr() * xs.length)]!;
+    const mbetween = (lo: number, hi: number): number => lo + Math.floor(mr() * (hi - lo + 1));
+    const SESSIONS: { type: DemoMentorship["activities"][number]["type"]; summary: string }[] = [
+      { type: "one_on_one", summary: "Weekly check-in: priorities, blockers and how the week went." },
+      { type: "feedback", summary: "Went through recent work and gave specific feedback." },
+      { type: "review", summary: "Reviewed a piece of work together before it shipped." },
+      { type: "unblock", summary: "Helped get past a blocker with another team." },
+      { type: "training", summary: "Walked through a technique the mentee wanted to learn." },
+      { type: "goal_setting", summary: "Reviewed the development goal and agreed the next step." },
+    ];
+    const mentors = people.filter((p) => p.role === "r_mentor");
+    const taken = new Set<string>();
+    mentors.forEach((mentor, mi) => {
+      // mentees with enough work on record to have scores in both quarters (a mentee with no data has no change to measure)
+      const scored = new Set(objectives.filter((o) => o.level === "individual").map((o) => o.ownerKey).filter((k) => tasks.filter((t) => t.assigneeKey === k && t.status === "completed").length >= 10));
+      const pool = people.filter((p) => p.deptKey === mentor.deptKey && p.key !== mentor.key && p.teamType === "member" && p.role === "r_employee" && !taken.has(p.key) && scored.has(p.key));
+      const menteesOf = [...pool].sort(() => mr() - 0.5).slice(0, mbetween(3, 4));
+      const sparse = mi === mentors.length - 1 && mentors.length > 1; // the last mentor logs little
+      for (const mentee of menteesOf) {
+        taken.add(mentee.key);
+        const start = -mbetween(150, 230);
+        const cadence = 14;
+        const activities: DemoMentorship["activities"] = [];
+        for (let d = start + mbetween(3, 10); d <= -2; d += cadence + mbetween(-3, 5)) {
+          if (mr() < (sparse ? 0.18 : 0.88)) {
+            const x = mpick(SESSIONS);
+            activities.push({ dayOffset: d, type: x.type, minutes: mpick([30, 45, 60]), summary: x.summary });
+          }
+        }
+        mentorships.push({ mentorKey: mentor.key, menteeKey: mentee.key, startOffset: start, cadenceDays: cadence, goals: "Grow in the role: take on harder work and get more independent.", activities });
+      }
+    });
+    // one mentee also has a second mentor (the credit is shared)
+    if (mentors.length > 1 && mentorships.length > 0) {
+      const first = mentorships[0]!;
+      const other = mentors.find((m) => m.key !== first.mentorKey);
+      if (other) mentorships.push({ mentorKey: other.key, menteeKey: first.menteeKey, startOffset: first.startOffset + 40, cadenceDays: 21, goals: "A second perspective on design and review habits.", activities: [-70, -49, -28, -9].map((d, i) => ({ dayOffset: d, type: i % 2 === 0 ? "review" as const : "feedback" as const, minutes: 45, summary: SESSIONS[i % 2 === 0 ? 2 : 1]!.summary })) });
+    }
+  }
+
+  // ----- reviews (stage 5.6): managers, leads and department heads review their direct reports for last quarter, mostly on time,
+  // some late, some not at all; a few drafts for this quarter. Its own random stream, drawn after everything else. -----
+  const reviews: DemoReview[] = [];
+  {
+    const rr = rng(`reviews:${seed}`);
+    const rpick = <T,>(xs: readonly T[]): T => xs[Math.floor(rr() * xs.length)]!;
+    const SUMMARY = ["Delivered steadily and communicated well. Took on harder work than last quarter.", "Reliable and thoughtful. Good judgement about what to do first.", "Strong quarter with a clear step up in ownership.", "Solid contribution; a few deadlines slipped and were flagged early.", "Made real progress on the goals we agreed. Teammates value the help."];
+    const FOCUS = ["Take on one larger piece of work end to end next quarter.", "Share what you learn with the team more often.", "Practise estimating work before starting it.", "Spend time with a mentor on design decisions."];
+    const PRIVATE = ["Capable of more; worth discussing a stretch assignment. Not for sharing yet.", "Was visibly stretched by the workload in the middle of the quarter. Keep an eye on it.", "Candid note: a tendency to avoid conflict in reviews. Coach on it.", "Strong candidate to lead a small project next quarter."];
+    for (const subject of people) {
+      if (!subject.managerKey) continue;
+      const manager = byKey.get(subject.managerKey);
+      if (!manager || manager.role === "r_employee") continue;
+      const roll = rr();
+      if (roll < 0.18) continue; // nothing written
+      reviews.push({ reviewerKey: manager.key, subjectKey: subject.key, quarter: "last", status: rr() < 0.35 ? "acknowledged" : "submitted", rating: 3 + Math.floor(rr() * 3), sharedSummary: rpick(SUMMARY), developmentFocus: rpick(FOCUS), privateNotes: rpick(PRIVATE), daysAfterEnd: roll < 0.3 ? 20 + Math.floor(rr() * 12) : Math.floor(rr() * 12) });
+    }
+    for (const r of reviews.slice(0, 4)) reviews.push({ ...r, quarter: "current", status: "draft", daysAfterEnd: 0, sharedSummary: "", rating: 0, privateNotes: "Started: notes to finish." });
+  }
+
   return {
     departments: DEPARTMENTS,
     teams: TEAMS,
@@ -482,6 +631,8 @@ export function buildDemoCompany(seed: string): DemoCompany {
     dailyUpdates,
     objectives,
     kpis,
+    mentorships,
+    reviews,
   };
 }
 

@@ -50,7 +50,8 @@ describe("permission matrix: every role template × every route that needs a per
       }
     }
     expect(cells).toBe(routes.length * ROLE_TEMPLATES.length);
-  });
+    // one request per role and route: it grows with the API, so it gets a generous time limit (the assertions above are unchanged)
+  }, 60_000);
 
   it("a person with NO role (joined before roles existed) is refused every permission route and can use every baseline route", async () => {
     t = makeAuthApp();
@@ -68,7 +69,10 @@ describe("permission matrix: every role template × every route that needs a per
     // (stage 6.1's overview adds counts over the scope the person's permissions already reach, and nothing beyond it;
     // stages 4.4 and 4.5 add the signed-in person's OWN data: my work, daily updates, notifications and preferences. Each
     // returns only the caller's rows; the tenancy matrix below checks that none of another organization's appears.)
-    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/overview", "/api/preferences"]);
+    // stage 5.2 adds the performance reads: everyone reads their OWN score and what it is made of (docs/permission-model.md 2.1);
+    // each of these answers only with the caller's own scorecards plus those inside the scope their role grants
+    // (`performance.view_scores`/`view_components`), which tests/scorecards.test.ts checks for every role.
+    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/overview", "/api/performance/compare", "/api/performance/periods", "/api/performance/reviews", "/api/performance/scorecards", "/api/performance/scorecards/:id", "/api/performance/scorecards/for", "/api/performance/scores/:id", "/api/performance/trends", "/api/preferences"]);
   });
 
   it("every role can use the baseline routes without any permission", async () => {
@@ -130,6 +134,15 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     expect((await post(t.app, `/api/kpis/${kpiA}/assignments`, { teamId: teamA }, ownerA)).status).toBe(201);
     expect((await post(t.app, `/api/kpis/${kpiA}/measurements`, { subject: { type: "person", id: personA.membershipId }, periodStart: "2026-01-01", value: 7 }, ownerA)).status).toBe(201);
     const kpiAssignmentA = (t.db.prepare("SELECT id FROM kpi_assignments WHERE kpi_id = ?").get(kpiA) as { id: string }).id;
+    const modelA = ((await get(t.app, "/api/performance/models", ownerA)).body.data as { id: string; name: string }[]).find((m) => m.name === "Employee")!.id;
+    const periodA = ((await post(t.app, "/api/performance/periods", { name: "Alpha secret period", startDate: "2026-01-01", endDate: "2026-12-31" }, ownerA)).body.data as { id: string }).id;
+    expect((await post(t.app, "/api/performance/scorecards/recalculate", { periodId: periodA, subjectId: personA.membershipId }, ownerA)).status).toBe(200);
+    const cardA = (t.db.prepare("SELECT id FROM performance_scorecards WHERE period_id = ?").get(periodA) as { id: string }).id;
+    const scoreA = (t.db.prepare("SELECT id FROM performance_scores WHERE scorecard_id = ?").get(cardA) as { id: string }).id;
+    const mentorB = (await post(t.app, "/api/employees", { name: "Alpha secret mentee" }, ownerA)).body.data.id as string;
+    const mentoringA = ((await post(t.app, "/api/mentorship/assignments", { mentorId: personA.membershipId, menteeId: mentorB, goals: "Alpha secret goals" }, ownerA)).body.data as { id: string }).id;
+    const reviewA = ((await post(t.app, "/api/performance/reviews", { periodId: periodA, subjectId: personA.membershipId, sharedSummary: "Alpha secret summary", privateNotes: "Alpha secret private note" }, ownerA)).body.data as { id: string }).id;
+    const comparisonA = ((await post(t.app, "/api/performance/comparisons", { name: "Alpha secret comparison", periodId: periodA }, ownerA)).body.data as { id: string }).id;
     const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
     const notificationA = (t.db.prepare("SELECT id FROM notifications WHERE recipient_membership_id = ?").get(personA.membershipId) as { id: string }).id;
@@ -202,6 +215,31 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/kpis/:id/subjects": { params: { id: kpiA } },
       "/api/kpis/:id/history": { params: { id: kpiA }, body: { subject: `person:${personA.membershipId}` } },
       "/api/kpis/:id/measurements": { params: { id: kpiA }, body: { subject: { type: "person", id: personA.membershipId }, periodStart: "2026-01-01", value: 5 } },
+      "/api/performance/models/:id": { params: { id: modelA }, body: { name: "Hacked by B" } },
+      "/api/performance/models/:id/activate": { params: { id: modelA } },
+      "/api/performance/models/preview": { params: {}, body: { modelId: modelA, values: { okr: 50 } } },
+      "/api/performance/periods/:id": { params: { id: periodA }, body: { name: "Hacked by B" } },
+      "/api/performance/periods/:id/close": { params: { id: periodA } },
+      "/api/performance/periods/:id/reopen": { params: { id: periodA } },
+      "/api/performance/periods/:id/lock": { params: { id: periodA } },
+      "/api/performance/trends": { params: {}, body: { subjectId: personA.membershipId } },
+      "/api/mentorship/assignments": { params: {}, body: { mentorId: personA.membershipId, menteeId: mentorB } },
+      "/api/mentorship/assignments/:id": { params: { id: mentoringA }, body: { goals: "Hacked by B" } },
+      "/api/mentorship/assignments/:id/activities": { params: { id: mentoringA }, body: { type: "feedback", summary: "Hacked by B" } },
+      "/api/mentorship/assignments/:id/progress": { params: { id: mentoringA }, body: { periodId: periodA, value: 3 } },
+      "/api/mentorship/effectiveness": { params: {}, body: { periodId: periodA } },
+      "/api/performance/reviews": { params: {}, body: { periodId: periodA, subjectId: personA.membershipId } },
+      "/api/performance/reviews/:id": { params: { id: reviewA }, body: { sharedSummary: "Hacked by B" } },
+      "/api/performance/reviews/:id/acknowledge": { params: { id: reviewA } },
+      "/api/performance/compare": { params: {}, body: { periodId: periodA } },
+      "/api/performance/compare/difference": { params: {}, body: { periodId: periodA, a: personA.membershipId, b: personA.membershipId } },
+      "/api/performance/comparisons": { params: {}, body: { name: "Hacked by B", periodId: periodA } },
+      "/api/performance/comparisons/:id": { params: { id: comparisonA } },
+      "/api/performance/scorecards/for": { params: {}, body: { periodId: periodA, subjectId: personA.membershipId } },
+      "/api/performance/scorecards/recalculate": { params: {}, body: { periodId: periodA } },
+      "/api/performance/scorecards/:id": { params: { id: cardA } },
+      "/api/performance/scores/:id": { params: { id: scoreA } },
+      "/api/performance/scores/:id/verify": { params: { id: scoreA } },
       "/api/notifications/:id/read": { params: { id: notificationA } },
       "/api/demo/view-as/:membershipId": { params: { membershipId: personA.membershipId } },
     };
@@ -235,9 +273,18 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, health, health_reason FROM objectives ORDER BY id").all(),
       t.db.prepare("SELECT id, key_result_id, value, source FROM objective_progress_history ORDER BY id").all(),
       t.db.prepare("SELECT id, key, name, description, archived_at FROM kpis ORDER BY id").all(),
+      t.db.prepare("SELECT id, name, version, status, is_default FROM scoring_models WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, scoring_model_id, component_key, weight FROM scoring_model_components WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, team_id, membership_id, target_value, weight, effective_to FROM kpi_assignments ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, level, value FROM kpi_thresholds ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, subject_membership_id, period_start, value, supersedes_measurement_id FROM kpi_measurements ORDER BY id").all(),
+      t.db.prepare("SELECT id, name, status, start_date, end_date FROM performance_periods WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, period_id, latest_score_id, status FROM performance_scorecards WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, scorecard_id, run_number, total_score, inputs_hash FROM performance_scores WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, name, period_id, cohort_size, results_json FROM performance_comparisons WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, mentor_membership_id, mentee_membership_id, status, goals, end_date FROM mentorship_assignments WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT COUNT(*) n FROM mentorship_activities WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
+      t.db.prepare("SELECT id, period_id, subject_membership_id, status, shared_summary, private_notes FROM performance_reviews WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM automation_events").get(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
@@ -254,13 +301,14 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       expect(JSON.stringify(res.body)).not.toMatch(/Alpha|pending-a|member-a/i);
     }
     // lists: nothing of A's appears
-    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && (r.access.kind === "permission" || ["/api/organization", "/api/auth/me", "/api/my-work", "/api/notifications", "/api/preferences", "/api/daily-updates", "/api/overview"].includes(r.path)));
+    // (a route that needs an id in its query, like the difference of two people, is covered by the id loop above: it cannot be asked without one)
+    const lists = t.registry.list().filter((r) => r.method === "get" && !r.path.includes(":") && !(r.takesEntityId && ["/difference", "/effectiveness", "/reviews"].some((x) => r.path.endsWith(x))) && (r.access.kind === "permission" || ["/api/organization", "/api/auth/me", "/api/my-work", "/api/notifications", "/api/preferences", "/api/daily-updates", "/api/overview"].includes(r.path)));
     expect(lists.length).toBeGreaterThanOrEqual(12);
     for (const route of lists) {
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", modelA, periodA, cardA, scoreA, comparisonA, mentoringA, reviewA, kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

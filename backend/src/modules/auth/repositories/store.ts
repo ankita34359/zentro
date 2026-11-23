@@ -12,6 +12,9 @@ import { AutomationEventsRepository } from "../../automation/repositories/events
 import { DemoRepository } from "../../demo/repositories/demo.js";
 import { OkrRepository } from "../../okr/repositories/okr.js";
 import { KpiRepository } from "../../kpi/repositories/kpi.js";
+import { ReviewRepository } from "../../reviews/repositories/reviews.js";
+import { MentorshipRepository } from "../../mentorship/repositories/mentorship.js";
+import { ScorecardRepository, ScoringRepository } from "../../scoring/repositories/scoring.js";
 import { ErasureRepository } from "./erasure.js";
 import { InvitationsRepository } from "./invitations.js";
 import { SessionsRepository } from "./sessions.js";
@@ -39,6 +42,10 @@ export interface AuthStore {
   demo(tdb: TenantDb): DemoRepository;
   okr(tdb: TenantDb): OkrRepository;
   kpi(tdb: TenantDb): KpiRepository;
+  scoring(tdb: TenantDb): ScoringRepository;
+  scorecards(tdb: TenantDb): ScorecardRepository;
+  mentorship(tdb: TenantDb): MentorshipRepository;
+  reviews(tdb: TenantDb): ReviewRepository;
   transaction<T>(fn: () => T): T;
 }
 
@@ -64,6 +71,10 @@ export function createAuthStore(db: Database.Database): AuthStore {
     demo: (tdb) => new DemoRepository(tdb),
     okr: (tdb) => new OkrRepository(tdb),
     kpi: (tdb) => new KpiRepository(tdb),
+    scoring: (tdb) => new ScoringRepository(tdb),
+    scorecards: (tdb) => new ScorecardRepository(tdb),
+    mentorship: (tdb) => new MentorshipRepository(tdb),
+    reviews: (tdb) => new ReviewRepository(tdb),
     transaction: (fn) => db.transaction(fn)(),
   };
 }

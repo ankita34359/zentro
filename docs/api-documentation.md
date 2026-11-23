@@ -282,27 +282,34 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 
 | Method | Path | Permission | Notes |
 | --- | --- | --- | --- |
-| GET / POST / PATCH | `/api/performance/periods[/:id]` | `performance.view_scores` / `performance.manage_periods` | |
-| POST | `/api/performance/periods/:id/close` | `performance.manage_periods` | Triggers final recalculation |
-| GET | `/api/performance/scorecards` | own always; others `performance.view_scores` (scope) | `?subjectType&subjectId&periodId&status` |
-| GET | `/api/performance/scorecards/:id` | same | Latest run plus run history |
+| GET | `/api/performance/periods` | baseline (everyone) | Newest first, with how many scorecards the caller may open (live, 5.2) |
+| POST / PATCH | `/api/performance/periods[/:id]` | `performance.manage_periods` | Name unique; dates real and ordered; only while open (live, 5.2) |
+| POST | `/api/performance/periods/:id/close` | `performance.manage_periods` | Final run for everyone as of the period end (`period_close`), scorecards become final (live, 5.3); 409 `not_open`, `not_started` |
+| POST | `/api/performance/periods/:id/reopen` | `performance.manage_periods` | closed → open; runs kept; 409 `period_locked`, `not_closed` (live, 5.3) |
+| POST | `/api/performance/periods/:id/lock` | `performance.manage_periods` | closed → locked for good: no recalculation, no new KPI value inside it (corrections still allowed) (live, 5.3) |
+| GET | `/api/performance/scorecards` | baseline: own always; others inside `performance.view_scores` | `?periodId` (required) `&search`; latest run per person (live, 5.2) |
+| GET | `/api/performance/scorecards/for` | same | `?periodId&subjectId` (default the caller); 404 when none or not theirs to see |
+| GET | `/api/performance/scorecards/:id` | same | Latest run plus run history (newest first) |
 | GET | `/api/performance/scores/:id` | same; components need `performance.view_components` for others | Components, contributing records (permission-filtered), `explanation_json` |
-| POST | `/api/performance/scores/:id/verify` | `performance.view_components` | Recompute from stored inputs; `{matches, expected, actual}` |
-| POST | `/api/performance/scorecards/recalculate` | `performance.recalculate` (scope) | One subject sync; many → `202 {jobId}` |
-| GET | `/api/performance/compare` | `performance.compare` (scope) | `?roleFamilyId&periodId&subjectType`; `422 cohort_mismatch` across families |
-| POST / GET | `/api/performance/comparisons[/:id]` | `performance.compare` | Saved snapshots |
-| GET | `/api/performance/trends` | own or scope | `?subject&periodIds` per-component deltas across periods |
+| POST | `/api/performance/scores/:id/verify` | the person themself, or `performance.view_components` over them (403 otherwise) | Recompute from stored inputs and model; `{matches, expected, actual, mismatches}` |
+| POST | `/api/performance/scorecards/recalculate` | `performance.recalculate` (scope) | `{periodId, subjectId?}`: one person, or everyone in scope (at most 400); a run is added only when the inputs or the outcome changed; `{scored, unchanged, skipped}` |
+| GET | `/api/performance/compare` | baseline: everyone gets `you` (own rank and percentile); named rows only for people inside `performance.compare` scope whose score the caller may see | `?periodId&roleFamilyId&departmentId&subjectIds&minTenureDays&includeInsufficient`; `422 cohort_mismatch` across families; under 3 people no rank, from 8 a z-score (live, 5.4) |
+| GET | `/api/performance/compare/difference` | `performance.compare` + both people in scope | `?periodId&a&b`: why two totals differ, part by part (live, 5.4) |
+| GET / POST | `/api/performance/comparisons` | `performance.compare` | Saved snapshots: own, or all with compare over everyone (live, 5.4) |
+| GET | `/api/performance/comparisons/:id` | same | One snapshot exactly as saved |
+| GET | `/api/performance/trends` | baseline: own always; others inside `performance.view_scores`, parts need `view_components` | `?subjectId&from&to`: scores across periods with the change since the one before; `from`/`to` (period ids) add a part-by-part comparison. A period with no data gives no change, never a drop to zero (live, 5.3) |
 | GET / POST | `/api/performance/models` | `performance.view_components` / `performance.configure` | Scoring models |
 | PATCH | `/api/performance/models/:id` | `performance.configure` | Creates a new version |
 | POST | `/api/performance/models/:id/activate` | `performance.configure` | Validates weights sum to 100 |
 | POST | `/api/performance/models/preview` | `performance.configure` | What-if dry run, stores nothing |
-| GET / POST | `/api/performance/reviews` | `reviews.read_shared` / `reviews.write` | Private notes only with `reviews.read_private` |
-| PATCH | `/api/performance/reviews/:id` | author | submit, acknowledge |
-| GET / POST | `/api/mentorship/assignments` | `mentorship.view` / `mentorship.manage` | |
-| PATCH | `/api/mentorship/assignments/:id` | `mentorship.manage` | pause/end |
-| GET / POST | `/api/mentorship/assignments/:id/activities` | `mentorship.view` / `mentorship.log` | |
-| GET | `/api/mentorship/assignments/:id/progress` | `mentorship.view` | |
-| GET | `/api/mentorship/effectiveness` | `mentorship.view` (scope) | `?mentorId&periodId`; factors disclosed |
+| GET | `/api/performance/reviews` | baseline: the person reads the shared parts of their own SUBMITTED reviews, never `privateNotes`; authors read their own; `reviews.read_shared` over the person reads submitted ones; `privateNotes` only with `reviews.read_private` over the person | `?periodId&subjectId` (live, 5.6) |
+| POST / PATCH | `/api/performance/reviews[/:id]` | `reviews.write` over the person (PATCH: author only) | `{rating?, sharedSummary?, developmentFocus?, privateNotes?, submit?}`; one per reviewer, person and period; audited without the text (live, 5.6) |
+| POST | `/api/performance/reviews/:id/acknowledge` | baseline: the person reviewed | locks the review (live, 5.6) |
+| GET / POST | `/api/mentorship/assignments` | `mentorship.view` / `mentorship.manage` | Own pairs and pairs where mentor or mentee is in scope; the mentee must be in the manager's scope; 409 `duplicate`, `loop` (live, 5.5) |
+| GET / PATCH | `/api/mentorship/assignments/:id` | `mentorship.view` / `mentorship.manage` | PATCH: goals, cadence, pause, resume, end (`endDate`, the day it stops applying); an ended one is final (live, 5.5) |
+| GET / POST | `/api/mentorship/assignments/:id/activities` | `mentorship.view` / `mentorship.log` | The mentor (or someone with log over them) logs; not while paused (live, 5.5) |
+| GET / POST | `/api/mentorship/assignments/:id/progress` | `mentorship.view` / `mentorship.log` | GET: ratings, and with `?periodId` the measured change; POST: a 1 to 5 rating by the mentor or the mentee (live, 5.5) |
+| GET | `/api/mentorship/effectiveness` | `mentorship.view` (scope) | `?periodId&mentorId`: development and activity per mentor with every factor (days, mentors, credit share, sessions vs cadence), caveats (live, 5.5) |
 
 ## 9. Dashboards and leadership
 

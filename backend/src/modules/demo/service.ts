@@ -11,6 +11,10 @@ import { keyResultAttainment } from "../okr/attainment.js";
 import { healthOf } from "../okr/healthSweep.js";
 import { periodEndOf, completedPeriods } from "../kpi/periods.js";
 import { applySeriesAlerts, buildSeries, loadSeriesInput } from "../kpi/series.js";
+import { Collector } from "../scoring/collector.js";
+import { seedTemplates } from "../scoring/models.js";
+import { scoringOrder } from "../scoring/runner.js";
+import type { PerformanceService } from "../scoring/performance.js";
 import { buildDemoCompany, demoEmail, type DemoTask, type RoleChoice } from "./seed.js";
 
 const ROLE_KEY: Record<RoleChoice, string> = {
@@ -49,7 +53,7 @@ const at = (day: string, hour = 9): string => `${day}T${String(hour).padStart(2,
  * employee, manager and CEO views. Everything is audited.
  */
 export class DemoService {
-  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService }) {}
+  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; performance: PerformanceService }) {}
 
   private ctx(auth: AuthContext, requestId: string): TenantCtx {
     return this.o.auth.tenantCtx(auth, requestId);
@@ -80,7 +84,7 @@ export class DemoService {
     const org = this.o.store.orgs.findById(ctx.organizationId);
     const now = this.o.auth.iso();
     const today = todayIn(org?.timezone ?? "UTC", new Date(now));
-    const company = buildDemoCompany(ctx.organizationId);
+    const company = buildDemoCompany(ctx.organizationId, today);
     const by = ctx.membershipId;
 
     // roles the seed hands out are the organization's own role templates; one that was archived is simply not given
@@ -211,6 +215,61 @@ export class DemoService {
       for (const t of company.tasks) if (t.dependsOnKey) repo.insertDependency({ taskId: taskId.get(t.key)!, dependsOnId: taskId.get(t.dependsOnKey)!, by: personId.get(t.creatorKey) ?? by, now: at(addDays(today, t.createdOffset), 9) });
       for (const d of company.dailyUpdates) repo.insertDailyUpdate({ id: newId(), membershipId: personId.get(d.personKey)!, day: addDays(today, d.dayOffset), summary: d.summary, blockers: d.blockers, now: at(addDays(today, d.dayOffset), 17) });
       this.insertNotifications(repo, company.tasks, taskId, personId, today, now);
+
+      // mentorship: who mentors whom, and what they did (stage 5.5), before the scores that read it
+      for (const m of company.mentorships) {
+        const aid = newId();
+        repo.insertMentorship({ id: aid, mentorId: personId.get(m.mentorKey)!, menteeId: personId.get(m.menteeKey)!, startDate: addDays(today, m.startOffset), goals: m.goals, cadenceDays: m.cadenceDays, by, now });
+        for (const x of m.activities) repo.insertMentorshipActivity({ id: newId(), assignmentId: aid, type: x.type, occurredOn: addDays(today, x.dayOffset), minutes: x.minutes, summary: x.summary, by: personId.get(m.mentorKey)!, now });
+      }
+
+      // (reviews are written after the periods exist, below)
+      // scores: the demo's two periods (last quarter and this quarter), and a run for every demo person in each (stage 5.2)
+      {
+        const scoring = this.o.store.scorecards(tdb);
+        const q0 = `${today.slice(0, 4)}-${String(Math.floor((Number(today.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`;
+        const prevStart = new Date(Date.UTC(Number(q0.slice(0, 4)), Number(q0.slice(5, 7)) - 4, 1)).toISOString().slice(0, 10);
+        const curEnd = new Date(Date.UTC(Number(q0.slice(0, 4)), Number(q0.slice(5, 7)) + 2, 0)).toISOString().slice(0, 10);
+        const quarter = (d: string): string => `Q${Math.floor((Number(d.slice(5, 7)) - 1) / 3) + 1} ${d.slice(0, 4)}`;
+        const taken = new Set(scoring.periods().map((p) => p.name.toLowerCase()));
+        const nameOf = (d: string): string => (taken.has(quarter(d).toLowerCase()) ? `${quarter(d)} (demo)` : quarter(d));
+        const periods = [
+          { id: newId(), name: nameOf(prevStart), start: prevStart, end: addDays(q0, -1) },
+          { id: newId(), name: nameOf(q0), start: q0, end: curEnd },
+        ];
+        for (const p of periods) scoring.insertPeriod({ id: p.id, name: p.name, periodType: "quarter", startDate: p.start, endDate: p.end, isDemo: true, now });
+        this.o.performance.ensureModels(ctx, { tdb, models: this.o.store.scoring(tdb) });
+        // the standard models for the demo's leadership and mentors, as demo copies bound to the demo designations they hold: the highest role wins
+        {
+          const TEMPLATE_OF: Record<RoleChoice, string | null> = { r_ceo: "model_ceo", r_senior: "model_senior_management", r_dept_head: "model_department_head", r_manager: "model_manager", r_team_lead: "model_team_lead", r_mentor: "model_mentor", r_employee: null };
+          const label: Record<string, string> = { model_ceo: "CEO", model_senior_management: "Senior management", model_department_head: "Department head", model_manager: "Manager", model_team_lead: "Team lead", model_mentor: "Mentor" };
+          const bound = new Set<string>();
+          for (const role of ["r_ceo", "r_senior", "r_dept_head", "r_manager", "r_team_lead", "r_mentor"] as const) {
+            for (const person of company.people.filter((x) => x.role === role)) {
+              if (bound.has(person.designation)) continue;
+              // a title that people in other roles also hold (a Senior Engineer who leads next to ones who do not) stays on the default model
+              if (company.people.some((x) => x.designation === person.designation && x.role !== role)) continue;
+              bound.add(person.designation);
+              const key = TEMPLATE_OF[role]!;
+              seedTemplates(this.o.store.scoring(tdb), by, now, { isDemo: true, only: [key], designationId: designationId.get(person.designation)!, name: `${label[key]} (demo: ${person.designation})` });
+            }
+          }
+        }
+        this.o.performance.prepareDemoPeriods(tdb, ctx, periods.map((p) => p.id), today);
+        // last quarter's reviews (and a few drafts for this quarter): the managers' review duty reads them
+        const reviewRepo = repo;
+        for (const rv of company.reviews) {
+          const p = rv.quarter === "last" ? periods[0]! : periods[1]!;
+          const submittedAt = rv.status === "draft" ? null : `${addDays(p.end, rv.daysAfterEnd)}T10:00:00.000Z`;
+          if (submittedAt !== null && submittedAt.slice(0, 10) > today) continue;
+          reviewRepo.insertReview({ id: newId(), periodId: p.id, subjectId: personId.get(rv.subjectKey)!, reviewerId: personId.get(rv.reviewerKey)!, status: rv.status, rating: rv.rating || null, sharedSummary: rv.sharedSummary, developmentFocus: rv.developmentFocus, privateNotes: rv.privateNotes, submittedAt, acknowledgedAt: rv.status === "acknowledged" ? submittedAt : null, now });
+        }
+        for (const p of periods) {
+          const row = scoring.period(p.id)!;
+          const collector = new Collector(tdb, { id: row.id, start: row.start_date, end: row.end_date, open: row.status === "open" }, today);
+          for (const person of scoringOrder(company.people.map((x) => ({ ...x, id: personId.get(x.key)! })), collector)) this.o.performance.runFor(tdb, ctx, collector, row, person.id, person.name, row.status === "open" ? "scheduled" : "period_close", true);
+        }
+      }
 
       const counts = repo.counts();
       repo.insertBatch({ id: newId(), createdBy: by, countsJson: JSON.stringify(counts), now });

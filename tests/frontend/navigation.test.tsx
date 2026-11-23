@@ -82,12 +82,19 @@ describe("routes", () => {
     expect(document.title).toBe("Overview · Zentro");
   });
 
-  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs" && n.key !== "kpis"))("renders $label with an empty state that says what to do", async (n) => {
+  it.each(NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs" && n.key !== "kpis" && n.key !== "performance"))("renders $label with an empty state that says what to do", async (n) => {
     renderApp(n.path);
     await screen.findByRole("heading", { level: 1, name: n.label });
     expect(screen.getByRole("heading", { level: 2 })).toBeTruthy(); // the empty-state headline
     expect(document.title).toBe(`${n.label} · Zentro`);
     expect(screen.getByText(/Planned for stage \d\.\d/)).toBeTruthy(); // honest about what is not built yet
+  });
+
+  it("renders Performance Intelligence as a real page (stage 5.2): its own title and the standing note that scores are information, not employment decisions", async () => {
+    renderApp("/performance");
+    await screen.findByRole("heading", { level: 1, name: "Performance Intelligence" });
+    expect(document.title).toBe("Performance Intelligence · Zentro");
+    expect(screen.getByText(/They are not employment decisions/)).toBeTruthy();
   });
 
   it("renders Organization as a real page (stage 2.6): the chart and the people list", async () => {

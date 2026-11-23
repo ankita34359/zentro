@@ -120,6 +120,10 @@ export class OkrRepository {
   history(objectiveId: string): HistoryRow[] {
     return this.tdb.all<HistoryRow>(`SELECT ${HIST_COLS} FROM objective_progress_history WHERE organization_id = @organization_id AND objective_id = @objectiveId ORDER BY recorded_at, rowid`, { objectiveId });
   }
+  /** Every recorded value of every key result, oldest first (scoring reads the value AS OF a day). */
+  allHistory(): HistoryRow[] {
+    return this.tdb.all<HistoryRow>(`SELECT ${HIST_COLS} FROM objective_progress_history WHERE organization_id = @organization_id AND key_result_id IS NOT NULL ORDER BY recorded_at, rowid`);
+  }
   latestFor(keyResultId: string): HistoryRow | undefined {
     return this.tdb.get<HistoryRow>(`SELECT ${HIST_COLS} FROM objective_progress_history WHERE organization_id = @organization_id AND key_result_id = @keyResultId AND source <> 'target_change' ORDER BY recorded_at DESC, rowid DESC LIMIT 1`, { keyResultId });
   }

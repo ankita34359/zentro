@@ -16,7 +16,7 @@ describe("/healthz", () => {
       ready: true,
       version: "test",
       node: process.versions.node,
-      migrations: { applied: 14, total: 14 },
+      migrations: { applied: 19, total: 19 },
       registration: "closed",
       lastTick: null,
     });
@@ -66,6 +66,7 @@ describe("cron tick route", () => {
       { job_name: "kpi.thresholds", status: "ok" },
       { job_name: "okr.health", status: "ok" },
       { job_name: "platform.housekeeping", status: "ok" },
+      { job_name: "scores.recalculate", status: "ok" },
       { job_name: "tasks.reminders", status: "ok" },
       { job_name: "tick", status: "ok" },
     ]);

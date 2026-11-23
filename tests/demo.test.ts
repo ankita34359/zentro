@@ -520,3 +520,150 @@ describe("Archived people and demo data (bug fix)", () => {
     expect((again.body.error.details.blockers as { kind: string; message: string }[]).find((x) => x.kind === "designations")!.message).toBe("1 of your real people holds a demo designation: Testing. Give them another designation first.");
   });
 });
+
+describe("Demo scores (stage 5.2)", () => {
+  it("the demo company arrives with two periods and a scorecard for every demo person, all flagged as demo, with real explanations", async () => {
+    const { owner } = await setup();
+    const load = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(load.status, JSON.stringify(load.body)).toBe(201);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; isDemo: boolean; status: string; scorecards: number }[];
+    expect(periods.filter((p) => p.isDemo)).toHaveLength(2);
+    expect(periods.filter((p) => p.isDemo).map((p) => p.status).sort()).toEqual(["closed", "open"]); // last quarter is closed, this one is open
+    const cur = periods.find((p) => p.isDemo && p.scorecards > 0)!;
+    const cards = (await get(t.app, `/api/performance/scorecards?periodId=${cur.id}`, owner)).body.data as { isDemo: boolean; total: number | null; status: string }[];
+    expect(cards.length).toBeGreaterThanOrEqual(50);
+    expect(cards.every((c) => c.isDemo)).toBe(true);
+    expect(cards.filter((c) => c.total !== null).length).toBeGreaterThan(20); // most have data
+    expect(new Set(cards.map((c) => c.status)).size).toBeGreaterThan(1); // and the data gaps show as provisional or insufficient, not as zeros
+    expect(cards.some((c) => c.status === "insufficient" && c.total === null)).toBe(true);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM performance_scores s WHERE NOT EXISTS (SELECT 1 FROM performance_score_components c WHERE c.score_id = s.id)").n).toBe(0);
+  });
+
+  it("view as a demo employee: their own scorecard opens with its components; a teammate's does not", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const ps = await personas(owner);
+    const seller = ps.find((p) => p.designation === "Account Executive")!;
+    const other = ps.find((p) => p.designation === "Account Executive" && p.id !== seller.id)!;
+    const as = await asCookie(owner, seller.id);
+    const periods = (await get(t.app, "/api/performance/periods", as)).body.data as { id: string; isDemo: boolean; scorecards: number }[];
+    const cur = periods.find((p) => p.scorecards > 0)!;
+    const mine = await get(t.app, `/api/performance/scorecards/for?periodId=${cur.id}`, as);
+    expect(mine.status, JSON.stringify(mine.body)).toBe(200);
+    expect(mine.body.data.latest.components.length).toBeGreaterThan(0);
+    expect((await get(t.app, `/api/performance/scorecards/for?periodId=${cur.id}&subjectId=${other.id}`, as)).status).toBe(404);
+  });
+
+  it("compare the demo's Engineering people: the administrator sees names and ranks; a demo engineer sees only their own position; a manager sees their team", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const fam = ((await get(t.app, "/api/organization/structure", owner)).body.data.roleFamilies as { id: string; name: string }[]).find((f) => f.name === "Engineering")!;
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; status: string }[];
+    const cur = periods.find((p) => p.status === "open")!;
+    const all = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&roleFamilyId=${fam.id}&minTenureDays=0`, owner)).body.data;
+    expect(all.cohortSize).toBeGreaterThanOrEqual(8);
+    expect(all.normalization).toBe("percentile_z");
+    expect(all.entries.length).toBe(all.cohortSize);
+    expect(all.entries[0].rank).toBe(1);
+    const ps = await personas(owner);
+    const engineer = ps.find((p) => p.designation === "Software Engineer" && all.entries.some((e: { subject: { id: string } }) => e.subject.id === p.id))!;
+    const as = await asCookie(owner, engineer.id);
+    const mine = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&minTenureDays=0`, as)).body.data;
+    expect(mine.canSeeNames).toBe(false);
+    expect(mine.entries).toHaveLength(1);
+    expect(mine.you.of).toBe(all.cohortSize);
+    // a department head compares inside their own department only
+    const vp = (dept: string) => ps.find((p) => p.department === dept && p.designation === "Vice President")!;
+    const own = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&roleFamilyId=${fam.id}&minTenureDays=0`, await asCookie(owner, vp("Engineering").id))).body.data;
+    expect(own.entries.length).toBeGreaterThan(5);
+    expect(own.cohortSize).toBe(all.cohortSize); // they are ranked among everyone...
+    const other = (await get(t.app, `/api/performance/compare?periodId=${cur.id}&roleFamilyId=${fam.id}&minTenureDays=0`, await asCookie(owner, vp("Sales").id))).body.data;
+    expect(other.entries).toHaveLength(0); // ...but another department's head sees no engineer's name or score
+    expect(other.hiddenCount).toBe(all.cohortSize);
+  });
+
+  it("the demo has mentors with mentees, activities and a measured effect; a real assignment involving a demo person stops the removal; removal takes the rest", async () => {
+    const { owner } = await setup();
+    const load = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(load.body.data.counts.mentorships).toBeGreaterThanOrEqual(5);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; status: string }[];
+    const cur = periods.find((p) => p.status === "open")!;
+    const e = (await get(t.app, `/api/mentorship/effectiveness?periodId=${cur.id}`, owner)).body.data;
+    expect(e.mentors.length).toBeGreaterThanOrEqual(2);
+    expect(e.mentors.every((m: { development: { state: string; value: number } }) => m.development.state === "ok")).toBe(true);
+    const acts = e.mentors.map((m: { activity: { value: number } }) => m.activity.value) as number[];
+    expect(Math.max(...acts) - Math.min(...acts)).toBeGreaterThan(20); // one mentor logs far less than the other
+    expect(e.mentors.some((m: { mentees: { mentorCount: number }[] }) => m.mentees.some((x) => x.mentorCount > 1))).toBe(true); // a shared mentee
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM scoring_models WHERE is_demo = 1 AND template_key = 'model_mentor'").n).toBe(1);
+    // a real assignment that involves a demo person
+    const real = await created("/api/employees", { name: "Real Mentor" }, owner);
+    const demoMentee = (await get(t.app, "/api/mentorship/assignments", owner)).body.data[0].mentee.id as string;
+    expect((await post(t.app, "/api/mentorship/assignments", { mentorId: real, menteeId: demoMentee }, owner)).status).toBe(201);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    expect((blocked.body.error.details.blockers as { kind: string; message: string }[]).find((b) => b.kind === "mentorship")!.message).toMatch(/1 of your own mentorship assignment involves a demo person/);
+    const row = one<{ id: string }>("SELECT id FROM mentorship_assignments WHERE is_demo = 0");
+    expect((await request(t.app).patch(`/api/mentorship/assignments/${row.id}`).set("Origin", ORIGIN).set("Cookie", owner).send({ status: "ended", endDate: new Date().toISOString().slice(0, 10) })).status).toBe(400); // ended on the day it started is refused: it must end after it started
+    t.db.prepare("UPDATE mentorship_assignments SET status = 'ended', end_date = date('now') WHERE id = ?").run(row.id);
+    const removed = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    for (const table of ["mentorship_activities", "mentorship_progress"]) expect(one<{ n: number }>(`SELECT COUNT(*) n FROM ${table}`).n, table).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM mentorship_assignments WHERE is_demo = 1").n).toBe(0);
+    expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
+  });
+
+  it("the demo's leaders have their own models: the CEO has no task component; a department head's contribution and a manager's review duty are scored; a reviewed employee never sees the private note", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; status: string }[];
+    const open = periods.find((p) => p.status === "open")!;
+    const closed = periods.find((p) => p.status === "closed")!;
+    const ps = await personas(owner);
+    const cardOf = async (person: { id: string }, periodId: string) => (await get(t.app, `/api/performance/scorecards/for?periodId=${periodId}&subjectId=${person.id}`, owner)).body.data.latest;
+    const ceo = ps.find((p) => p.designation === "Chief Executive Officer")!;
+    const ceoCard = await cardOf(ceo, open.id);
+    expect(ceoCard.modelName).toMatch(/^CEO/);
+    expect(ceoCard.components.map((c: { providerKey: string }) => c.providerKey)).not.toContain("tasks.delivery");
+    expect(ceoCard.components.find((c: { key: string }) => c.key === "company_okr").state).toBe("ok");
+    const vp = ps.find((p) => p.designation === "Vice President" && p.department === "Engineering")!;
+    const vpCard = await cardOf(vp, open.id);
+    expect(vpCard.modelName).toMatch(/^Department head/);
+    const contribution = vpCard.components.find((c: { key: string }) => c.key === "contribution");
+    expect(contribution.state).toBe("ok");
+    expect(contribution.contributors[0].label).toMatch(/ → /); // the chain: department objective → company objective
+    // the managers' review duty for last quarter: scored from the reviews they wrote, on time or late
+    const duties = t.db.prepare("SELECT c.data_state AS state, c.normalized_score AS score FROM performance_score_components c JOIN performance_scores s ON s.id = c.score_id JOIN performance_scorecards k ON k.latest_score_id = s.id WHERE c.provider_key = 'mgmt.responsibilities' AND k.period_id = ?").all(closed.id) as { state: string; score: number | null }[];
+    expect(duties.length).toBeGreaterThan(0);
+    expect(duties.some((d) => d.state === "ok" && d.score !== null && d.score > 0)).toBe(true);
+    expect(duties.every((d) => d.state !== "ok" || (d.score !== null && d.score >= 0 && d.score <= 100))).toBe(true);
+    // a reviewed demo employee reads the shared part and never the private note
+    const subject = t.db.prepare("SELECT subject_membership_id AS id FROM performance_reviews WHERE is_demo = 1 AND status <> 'draft' LIMIT 1").get() as { id: string };
+    const as = await asCookie(owner, subject.id);
+    const mine = (await get(t.app, `/api/performance/reviews?periodId=${closed.id}&subjectId=${subject.id}`, as)).body.data as { sharedSummary: string }[]; // about them (a manager also sees the reviews they wrote, with their own private notes)
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.every((r) => !("privateNotes" in r) && r.sharedSummary.length > 0)).toBe(true);
+    expect(JSON.stringify(mine)).not.toMatch(/Not for sharing|Candid note|stretch assignment|Strong candidate|visibly stretched/);
+    // removal takes the reviews too
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM performance_reviews").n).toBe(0);
+  });
+
+  it("removal takes every demo period, scorecard, run and component, even a real person's scorecard inside a demo period, and works with an archived real person", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const demoDesignation = ((await get(t.app, "/api/organization/structure", owner)).body.data.designations as { id: string; name: string; isDemo?: boolean }[]).find((d) => d.isDemo && d.name === "Account Executive")!;
+    const manager = (await personas(owner)).find((p) => p.designation === "Sales Manager")!;
+    const id = await created("/api/employees", { name: "Testing", designationId: demoDesignation.id, managerId: manager.id }, owner);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; isDemo: boolean }[];
+    expect((await post(t.app, "/api/performance/scorecards/recalculate", { periodId: periods.find((p) => p.isDemo)!.id, subjectId: id }, owner)).status).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM performance_scorecards WHERE subject_membership_id = ?", id).n).toBe(1);
+    const line = (await get(t.app, `/api/employees/${id}/history`, owner)).body.data.managers[0] as { id: string };
+    expect((await request(t.app).patch(`/api/hierarchy/reporting/${line.id}`).set("Origin", ORIGIN).set("Cookie", owner).send({})).status).toBe(200);
+    expect((await post(t.app, `/api/employees/${id}/archive`, undefined, owner)).status).toBe(200);
+    const removed = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    for (const table of ["performance_periods", "performance_scorecards", "performance_scores", "performance_score_components"]) expect(one<{ n: number }>(`SELECT COUNT(*) n FROM ${table}`).n, table).toBe(0);
+    expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
+    expect(one<{ archived_at: string | null }>("SELECT archived_at FROM organization_memberships WHERE id = ?", id).archived_at).not.toBeNull(); // the real person stays
+  });
+});
