@@ -7,6 +7,7 @@ import type { AuthContext, AuthService } from "../auth/service.js";
 import { TEMPLATE_KEYS } from "../permissions/roleTemplates.js";
 import type { Capabilities } from "../permissions/service.js";
 import { addDays, todayIn } from "../tasks/dates.js";
+import { keyResultAttainment } from "../okr/attainment.js";
 import { buildDemoCompany, demoEmail, type DemoTask, type RoleChoice } from "./seed.js";
 
 const ROLE_KEY: Record<RoleChoice, string> = {
@@ -123,19 +124,49 @@ export class DemoService {
         if (p.managerKey) repo.insertReporting({ id: newId(), subordinateId: personId.get(p.key)!, managerId: personId.get(p.managerKey)!, startDate: addDays(today, p.startOffsetDays), createdBy: by, now });
       }
 
+      // objectives with their key results and recorded values (stage 3.1), before the tasks that support them (stage 4.2)
+      const objectiveId = new Map<string, string>();
+      const keyResultIds = new Map<string, string[]>();
+      for (const o of company.objectives) {
+        const id = newId();
+        objectiveId.set(o.key, id);
+        const startDate = addDays(today, o.startOffset);
+        repo.insertObjective({
+          id, level: o.level, departmentId: o.deptKey ? deptId.get(o.deptKey)! : o.teamKey ? deptId.get(company.teams.find((t) => t.key === o.teamKey)!.deptKey)! : null, teamId: o.teamKey ? teamId.get(o.teamKey)! : null,
+          ownerId: personId.get(o.ownerKey)!, title: o.title, description: o.description, objectiveType: o.objectiveType, startDate, endDate: addDays(today, o.endOffset), priority: o.priority, lifecycle: o.lifecycle,
+          visibility: o.published ? "organization" : "scope", publishedAt: o.published ? at(startDate) : null, createdBy: personId.get(o.ownerKey)!, now: at(startDate),
+        });
+        const ids: string[] = [];
+        for (const k of o.keyResults) {
+          const kid = newId();
+          ids.push(kid);
+          const last = k.history.length > 0 ? k.history[k.history.length - 1]! : null;
+          repo.insertKeyResult({ id: kid, objectiveId: id, title: k.title, unit: k.unit, direction: k.direction, method: k.method, start: k.method === "binary" ? 0 : k.method === "manual" ? 0 : k.start, target: k.method === "binary" ? 1 : k.method === "manual" ? 100 : k.target, current: last ? last.value : null, currentAsOf: last ? addDays(today, last.dayOffset) : null, weight: k.weight, ownerId: personId.get(k.ownerKey)!, now: at(startDate) });
+          let previous: string | null = null;
+          for (const h of k.history) {
+            const hid = newId();
+            const a = keyResultAttainment({ direction: k.direction, method: k.method, start: k.method === "binary" ? 0 : k.method === "manual" ? 0 : k.start, target: k.method === "binary" ? 1 : k.method === "manual" ? 100 : k.target, current: h.value, weight: k.weight }).value;
+            repo.insertHistory({ id: hid, objectiveId: id, keyResultId: kid, value: h.value, attainment: a, note: h.note ?? null, by: personId.get(k.ownerKey)!, supersedesId: previous, at: at(addDays(today, h.dayOffset), 12) });
+            previous = hid;
+          }
+        }
+        keyResultIds.set(o.key, ids);
+      }
+
       const taskId = new Map<string, string>();
-      for (const t of company.tasks) this.insertTask(repo, t, taskId, personId, teamId, today, by);
+      for (const t of company.tasks) this.insertTask(repo, t, taskId, personId, teamId, today, by, objectiveId, keyResultIds);
+      for (const t of company.tasks) if (t.dependsOnKey) repo.insertDependency({ taskId: taskId.get(t.key)!, dependsOnId: taskId.get(t.dependsOnKey)!, by: personId.get(t.creatorKey) ?? by, now: at(addDays(today, t.createdOffset), 9) });
       for (const d of company.dailyUpdates) repo.insertDailyUpdate({ id: newId(), membershipId: personId.get(d.personKey)!, day: addDays(today, d.dayOffset), summary: d.summary, blockers: d.blockers, now: at(addDays(today, d.dayOffset), 17) });
       this.insertNotifications(repo, company.tasks, taskId, personId, today, now);
 
       const counts = repo.counts();
       repo.insertBatch({ id: newId(), createdBy: by, countsJson: JSON.stringify(counts), now });
-      this.o.audit.record(tdb, ctx, { action: "demo.load", entityType: "demo", entityId: null, summary: `Loaded demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks`, after: counts });
+      this.o.audit.record(tdb, ctx, { action: "demo.load", entityType: "demo", entityId: null, summary: `Loaded demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks, ${counts.objectives} objectives`, after: counts });
     });
     return this.status(auth, requestId, caps);
   }
 
-  private insertTask(repo: ReturnType<AuthStore["demo"]>, t: DemoTask, taskId: Map<string, string>, personId: Map<string, string>, teamId: Map<string, string>, today: string, by: string): void {
+  private insertTask(repo: ReturnType<AuthStore["demo"]>, t: DemoTask, taskId: Map<string, string>, personId: Map<string, string>, teamId: Map<string, string>, today: string, by: string, objectiveId: Map<string, string>, keyResultIds: Map<string, string[]>): void {
     const id = newId();
     taskId.set(t.key, id);
     const created = addDays(today, t.createdOffset);
@@ -147,6 +178,9 @@ export class DemoService {
       id, title: t.title, description: "", status: t.status, priority: t.priority, importance: t.importance, progressPct: t.progressPct,
       dueAt: t.dueOffset === null ? null : addDays(today, t.dueOffset), startDate: created, estimated: t.estimatedMinutes, actual: t.loggedMinutes, completedAt: completed,
       blockedReason: t.blockedReason, teamId: t.teamKey ? teamId.get(t.teamKey)! : null, createdBy: creator, createdAt: at(created), updatedAt: updated,
+      objectiveId: t.objectiveKey ? objectiveId.get(t.objectiveKey) ?? null : null,
+      keyResultId: t.objectiveKey && t.krIndex !== null ? keyResultIds.get(t.objectiveKey)?.[t.krIndex] ?? null : null,
+      outcomeSummary: t.outcome?.summary ?? null, outcomeQuality: t.outcome?.quality ?? null, outcomeReviewedBy: t.outcome?.qualityBy ? personId.get(t.outcome.qualityBy) ?? null : null,
     });
     repo.insertTaskAssignment({ id: newId(), taskId: id, membershipId: assignee, by: creator, now: at(created) });
     const step = (type: string, from: string | null, to: string | null, day: string, hour: number, extra: { progress?: number; minutes?: number; body?: string } = {}) =>
@@ -194,7 +228,7 @@ export class DemoService {
       this.o.store.sessions.deleteForUsers(userIds);
       this.o.store.users.deleteDemo(userIds);
       repo.markRemoved(batch.id, ctx.membershipId, now);
-      this.o.audit.record(tdb, ctx, { action: "demo.remove", entityType: "demo", entityId: null, summary: `Removed demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks`, before: counts });
+      this.o.audit.record(tdb, ctx, { action: "demo.remove", entityType: "demo", entityId: null, summary: `Removed demo data: ${counts.people} people, ${counts.departments} departments, ${counts.teams} teams, ${counts.tasks} tasks, ${counts.objectives} objectives`, before: counts });
     });
     return this.status(auth, requestId, caps);
   }

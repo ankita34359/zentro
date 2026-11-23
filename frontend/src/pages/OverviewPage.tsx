@@ -19,6 +19,7 @@ import { ProgressRing } from "@/motion/ProgressRing";
 import { Stagger, StaggerItem } from "@/motion/Stagger";
 import { NAV_ITEMS } from "@/routes/navigation";
 import { Metric } from "@/components/common/Metric";
+import { Attainment } from "@/pages/okrs/okrUi";
 
 /** Shown before the server's numbers arrive (and when they cannot be loaded): nothing is claimed as done. */
 const DEFAULT_STEPS: ChecklistItem[] = [
@@ -177,6 +178,38 @@ function CompletedChart({ days }: { days: { date: string; count: number }[] }) {
   );
 }
 
+function ObjectivesCard({ o, unaligned }: { o: NonNullable<Overview["objectives"]>; unaligned: number }) {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>Company objectives</CardTitle>
+        <CardDescription>How far each active company objective has really come, from the values recorded on its key results.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {o.items.length === 0 ? (
+          <p className="text-label text-muted-foreground">
+            No active company objective is visible to you yet. <Link to="/okrs" className="font-medium text-primary-ink underline">Open OKRs &amp; Goals</Link>
+          </p>
+        ) : (
+          <ul aria-label="Company objectives" className="grid gap-4 lg:grid-cols-2">
+            {o.items.map((i) => (
+              <li key={i.id} className="space-y-1.5">
+                <Link to={`/okrs?objective=${i.id}`} className="text-label font-medium hover:text-primary-ink">{i.title}</Link>
+                <Attainment pct={i.attainmentPct} dataState={i.dataState} elapsedPct={i.elapsedPct} label={`Progress of ${i.title}`} />
+              </li>
+            ))}
+          </ul>
+        )}
+        {unaligned > 0 && (
+          <p className="border-t pt-3 text-label text-muted-foreground">
+            {unaligned} of your open {unaligned === 1 ? "task supports" : "tasks support"} no objective. <Link to="/my-work/tasks" className="font-medium text-primary-ink underline">See your tasks</Link>
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function OrganizationCards({ org }: { org: NonNullable<Overview["organization"]> }) {
   const statuses = STATUS_ORDER.filter((s) => (org.tasksByStatus[s] ?? 0) > 0);
   const total = statuses.reduce((n, s) => n + (org.tasksByStatus[s] ?? 0), 0);
@@ -291,6 +324,7 @@ export default function OverviewPage() {
           <>
             <StaggerItem className={o.team ? "" : "lg:col-span-2"}><YourWork o={o} /></StaggerItem>
             {o.team && <StaggerItem className="lg:col-span-2"><TeamCard t={o.team} /></StaggerItem>}
+            {o.objectives && <StaggerItem className="lg:col-span-3"><ObjectivesCard o={o.objectives} unaligned={o.personal.unalignedOpen} /></StaggerItem>}
             {o.organization && <OrganizationCards org={o.organization} />}
           </>
         )}

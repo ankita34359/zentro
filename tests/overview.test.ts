@@ -3,6 +3,8 @@ import type { Response } from "supertest";
 import type { TestApp } from "./helpers/app.js";
 import { get, makeAuthApp, post, signUpWithOrg } from "./helpers/auth.js";
 import { addPerson, roleIds } from "./helpers/roles.js";
+import request from "supertest";
+import { ORIGIN } from "./helpers/app.js";
 
 let t: TestApp;
 afterEach(() => t?.cleanup());
@@ -42,6 +44,23 @@ describe("Overview (stage 6.1)", () => {
     expect(await state()).toMatchObject({ reporting: true, tasks: false });
     await created("/api/tasks", { title: "First", assigneeIds: [b] }, owner);
     expect(await state()).toMatchObject({ tasks: true, objective: false, kpi: false });
+    await created("/api/objectives", { level: "company", title: "Grow", startDate: "2026-01-01", endDate: "2026-12-31" }, owner);
+    expect(await state()).toMatchObject({ objective: true, kpi: false });
+  });
+
+  it("shows company objectives with their real attainment, 'no data' as null, and how many of my open tasks support none", async () => {
+    t = makeAuthApp();
+    const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
+    const o = (await post(t.app, "/api/objectives", { level: "company", title: "Grow", startDate: "2026-01-01", endDate: "2026-12-31", keyResults: [{ title: "Deals", targetValue: 10 }] }, owner)).body.data;
+    await created("/api/tasks", { title: "Unlinked" }, owner);
+    const linked = await created("/api/tasks", { title: "Linked" }, owner);
+    await request(t.app).patch(`/api/tasks/${linked}`).set("Origin", ORIGIN).set("Cookie", owner).send({ objectiveId: o.id });
+    let ov = await overview(owner);
+    expect(ov.objectives.items).toEqual([expect.objectContaining({ id: o.id, title: "Grow", attainmentPct: null, dataState: "none" })]);
+    expect(ov.personal.unalignedOpen).toBe(1);
+    await post(t.app, `/api/key-results/${o.keyResults[0].id}/progress`, { value: 5 }, owner);
+    ov = await overview(owner);
+    expect(ov.objectives.items[0]).toMatchObject({ attainmentPct: 50, dataState: "ok" });
   });
 
   it("counts what is really there: statuses, overdue work, completions by day, and the load of each department", async () => {
@@ -104,7 +123,7 @@ describe("Overview (stage 6.1)", () => {
     await created("/api/tasks", { title: "Acme only" }, owner);
     const none = await addPerson(t.app, owner, "none@example.com", undefined, "No Role");
     const o = await overview(none.cookie);
-    expect(o).toMatchObject({ preset: "personal", team: null, organization: null, personal: { open: 0 } });
+    expect(o).toMatchObject({ preset: "personal", team: null, organization: null, objectives: null, personal: { open: 0 } }); // no okr.view: no objectives widget
     expect(o.flags.canManageDemo).toBe(false);
     const ownerB = await signUpWithOrg(t.app, "b-owner@example.com", "Beta Co");
     const b = await overview(ownerB);
@@ -122,7 +141,10 @@ describe("Overview (stage 6.1)", () => {
     expect(exec.organization.departmentLoad.length).toBeGreaterThanOrEqual(5);
     expect(exec.organization.tasksByStatus.completed).toBeGreaterThan(20);
     expect(exec.organization.completedByDay.reduce((n: number, d: { count: number }) => n + d.count, 0)).toBeGreaterThan(5);
-    expect(exec.checklist.filter((c: { done: boolean }) => c.done).map((c: { key: string }) => c.key)).toEqual(["departments", "people", "reporting", "tasks"]);
+    expect(exec.checklist.filter((c: { done: boolean }) => c.done).map((c: { key: string }) => c.key)).toEqual(["departments", "people", "reporting", "objective", "tasks"]);
+    expect(exec.objectives.total).toBeGreaterThanOrEqual(3);
+    expect(exec.objectives.items.length).toBeGreaterThanOrEqual(3);
+    expect(exec.objectives.items.some((i: { attainmentPct: number | null }) => i.attainmentPct !== null && i.attainmentPct > 0)).toBe(true);
     const personas = (await get(t.app, "/api/demo/personas", owner)).body.data as { id: string; designation: string; roles: string[] }[];
     const view = async (id: string) => {
       const r = await post(t.app, `/api/demo/view-as/${id}`, undefined, owner);

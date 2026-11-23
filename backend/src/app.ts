@@ -107,7 +107,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerTaskRoutes(registry, { permissions, tasks: taskService });
   registerNotificationRoutes(registry, { notifications });
   registerOkrRoutes(registry, { permissions, okr: okrService });
-  registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService }) });
+  registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);

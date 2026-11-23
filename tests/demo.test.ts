@@ -8,6 +8,10 @@ import { roleIds } from "./helpers/roles.js";
 let t: TestApp;
 afterEach(() => t?.cleanup());
 
+const send = (method: "patch" | "delete", path: string, body: Record<string, unknown> | undefined, cookie: string) => {
+  const r = request(t.app)[method](path).set("Origin", ORIGIN).set("Cookie", cookie);
+  return body ? r.send(body) : r;
+};
 const one = <T>(sql: string, ...p: unknown[]) => t.db.prepare(sql).get(...p) as T;
 const code = (r: { body: { error?: { code?: string } } }) => r.body.error?.code;
 const created = async (path: string, body: Record<string, unknown>, cookie: string): Promise<string> => {
@@ -60,8 +64,11 @@ describe("Load demo data", () => {
     expect(flagged.organization_memberships).toBe(c.people);
     expect(flagged.tasks).toBe(c.tasks);
     expect(flagged.users).toBe(c.people);
+    expect(c.objectives).toBeGreaterThanOrEqual(12);
+    expect(flagged.objectives).toBe(c.objectives);
+    expect(flagged.key_results).toBe(c.keyResults);
     expect(code(await post(t.app, "/api/demo/load", undefined, owner))).toBe("demo_loaded");
-    expect((await audit(owner))[0]!.summary).toMatch(/^Loaded demo data: \d+ people, 6 departments, 12 teams, \d+ tasks$/);
+    expect((await audit(owner))[0]!.summary).toMatch(/^Loaded demo data: \d+ people, 6 departments, 12 teams, \d+ tasks, \d+ objectives$/);
     // the company is real data the rest of the app reads
     const dirs = (await get(t.app, "/api/employees?limit=500", owner)).body.data;
     expect(dirs.total).toBe(c.people! + 1);
@@ -282,5 +289,66 @@ describe("View as a demo person", () => {
     await post(t.app, "/api/demo/remove", undefined, owner);
     expect((await get(t.app, "/api/auth/me", cookie)).status).toBe(401);
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM sessions WHERE impersonated_by_user_id IS NOT NULL").n).toBe(0);
+  });
+});
+
+describe("Demo objectives, key results and linked tasks (stages 3.1 and 4.2)", () => {
+  it("loads company, department, team and personal objectives with recorded values, an honest 'no data' key result, linked tasks, outcomes and dependencies", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const list = (await get(t.app, "/api/objectives", owner)).body.data as { id: string; level: string; lifecycle: string; attainmentPct: number | null; dataState: string; isDemo: boolean; published: boolean; title: string }[];
+    expect(new Set(list.map((o) => o.level))).toEqual(new Set(["company", "department", "team", "individual"]));
+    expect(list.every((o) => o.isDemo)).toBe(true);
+    expect(list.filter((o) => o.published).length).toBeGreaterThanOrEqual(2);
+    expect(list.some((o) => o.lifecycle === "draft")).toBe(true);
+    expect(list.some((o) => o.lifecycle === "completed")).toBe(true);
+    expect(list.some((o) => o.attainmentPct !== null && o.attainmentPct > 0)).toBe(true);
+    // a key result with nothing recorded shows null, never 0
+    const second = (await get(t.app, `/api/objectives/${list.find((o) => o.title.startsWith("Make Zentro"))!.id}`, owner)).body.data;
+    const none = second.keyResults.find((k: { title: string }) => k.title === "Self-serve activation rate");
+    expect(none).toMatchObject({ currentValue: null, attainmentPct: null });
+    expect(second.attainmentPct).not.toBeNull(); // the others still count: the objective is computed from the key results that have data
+    // linked tasks, outcomes (some reviewed by a manager, never by the person who did the work) and dependencies exist
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM tasks WHERE is_demo = 1 AND objective_id IS NOT NULL").n).toBeGreaterThan(30);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM tasks WHERE is_demo = 1 AND outcome_summary IS NOT NULL AND status = 'completed'").n).toBeGreaterThan(3);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM tasks t WHERE t.outcome_reviewed_by IS NOT NULL AND EXISTS (SELECT 1 FROM task_assignments a WHERE a.task_id = t.id AND a.assignee_membership_id = t.outcome_reviewed_by)").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM task_dependencies").n).toBeGreaterThan(0);
+    // no open task waits for a task that depends on it (the seed cannot create a loop), and no finished task waits for an unfinished one
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM task_dependencies d JOIN tasks a ON a.id = d.task_id JOIN tasks b ON b.id = d.depends_on_task_id WHERE a.status IN ('completed', 'cancelled') AND b.status NOT IN ('completed', 'cancelled')").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_progress_history WHERE source <> 'demo'").n).toBe(0);
+  });
+
+  it("view as a department head: they see their department's objectives and the published company ones, not other departments' drafts", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const personas = (await get(t.app, "/api/demo/personas", owner)).body.data as { id: string; designation: string; department: string }[];
+    const vp = personas.find((p) => p.designation === "Vice President" && p.department === "Product & Design")!;
+    const r = await post(t.app, `/api/demo/view-as/${vp.id}`, undefined, owner);
+    const cookie = ([] as string[]).concat((r.headers["set-cookie"] as unknown as string[]) ?? []).map((c) => c.split(";")[0]).join("; ");
+    const titles = ((await get(t.app, "/api/objectives", cookie)).body.data as { title: string }[]).map((o) => o.title);
+    expect(titles).toContain("Redesign the first-run experience");
+    expect(titles).toContain("Reach $12M in annual recurring revenue"); // published
+    expect(titles).not.toContain("Build a team people want to stay in"); // a company objective that is not published
+  });
+
+  it("removal removes every objective, key result, recorded value and dependency of the demo, and leaves real ones untouched; real data pointing at demo objectives blocks it", async () => {
+    const { owner } = await setup();
+    const real = await created("/api/objectives", { level: "company", title: "My real objective", startDate: "2026-01-01", endDate: "2026-12-31", keyResults: [{ title: "Real KR", targetValue: 10 }] }, owner);
+    await post(t.app, "/api/demo/load", undefined, owner);
+    // a real task linked to a demo objective stops the removal
+    const demoObjective = ((await get(t.app, "/api/objectives", owner)).body.data as { id: string; isDemo: boolean }[]).find((o) => o.isDemo)!;
+    const task = await created("/api/tasks", { title: "Real task for a demo goal" }, owner);
+    expect((await send("patch", `/api/tasks/${task}`, { objectiveId: demoObjective.id }, owner)).status).toBe(200);
+    const blocked = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(code(blocked)).toBe("demo_blocked");
+    expect((blocked.body.error.details.blockers as { kind: string }[]).map((b) => b.kind)).toContain("objective_tasks");
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objectives WHERE is_demo = 1").n).toBeGreaterThan(0); // nothing changed
+    await send("patch", `/api/tasks/${task}`, { objectiveId: null }, owner);
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objective_progress_history").n).toBe(0); // the real objective has none recorded
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM task_dependencies").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM objectives").n).toBe(1);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM key_results").n).toBe(1);
+    expect((await get(t.app, `/api/objectives/${real}`, owner)).body.data.title).toBe("My real objective");
   });
 });
