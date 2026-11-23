@@ -1,0 +1,32 @@
+# Checks on every pull request into main: typecheck, build, tests, dependency audit.
+# No secrets are used and nothing is deployed from here (deploys stay manual, see scripts/embarko-deploy.sh).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.2" # the exact version the app runs on in production
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - name: Audit production dependencies (high severity and above)
+        run: npm audit --omit=dev --audit-level=high
