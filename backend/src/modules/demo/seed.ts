@@ -114,6 +114,19 @@ export interface DemoMentorship {
   goals: string;
   activities: { dayOffset: number; type: "one_on_one" | "feedback" | "review" | "unblock" | "training" | "goal_setting"; minutes: number; summary: string }[];
 }
+export interface DemoReview {
+  reviewerKey: string;
+  subjectKey: string;
+  /** "last" is the previous quarter (closed), "current" this one. */
+  quarter: "last" | "current";
+  status: "draft" | "submitted" | "acknowledged";
+  rating: number;
+  sharedSummary: string;
+  developmentFocus: string;
+  privateNotes: string;
+  /** Days after the end of the quarter the review was submitted (for the previous quarter). */
+  daysAfterEnd: number;
+}
 export interface DemoCompany {
   departments: DemoDepartment[];
   teams: DemoTeam[];
@@ -125,6 +138,7 @@ export interface DemoCompany {
   objectives: DemoObjective[];
   kpis: DemoKpi[];
   mentorships: DemoMentorship[];
+  reviews: DemoReview[];
 }
 
 /** Small deterministic generator (mulberry32). */
@@ -587,6 +601,26 @@ export function buildDemoCompany(seed: string, today = "2026-02-14"): DemoCompan
     }
   }
 
+  // ----- reviews (stage 5.6): managers, leads and department heads review their direct reports for last quarter, mostly on time,
+  // some late, some not at all; a few drafts for this quarter. Its own random stream, drawn after everything else. -----
+  const reviews: DemoReview[] = [];
+  {
+    const rr = rng(`reviews:${seed}`);
+    const rpick = <T,>(xs: readonly T[]): T => xs[Math.floor(rr() * xs.length)]!;
+    const SUMMARY = ["Delivered steadily and communicated well. Took on harder work than last quarter.", "Reliable and thoughtful. Good judgement about what to do first.", "Strong quarter with a clear step up in ownership.", "Solid contribution; a few deadlines slipped and were flagged early.", "Made real progress on the goals we agreed. Teammates value the help."];
+    const FOCUS = ["Take on one larger piece of work end to end next quarter.", "Share what you learn with the team more often.", "Practise estimating work before starting it.", "Spend time with a mentor on design decisions."];
+    const PRIVATE = ["Capable of more; worth discussing a stretch assignment. Not for sharing yet.", "Was visibly stretched by the workload in the middle of the quarter. Keep an eye on it.", "Candid note: a tendency to avoid conflict in reviews. Coach on it.", "Strong candidate to lead a small project next quarter."];
+    for (const subject of people) {
+      if (!subject.managerKey) continue;
+      const manager = byKey.get(subject.managerKey);
+      if (!manager || manager.role === "r_employee") continue;
+      const roll = rr();
+      if (roll < 0.18) continue; // nothing written
+      reviews.push({ reviewerKey: manager.key, subjectKey: subject.key, quarter: "last", status: rr() < 0.35 ? "acknowledged" : "submitted", rating: 3 + Math.floor(rr() * 3), sharedSummary: rpick(SUMMARY), developmentFocus: rpick(FOCUS), privateNotes: rpick(PRIVATE), daysAfterEnd: roll < 0.3 ? 20 + Math.floor(rr() * 12) : Math.floor(rr() * 12) });
+    }
+    for (const r of reviews.slice(0, 4)) reviews.push({ ...r, quarter: "current", status: "draft", daysAfterEnd: 0, sharedSummary: "", rating: 0, privateNotes: "Started: notes to finish." });
+  }
+
   return {
     departments: DEPARTMENTS,
     teams: TEAMS,
@@ -598,6 +632,7 @@ export function buildDemoCompany(seed: string, today = "2026-02-14"): DemoCompan
     objectives,
     kpis,
     mentorships,
+    reviews,
   };
 }
 

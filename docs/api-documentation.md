@@ -302,8 +302,9 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | PATCH | `/api/performance/models/:id` | `performance.configure` | Creates a new version |
 | POST | `/api/performance/models/:id/activate` | `performance.configure` | Validates weights sum to 100 |
 | POST | `/api/performance/models/preview` | `performance.configure` | What-if dry run, stores nothing |
-| GET / POST | `/api/performance/reviews` | `reviews.read_shared` / `reviews.write` | Private notes only with `reviews.read_private` |
-| PATCH | `/api/performance/reviews/:id` | author | submit, acknowledge |
+| GET | `/api/performance/reviews` | baseline: the person reads the shared parts of their own SUBMITTED reviews, never `privateNotes`; authors read their own; `reviews.read_shared` over the person reads submitted ones; `privateNotes` only with `reviews.read_private` over the person | `?periodId&subjectId` (live, 5.6) |
+| POST / PATCH | `/api/performance/reviews[/:id]` | `reviews.write` over the person (PATCH: author only) | `{rating?, sharedSummary?, developmentFocus?, privateNotes?, submit?}`; one per reviewer, person and period; audited without the text (live, 5.6) |
+| POST | `/api/performance/reviews/:id/acknowledge` | baseline: the person reviewed | locks the review (live, 5.6) |
 | GET / POST | `/api/mentorship/assignments` | `mentorship.view` / `mentorship.manage` | Own pairs and pairs where mentor or mentee is in scope; the mentee must be in the manager's scope; 409 `duplicate`, `loop` (live, 5.5) |
 | GET / PATCH | `/api/mentorship/assignments/:id` | `mentorship.view` / `mentorship.manage` | PATCH: goals, cadence, pause, resume, end (`endDate`, the day it stops applying); an ended one is final (live, 5.5) |
 | GET / POST | `/api/mentorship/assignments/:id/activities` | `mentorship.view` / `mentorship.log` | The mentor (or someone with log over them) logs; not while paused (live, 5.5) |

@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { CompareTab } from "./CompareTab";
 import { MentorshipTab } from "./MentorshipTab";
+import { ReviewsSection } from "./ReviewsSection";
 import { problemText } from "@/lib/authForm";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
@@ -133,6 +134,7 @@ function Scorecard({ periodId, subjectId }: { periodId: string; subjectId: strin
           </section>
         )}
         <Trends subjectId={subjectId} />
+        <ReviewsSection periodId={periodId} subjectId={subjectId} subjectName={card.subject.name} />
       </CardContent>
     </Card>
   );

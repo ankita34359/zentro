@@ -127,6 +127,9 @@ export class DemoRepository {
   insertTaskComment(r: { id: string; taskId: string; author: string; body: string; now: string }): void {
     this.tdb.run("INSERT INTO task_comments (id, organization_id, task_id, author_membership_id, body, created_at) VALUES (@id, @organization_id, @taskId, @author, @body, @now)", r);
   }
+  insertReview(r: { id: string; periodId: string; subjectId: string; reviewerId: string; status: string; rating: number | null; sharedSummary: string; developmentFocus: string; privateNotes: string; submittedAt: string | null; acknowledgedAt: string | null; now: string }): void {
+    this.tdb.run("INSERT INTO performance_reviews (id, organization_id, period_id, subject_membership_id, reviewer_membership_id, status, rating, shared_summary, development_focus, private_notes, submitted_at, acknowledged_at, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @periodId, @subjectId, @reviewerId, @status, @rating, @sharedSummary, @developmentFocus, @privateNotes, @submittedAt, @acknowledgedAt, 1, @now, @now)", r);
+  }
   insertMentorship(a: { id: string; mentorId: string; menteeId: string; startDate: string; goals: string; cadenceDays: number; by: string; now: string }): void {
     this.tdb.run("INSERT INTO mentorship_assignments (id, organization_id, mentor_membership_id, mentee_membership_id, start_date, status, goals, cadence_days, created_by_membership_id, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @mentorId, @menteeId, @startDate, 'active', @goals, @cadenceDays, @by, 1, @now, @now)", a);
   }
@@ -186,6 +189,7 @@ export class DemoRepository {
       tasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = @organization_id AND is_demo = 1"),
       objectives: one("SELECT COUNT(*) AS n FROM objectives WHERE organization_id = @organization_id AND is_demo = 1"),
       keyResults: one("SELECT COUNT(*) AS n FROM key_results WHERE organization_id = @organization_id AND is_demo = 1"),
+      reviews: one("SELECT COUNT(*) AS n FROM performance_reviews WHERE organization_id = @organization_id AND is_demo = 1"),
       mentorships: one("SELECT COUNT(*) AS n FROM mentorship_assignments WHERE organization_id = @organization_id AND is_demo = 1"),
       periods: one("SELECT COUNT(*) AS n FROM performance_periods WHERE organization_id = @organization_id AND is_demo = 1"),
       scorecards: one("SELECT COUNT(*) AS n FROM performance_scorecards WHERE organization_id = @organization_id AND is_demo = 1"),
@@ -218,6 +222,7 @@ export class DemoRepository {
     this.tdb.run(`DELETE FROM mentorship_progress WHERE mentorship_progress.organization_id = @organization_id AND mentorship_progress.assignment_id IN ${DEMO_ASSIGNMENTS}`);
     this.tdb.run(`DELETE FROM mentorship_activities WHERE mentorship_activities.organization_id = @organization_id AND mentorship_activities.assignment_id IN ${DEMO_ASSIGNMENTS}`);
     this.tdb.run(`DELETE FROM mentorship_assignments WHERE mentorship_assignments.organization_id = @organization_id AND mentorship_assignments.id IN ${DEMO_ASSIGNMENTS}`);
+    this.tdb.run(`DELETE FROM performance_reviews WHERE performance_reviews.organization_id = @organization_id AND (performance_reviews.is_demo = 1 OR performance_reviews.subject_membership_id IN ${DEMO_PEOPLE} OR performance_reviews.reviewer_membership_id IN ${DEMO_PEOPLE} OR performance_reviews.period_id IN (SELECT drp.id FROM performance_periods drp WHERE drp.organization_id = @organization_id AND drp.is_demo = 1))`);
     this.tdb.run("DELETE FROM performance_comparisons WHERE performance_comparisons.organization_id = @organization_id AND performance_comparisons.period_id IN (SELECT dpp.id FROM performance_periods dpp WHERE dpp.organization_id = @organization_id AND dpp.is_demo = 1)");
     this.tdb.run(`DELETE FROM performance_score_components WHERE performance_score_components.organization_id = @organization_id AND performance_score_components.score_id IN (SELECT pss.id FROM performance_scores pss WHERE pss.organization_id = @organization_id AND pss.scorecard_id IN ${DEMO_CARDS})`);
     this.tdb.run(`DELETE FROM performance_scores WHERE performance_scores.organization_id = @organization_id AND performance_scores.scorecard_id IN ${DEMO_CARDS}`);

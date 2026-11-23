@@ -30,6 +30,7 @@ const server = (periods: unknown[] = [PERIOD], extra: (url: string, init?: Reque
     if (path === "/api/performance/scores/s2") return envelope(SCORE());
     if (path === "/api/performance/scores/s1") return envelope(SCORE({ scoreId: "s1", runNumber: 1, total: 80, isLatest: false }));
     if (path === "/api/performance/scores/s2/verify") return envelope({ matches: true, expected: { total: 84.3, status: "provisional" }, actual: { total: 84.3, status: "provisional" }, engineVersion: "1", modelVersion: 1, mismatches: [] });
+    if (path === "/api/performance/reviews" && isGet(init)) return envelope([]);
     if (path === "/api/performance/trends") return envelope({ subject: { id: "me-1", name: "Emma Employee" }, componentsHidden: false, points: [], comparison: null });
     if (path === "/api/organization/structure") return envelope({ departments: [], teams: [], roleFamilies: [{ id: "f1", name: "Engineers", description: "", archived: false, archivedAt: null }, { id: "f2", name: "Designers", description: "", archived: false, archivedAt: null }], designations: [], organization: { id: "o", name: "Acme" } });
     if (path === "/api/notifications") return envelope({ notifications: [], unreadCount: 0, nextCursor: null });
@@ -278,5 +279,42 @@ describe("Performance Intelligence (stage 5.2)", () => {
     renderApp("/performance?tab=mentorship");
     expect(await screen.findByText("No mentoring yet")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "New assignment" })).toBeNull();
+  });
+
+  const REVIEW = { id: "rv1", period: { id: "p1", name: "Q4 2026" }, subject: { id: "me-1", name: "Emma Employee" }, reviewer: { id: "mx", name: "Max Manager" }, status: "submitted", rating: 4, sharedSummary: "Strong quarter.", developmentFocus: "Own a bigger piece.", submittedAt: "2026-11-20T10:00:00.000Z", acknowledgedAt: null, can: { edit: false, acknowledge: true } };
+
+  it("Reviews, as the person reviewed: the shared summary and focus, an acknowledge button, and no private note anywhere", async () => {
+    setMe(withCaps({}));
+    const f = server([PERIOD], (url, init) => {
+      if (url.startsWith("/api/performance/reviews?") && isGet(init)) return envelope([REVIEW]);
+      if (url === "/api/performance/reviews/rv1/acknowledge" && init?.method === "POST") return envelope({ ...REVIEW, status: "acknowledged", can: { edit: false, acknowledge: false } });
+      return undefined;
+    });
+    renderApp("/performance");
+    const reviews = await screen.findByRole("region", { name: "Reviews" });
+    expect(await within(reviews).findByText("Strong quarter.")).toBeTruthy();
+    expect(within(reviews).getByText(/Own a bigger piece/)).toBeTruthy();
+    expect(within(reviews).queryByRole("note", { name: "Private note" })).toBeNull();
+    expect(within(reviews).queryByText(/Private note/)).toBeNull();
+    await userEvent.click(within(reviews).getByRole("button", { name: "I have read this review" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/performance/reviews/rv1/acknowledge" && (c[1] as RequestInit)?.method === "POST")).toBe(true));
+  });
+
+  it("Reviews, as the author: the private note is shown and labelled as private; a new review can be saved as a draft and submitted", async () => {
+    setMe(withCaps({ "reviews.write": ["all_in_scope"] }));
+    const f = server([PERIOD], (url, init) => {
+      if (url.startsWith("/api/performance/reviews?") && isGet(init)) return envelope([{ ...REVIEW, reviewer: { id: "me-9", name: "Me" }, privateNotes: "Worth a stretch role.", can: { edit: true, acknowledge: false } }]);
+      return undefined;
+    });
+    renderApp("/performance");
+    const reviews = await screen.findByRole("region", { name: "Reviews" });
+    const note = await within(reviews).findByRole("note", { name: "Private note" });
+    expect(within(note).getByText("Worth a stretch role.")).toBeTruthy();
+    expect(within(note).getByText(/Emma Employee cannot/)).toBeTruthy();
+    expect(within(reviews).queryByRole("button", { name: /Write a review of/ })).toBeNull(); // they already wrote one for this period
+    await userEvent.click(within(reviews).getByRole("button", { name: "Edit review" }));
+    const form = await within(reviews).findByRole("form", { name: "Edit review" });
+    expect(within(form).getByLabelText("Private note")).toBeTruthy();
+    expect(f.mock.calls.some((c) => (c[1] as RequestInit)?.method === "PATCH")).toBe(false);
   });
 });

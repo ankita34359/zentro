@@ -47,7 +47,19 @@ export interface ModelDef {
 // ---------- the snapshot the providers read ----------
 
 export interface KeyResultInput { id: string; title: string; direction: "increase" | "decrease"; method: "linear" | "binary" | "manual"; start: number; target: number; /** the value recorded at the period end, or null: nothing recorded */ current: number | null; weight: number }
-export interface ObjectiveInput { id: string; title: string; level: string; weight: number; lifecycle: string; keyResults: KeyResultInput[] }
+export interface ObjectiveInput {
+  id: string;
+  title: string;
+  level: string;
+  weight: number;
+  lifecycle: string;
+  keyResults: KeyResultInput[];
+  /** Stage 5.6: the objective's window, its health on the reference day, and the objective it contributes to (with how heavily). */
+  start?: string;
+  end?: string;
+  health?: string | null;
+  parent?: { id: string; title: string; weight: number } | null;
+}
 export interface KpiInput {
   assignmentId: string;
   kpiId: string;
@@ -90,7 +102,7 @@ export interface ScoreInputs {
   /** Direct values for a component (the what-if calculator, and tests): used instead of running its provider. */
   overrides?: Record<string, { value: number | null; state?: DataState; sampleSize?: number; coverage?: number }>;
   /** Sections other providers read (mentorship, departments, leadership...). Added by later stages as plain data. */
-  extra?: { mentorship?: MentorshipInputs } & Record<string, unknown>;
+  extra?: { mentorship?: MentorshipInputs; team?: TeamInputs; management?: ManagementInputs; department?: DepartmentInputs; org?: OrgInputs } & Record<string, unknown>;
 }
 
 // ---------- the result ----------
@@ -153,4 +165,12 @@ export interface MentorshipLink {
   activities: number;
   cadenceDays: number;
 }
+/** The people a team lead or manager answers for: their change between periods (stage 5.6). Aggregates only: no one person's score is listed. */
+export interface TeamInputs { members: { baseline: number | null; current: number | null }[] }
+/** A manager's duties: did each direct report get a review from them (stage 5.6). */
+export interface ManagementInputs { reports: { submitted: boolean; onTime: boolean }[]; graceDays: number; periodOpen: boolean }
+/** A department head's people: one line per department headed, the mean score of the people in it. */
+export interface DepartmentInputs { departments: { name: string; people: number; mean: number | null }[] }
+/** The organization's own objectives (company and department level), for organizational health. */
+export interface OrgInputs { objectives: ObjectiveInput[] }
 export interface MentorshipInputs { asMentor: MentorshipLink[]; asMentee: MentorshipLink[] }

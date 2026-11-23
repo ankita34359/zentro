@@ -2,16 +2,19 @@ import type { TenantDb } from "../../db/tenant.js";
 import { KpiRepository, type KpiAssignmentRow, type KpiRow, type MeasurementRow } from "../kpi/repositories/kpi.js";
 import { periodEndOf, periodStartOf, type Frequency } from "../kpi/periods.js";
 import { currentRows, subjectKeyOf, subjectOfRow } from "../kpi/series.js";
+import { keyResultAttainment, objectiveAttainment } from "../okr/attainment.js";
 import { OkrRepository, type KeyResultRow, type ObjectiveRow } from "../okr/repositories/okr.js";
 import { StructureRepository } from "../organization/repositories/structure.js";
 import { PeopleRepository } from "../people/repositories/people.js";
 import { addDays } from "../tasks/dates.js";
 import { TasksRepository } from "../tasks/repositories/tasks.js";
+import { objectiveHealth } from "../okr/health.js";
+import { ReviewRepository } from "../reviews/repositories/reviews.js";
 import { MentorshipRepository, type ActivityRow, type AssignmentRow } from "../mentorship/repositories/mentorship.js";
 import { okrProvider } from "./engine/providers/okr.js";
 import { roundHalfUp1 } from "./engine/math.js";
 import { ScorecardRepository } from "./repositories/scoring.js";
-import type { KeyResultInput, KpiInput, MentorshipInputs, MentorshipLink, ObjectiveInput, ScoreInputs, TaskInput } from "./engine/types.js";
+import type { DepartmentInputs, KeyResultInput, KpiInput, ManagementInputs, MentorshipInputs, TeamInputs, MentorshipLink, ObjectiveInput, ScoreInputs, TaskInput } from "./engine/types.js";
 
 export interface PeriodInfo { id: string; start: string; end: string; open: boolean }
 
@@ -40,6 +43,12 @@ export class Collector {
   private readonly names = new Map<string, string>();
   private readonly mentorLinks: { a: AssignmentRow; overlapDays: number }[] = [];
   private readonly activities: ActivityRow[];
+  private readonly parentOf = new Map<string, { id: string; weight: number }>();
+  private readonly titleOf = new Map<string, string>();
+  private readonly reviews: ReviewRepository;
+  private readonly structure: StructureRepository;
+  private readonly reportRows: ReturnType<PeopleRepository["reportingRows"]>;
+  private readonly deptMembers = new Map<string, Set<string>>();
   private readonly cardCache = new Map<string, { periodId: string; start: string; end: string; total: number | null; delivery: number | null; quality: number | null }[]>();
 
   constructor(tdb: TenantDb, readonly period: PeriodInfo, today: string) {
@@ -58,6 +67,10 @@ export class Collector {
     for (const r of this.people.deptRows({ asOf: ref })) if (r.membership_type === "head") this.headedDepts.set(r.membership_id, new Set([...(this.headedDepts.get(r.membership_id) ?? []), r.department_id]));
 
     this.cards = new ScorecardRepository(tdb);
+    this.reviews = new ReviewRepository(tdb);
+    this.structure = structure;
+    this.reportRows = this.people.reportingRows({ asOf: ref }).filter((r) => r.relationship_type === "primary");
+    for (const r of this.people.deptRows({ asOf: ref })) this.deptMembers.set(r.department_id, new Set([...(this.deptMembers.get(r.department_id) ?? []), r.membership_id]));
     for (const p of this.people.people()) this.names.set(p.id, p.display_name);
     const mentorship = new MentorshipRepository(tdb);
     this.activities = mentorship.activities();
@@ -77,6 +90,8 @@ export class Collector {
     for (const k of okr.keyResults()) krs.set(k.objective_id, [...(krs.get(k.objective_id) ?? []), k]);
     const history = new Map<string, { day: string; value: number }[]>();
     for (const h of okr.allHistory()) if (h.value !== null && h.key_result_id) history.set(h.key_result_id, [...(history.get(h.key_result_id) ?? []), { day: h.recorded_at.slice(0, 10), value: h.value }]);
+    for (const o of okr.objectives()) this.titleOf.set(o.id, o.title);
+    for (const r of okr.relationships()) this.parentOf.set(r.child_objective_id, { id: r.parent_objective_id, weight: r.contribution_weight });
     this.okr = { objectives: okr.objectives().filter((o) => overlaps(o.start_date, o.end_date, period.start, period.end)), krs, history, assignments: okr.assignments(true) };
 
     const kpiRepo = new KpiRepository(tdb);
@@ -112,7 +127,10 @@ export class Collector {
       const upTo = (this.okr.history.get(k.id) ?? []).filter((h) => h.day <= this.asOf);
       return { id: k.id, title: k.title, direction: k.direction as "increase" | "decrease", method: k.progress_method as KeyResultInput["method"], start: k.start_value, target: k.target_value, current: upTo.length ? upTo[upTo.length - 1]!.value : null, weight: k.weight };
     });
-    return { id: o.id, title: o.title, level: o.level, weight: o.weight, lifecycle: o.lifecycle, keyResults };
+    const att = objectiveAttainment(keyResults.map((k) => ({ attainment: keyResultAttainment({ direction: k.direction, method: k.method, start: k.start, target: k.target, current: k.current, weight: k.weight }).value, weight: k.weight })));
+    const parent = this.parentOf.get(o.id);
+    const health = objectiveHealth({ lifecycle: o.lifecycle, startDate: o.start_date, endDate: o.end_date, today: this.asOf, progress: att.value }).health;
+    return { id: o.id, title: o.title, level: o.level, weight: o.weight, lifecycle: o.lifecycle, keyResults, start: o.start_date, end: o.end_date, health, parent: parent ? { id: parent.id, title: this.titleOf.get(parent.id) ?? "Objective", weight: parent.weight } : null };
   }
   private objectivesFor(m: string): ScoreInputs["objectives"] {
     const mine = (o: ObjectiveRow): boolean => o.owner_membership_id === m || this.okr.assignments.some((a) => a.objective_id === o.id && a.assignee_membership_id === m && a.start_date <= this.period.end && (a.end_date === null || a.end_date >= this.period.start));
@@ -197,6 +215,22 @@ export class Collector {
     this.cardCache.delete(m);
   }
 
+  /** How many people are (directly or further down) under this person: leaders are scored after the people they answer for. */
+  private reachMemo = new Map<string, number>();
+  reach(m: string): number {
+    const known = this.reachMemo.get(m);
+    if (known !== undefined) return known;
+    const seen = new Set<string>([m]);
+    const queue = [m];
+    while (queue.length > 0) {
+      const next = queue.pop()!;
+      const below = [...this.answerableFor(next), ...this.headedDepartmentsOf(next).flatMap((d) => [...(this.deptMembers.get(d) ?? [])])];
+      for (const x of below) if (!seen.has(x)) { seen.add(x); queue.push(x); }
+    }
+    this.reachMemo.set(m, seen.size - 1);
+    return seen.size - 1;
+  }
+
   /** True for people who mentor someone in this period: their mentees' scores must be calculated before theirs. */
   mentorsAnyone(m: string): boolean {
     return this.mentorLinks.some((l) => l.a.mentor_membership_id === m);
@@ -259,8 +293,58 @@ export class Collector {
     };
   }
 
-  /** The snapshot for one person. */
-  inputsFor(m: string, label: string): ScoreInputs {
+  // ---------- leadership (stage 5.6) ----------
+
+  private directReports(m: string): string[] {
+    return this.reportRows.filter((r) => r.manager_membership_id === m).map((r) => r.subordinate_membership_id);
+  }
+  /** The people someone answers for: their direct reports and the members of the teams they lead. */
+  private answerableFor(m: string): string[] {
+    const set = new Set<string>(this.directReports(m));
+    for (const t of this.ledTeamsOf(m)) for (const x of this.membersOfTeam(t)) set.add(x);
+    set.delete(m);
+    return [...set];
+  }
+  private totalIn(person: string, periodId: string): number | null {
+    return this.scoresOfMentee(person).find((s) => s.periodId === periodId)?.total ?? null;
+  }
+  private baselineTotal(person: string): number | null {
+    const earlier = this.scoresOfMentee(person).filter((s) => s.start < this.period.start && s.total !== null);
+    return earlier.length ? earlier[earlier.length - 1]!.total : null;
+  }
+  teamFor(m: string): TeamInputs {
+    return { members: this.answerableFor(m).map((p) => ({ baseline: this.baselineTotal(p), current: this.totalIn(p, this.period.id) })) };
+  }
+  departmentFor(m: string): DepartmentInputs {
+    const names = new Map(this.structure.departments().map((d) => [d.id, d.name]));
+    return {
+      departments: this.headedDepartmentsOf(m).map((d) => {
+        const totals = [...(this.deptMembers.get(d) ?? [])].filter((p) => p !== m).map((p) => this.totalIn(p, this.period.id)).filter((x): x is number => x !== null);
+        return { name: names.get(d) ?? "Department", people: totals.length, mean: totals.length ? Math.round((totals.reduce((a, b) => a + b, 0) / totals.length) * 10) / 10 : null };
+      }),
+    };
+  }
+  managementFor(m: string, graceDays = 14): ManagementInputs {
+    const due = addDays(this.period.end, graceDays);
+    const mine = new Map(this.reviews.forPeriod(this.period.id).filter((r) => r.reviewer_membership_id === m && r.status !== "draft" && r.submitted_at !== null).map((r) => [r.subject_membership_id, r.submitted_at as string]));
+    return { reports: this.directReports(m).map((p) => ({ submitted: mine.has(p), onTime: (mine.get(p) ?? "9999").slice(0, 10) <= due })), graceDays, periodOpen: this.period.open };
+  }
+  orgFor(): { objectives: ObjectiveInput[] } {
+    return { objectives: this.okr.objectives.filter((o) => (o.level === "company" || o.level === "department") && (!o.archived_at || o.archived_at.slice(0, 10) > this.period.end)).map((o) => this.objectiveInput(o)) };
+  }
+
+  /**
+   * The snapshot for one person. `needs` are the provider keys of the model that will score it: only the sections those providers
+   * read are collected (mentorship, team, management, department, organization), so a snapshot holds what the score used and no more.
+   */
+  inputsFor(m: string, label: string, needs?: ReadonlySet<string>): ScoreInputs {
+    const want = (prefix: string): boolean => (needs ? [...needs].some((k) => k.startsWith(prefix)) : false);
+    const extra: NonNullable<ScoreInputs["extra"]> = {};
+    if (want("mentorship.")) extra.mentorship = this.mentorshipFor(m);
+    if (want("team.development")) extra.team = this.teamFor(m);
+    if (want("mgmt.")) extra.management = this.managementFor(m);
+    if (want("dept.team_performance")) extra.department = this.departmentFor(m);
+    if (want("org.health")) extra.org = this.orgFor();
     return {
       subject: { type: "membership", id: m, label },
       period: { start: this.period.start, end: this.period.end, open: this.period.open },
@@ -270,7 +354,7 @@ export class Collector {
       teamKpis: this.teamKpisFor(m),
       tasks: this.tasksFor(m),
       teamTasks: this.teamTasksFor(m),
-      ...(this.mentorLinks.some((l) => l.a.mentor_membership_id === m || l.a.mentee_membership_id === m) ? { extra: { mentorship: this.mentorshipFor(m) } } : {}),
+      ...(Object.keys(extra).length > 0 ? { extra } : {}),
     };
   }
 }

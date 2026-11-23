@@ -1,5 +1,6 @@
 import { clamp, num } from "./math.js";
 import { kpiProvider } from "./providers/kpi.js";
+import { contributionProvider, departmentPeopleProvider, managementProvider, orgHealthProvider, strategicExecutionProvider, teamDevelopmentProvider } from "./providers/leadership.js";
 import { activityProvider, DEFAULT_MENTORSHIP, developmentProvider, menteeGrowthProvider, type MentorshipConfig } from "./providers/mentorship.js";
 import { okrProvider } from "./providers/okr.js";
 import { deliveryProvider, qualityProvider } from "./providers/tasks.js";
@@ -36,6 +37,12 @@ function ownOkrKpi(inputs: ScoreInputs, c: ModelComponent): ProviderResult {
 
 /** Provider code is fixed; weights and thresholds are data (the model). A provider reads only the snapshot. */
 export const PROVIDERS: Record<string, Provider> = {
+  "dept.contribution": (i, c) => contributionProvider(i.objectives.department, c.minSample),
+  "dept.team_performance": (i, c) => departmentPeopleProvider(i.extra?.department, c.minSample),
+  "leadership.strategic_execution": (i, c) => strategicExecutionProvider(i.objectives.company, i.asOf, c.minSample, num(c.config, "attainmentShare", 0.7)),
+  "org.health": (i, c) => orgHealthProvider(i.extra?.org?.objectives ?? [], c.minSample),
+  "team.development": (i, c) => teamDevelopmentProvider(i.extra?.team, c.minSample, num(c.config, "k", 2.5)),
+  "mgmt.responsibilities": (i, c) => managementProvider(i.extra?.management, c.minSample),
   "mentorship.development": (i, c) => developmentProvider(i.extra?.mentorship?.asMentor ?? [], c.minSample, mentorCfg(c)),
   "mentorship.activity": (i) => activityProvider(i.extra?.mentorship?.asMentor ?? []),
   "mentorship.mentee_growth": (i, c) => menteeGrowthProvider(i.extra?.mentorship?.asMentee ?? [], mentorCfg(c)),

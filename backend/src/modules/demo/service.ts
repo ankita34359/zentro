@@ -223,6 +223,7 @@ export class DemoService {
         for (const x of m.activities) repo.insertMentorshipActivity({ id: newId(), assignmentId: aid, type: x.type, occurredOn: addDays(today, x.dayOffset), minutes: x.minutes, summary: x.summary, by: personId.get(m.mentorKey)!, now });
       }
 
+      // (reviews are written after the periods exist, below)
       // scores: the demo's two periods (last quarter and this quarter), and a run for every demo person in each (stage 5.2)
       {
         const scoring = this.o.store.scorecards(tdb);
@@ -238,9 +239,31 @@ export class DemoService {
         ];
         for (const p of periods) scoring.insertPeriod({ id: p.id, name: p.name, periodType: "quarter", startDate: p.start, endDate: p.end, isDemo: true, now });
         this.o.performance.ensureModels(ctx, { tdb, models: this.o.store.scoring(tdb) });
-        // the Mentor model, for the demo's Principal Engineers (who mentor): a demo copy bound to their demo designation
-        seedTemplates(this.o.store.scoring(tdb), by, now, { isDemo: true, only: ["model_mentor"], designationId: designationId.get("Principal Engineer")! });
+        // the standard models for the demo's leadership and mentors, as demo copies bound to the demo designations they hold: the highest role wins
+        {
+          const TEMPLATE_OF: Record<RoleChoice, string | null> = { r_ceo: "model_ceo", r_senior: "model_senior_management", r_dept_head: "model_department_head", r_manager: "model_manager", r_team_lead: "model_team_lead", r_mentor: "model_mentor", r_employee: null };
+          const label: Record<string, string> = { model_ceo: "CEO", model_senior_management: "Senior management", model_department_head: "Department head", model_manager: "Manager", model_team_lead: "Team lead", model_mentor: "Mentor" };
+          const bound = new Set<string>();
+          for (const role of ["r_ceo", "r_senior", "r_dept_head", "r_manager", "r_team_lead", "r_mentor"] as const) {
+            for (const person of company.people.filter((x) => x.role === role)) {
+              if (bound.has(person.designation)) continue;
+              // a title that people in other roles also hold (a Senior Engineer who leads next to ones who do not) stays on the default model
+              if (company.people.some((x) => x.designation === person.designation && x.role !== role)) continue;
+              bound.add(person.designation);
+              const key = TEMPLATE_OF[role]!;
+              seedTemplates(this.o.store.scoring(tdb), by, now, { isDemo: true, only: [key], designationId: designationId.get(person.designation)!, name: `${label[key]} (demo: ${person.designation})` });
+            }
+          }
+        }
         this.o.performance.prepareDemoPeriods(tdb, ctx, periods.map((p) => p.id), today);
+        // last quarter's reviews (and a few drafts for this quarter): the managers' review duty reads them
+        const reviewRepo = repo;
+        for (const rv of company.reviews) {
+          const p = rv.quarter === "last" ? periods[0]! : periods[1]!;
+          const submittedAt = rv.status === "draft" ? null : `${addDays(p.end, rv.daysAfterEnd)}T10:00:00.000Z`;
+          if (submittedAt !== null && submittedAt.slice(0, 10) > today) continue;
+          reviewRepo.insertReview({ id: newId(), periodId: p.id, subjectId: personId.get(rv.subjectKey)!, reviewerId: personId.get(rv.reviewerKey)!, status: rv.status, rating: rv.rating || null, sharedSummary: rv.sharedSummary, developmentFocus: rv.developmentFocus, privateNotes: rv.privateNotes, submittedAt, acknowledgedAt: rv.status === "acknowledged" ? submittedAt : null, now });
+        }
         for (const p of periods) {
           const row = scoring.period(p.id)!;
           const collector = new Collector(tdb, { id: row.id, start: row.start_date, end: row.end_date, open: row.status === "open" }, today);

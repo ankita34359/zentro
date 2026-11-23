@@ -29,7 +29,7 @@ export function runScore(d: { cards: ScorecardRepository; models: ScoringReposit
   if (!model) return null;
   // the engine scores the CANONICAL form of the snapshot and the model (the very text that is stored), so a later verification reproduces it exactly
   const def = JSON.parse(canonicalJson(toModelDef(model, d.models.components(model.id)))) as ModelDef;
-  const inputs = JSON.parse(canonicalJson(collector.inputsFor(m, name))) as ScoreInputs;
+  const inputs = JSON.parse(canonicalJson(collector.inputsFor(m, name, new Set(def.components.map((c) => c.providerKey))))) as ScoreInputs;
   const result = computeScore(inputs, def);
   const { asOf: _asOf, ...stable } = inputs;
   void _asOf;
@@ -59,7 +59,11 @@ export function runScore(d: { cards: ScorecardRepository; models: ScoringReposit
   return { scoreId, created: true, changedFrom: last?.run ?? null };
 }
 
-/** Mentors are scored after everyone else, because a mentor's development score reads their mentees' scores from the same period. */
+/**
+ * Leaders and mentors are scored after the people they answer for or mentor, because their scores read those people's scores from the
+ * same period: first everyone with nobody under them, then those with more and more people under them, mentors last.
+ */
 export function scoringOrder<T extends { id: string }>(people: readonly T[], collector: Collector): T[] {
-  return [...people.filter((p) => !collector.mentorsAnyone(p.id)), ...people.filter((p) => collector.mentorsAnyone(p.id))];
+  const key = (p: T): number => collector.reach(p.id) * 2 + (collector.mentorsAnyone(p.id) ? 1 : 0);
+  return people.map((p, i) => ({ p, i, k: key(p) })).sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.p);
 }

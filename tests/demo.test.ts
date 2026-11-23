@@ -612,6 +612,42 @@ describe("Demo scores (stage 5.2)", () => {
     expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
   });
 
+  it("the demo's leaders have their own models: the CEO has no task component; a department head's contribution and a manager's review duty are scored; a reviewed employee never sees the private note", async () => {
+    const { owner } = await setup();
+    await post(t.app, "/api/demo/load", undefined, owner);
+    const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; status: string }[];
+    const open = periods.find((p) => p.status === "open")!;
+    const closed = periods.find((p) => p.status === "closed")!;
+    const ps = await personas(owner);
+    const cardOf = async (person: { id: string }, periodId: string) => (await get(t.app, `/api/performance/scorecards/for?periodId=${periodId}&subjectId=${person.id}`, owner)).body.data.latest;
+    const ceo = ps.find((p) => p.designation === "Chief Executive Officer")!;
+    const ceoCard = await cardOf(ceo, open.id);
+    expect(ceoCard.modelName).toMatch(/^CEO/);
+    expect(ceoCard.components.map((c: { providerKey: string }) => c.providerKey)).not.toContain("tasks.delivery");
+    expect(ceoCard.components.find((c: { key: string }) => c.key === "company_okr").state).toBe("ok");
+    const vp = ps.find((p) => p.designation === "Vice President" && p.department === "Engineering")!;
+    const vpCard = await cardOf(vp, open.id);
+    expect(vpCard.modelName).toMatch(/^Department head/);
+    const contribution = vpCard.components.find((c: { key: string }) => c.key === "contribution");
+    expect(contribution.state).toBe("ok");
+    expect(contribution.contributors[0].label).toMatch(/ → /); // the chain: department objective → company objective
+    // the managers' review duty for last quarter: scored from the reviews they wrote, on time or late
+    const duties = t.db.prepare("SELECT c.data_state AS state, c.normalized_score AS score FROM performance_score_components c JOIN performance_scores s ON s.id = c.score_id JOIN performance_scorecards k ON k.latest_score_id = s.id WHERE c.provider_key = 'mgmt.responsibilities' AND k.period_id = ?").all(closed.id) as { state: string; score: number | null }[];
+    expect(duties.length).toBeGreaterThan(0);
+    expect(duties.some((d) => d.state === "ok" && d.score !== null && d.score > 0)).toBe(true);
+    expect(duties.every((d) => d.state !== "ok" || (d.score !== null && d.score >= 0 && d.score <= 100))).toBe(true);
+    // a reviewed demo employee reads the shared part and never the private note
+    const subject = t.db.prepare("SELECT subject_membership_id AS id FROM performance_reviews WHERE is_demo = 1 AND status <> 'draft' LIMIT 1").get() as { id: string };
+    const as = await asCookie(owner, subject.id);
+    const mine = (await get(t.app, `/api/performance/reviews?periodId=${closed.id}&subjectId=${subject.id}`, as)).body.data as { sharedSummary: string }[]; // about them (a manager also sees the reviews they wrote, with their own private notes)
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.every((r) => !("privateNotes" in r) && r.sharedSummary.length > 0)).toBe(true);
+    expect(JSON.stringify(mine)).not.toMatch(/Not for sharing|Candid note|stretch assignment|Strong candidate|visibly stretched/);
+    // removal takes the reviews too
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM performance_reviews").n).toBe(0);
+  });
+
   it("removal takes every demo period, scorecard, run and component, even a real person's scorecard inside a demo period, and works with an archived real person", async () => {
     const { owner } = await setup();
     await post(t.app, "/api/demo/load", undefined, owner);
