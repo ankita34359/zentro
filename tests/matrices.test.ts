@@ -130,6 +130,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     expect((await post(t.app, `/api/kpis/${kpiA}/assignments`, { teamId: teamA }, ownerA)).status).toBe(201);
     expect((await post(t.app, `/api/kpis/${kpiA}/measurements`, { subject: { type: "person", id: personA.membershipId }, periodStart: "2026-01-01", value: 7 }, ownerA)).status).toBe(201);
     const kpiAssignmentA = (t.db.prepare("SELECT id FROM kpi_assignments WHERE kpi_id = ?").get(kpiA) as { id: string }).id;
+    const modelA = ((await get(t.app, "/api/performance/models", ownerA)).body.data as { id: string; name: string }[]).find((m) => m.name === "Employee")!.id;
     const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
     const notificationA = (t.db.prepare("SELECT id FROM notifications WHERE recipient_membership_id = ?").get(personA.membershipId) as { id: string }).id;
@@ -202,6 +203,9 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/kpis/:id/subjects": { params: { id: kpiA } },
       "/api/kpis/:id/history": { params: { id: kpiA }, body: { subject: `person:${personA.membershipId}` } },
       "/api/kpis/:id/measurements": { params: { id: kpiA }, body: { subject: { type: "person", id: personA.membershipId }, periodStart: "2026-01-01", value: 5 } },
+      "/api/performance/models/:id": { params: { id: modelA }, body: { name: "Hacked by B" } },
+      "/api/performance/models/:id/activate": { params: { id: modelA } },
+      "/api/performance/models/preview": { params: {}, body: { modelId: modelA, values: { okr: 50 } } },
       "/api/notifications/:id/read": { params: { id: notificationA } },
       "/api/demo/view-as/:membershipId": { params: { membershipId: personA.membershipId } },
     };
@@ -235,6 +239,8 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, health, health_reason FROM objectives ORDER BY id").all(),
       t.db.prepare("SELECT id, key_result_id, value, source FROM objective_progress_history ORDER BY id").all(),
       t.db.prepare("SELECT id, key, name, description, archived_at FROM kpis ORDER BY id").all(),
+      t.db.prepare("SELECT id, name, version, status, is_default FROM scoring_models WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, scoring_model_id, component_key, weight FROM scoring_model_components WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, team_id, membership_id, target_value, weight, effective_to FROM kpi_assignments ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, level, value FROM kpi_thresholds ORDER BY id").all(),
       t.db.prepare("SELECT id, kpi_id, subject_membership_id, period_start, value, supersedes_measurement_id FROM kpi_measurements ORDER BY id").all(),
@@ -260,7 +266,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", modelA, kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }
