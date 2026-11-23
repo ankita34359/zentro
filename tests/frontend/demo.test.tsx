@@ -66,6 +66,10 @@ describe("Settings → Demo data (stage 2.8)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "View as Carla Chief" }));
     const banner = await screen.findByText(/This view is read only/);
     expect(banner.textContent).toContain("Carla Chief");
+    // after the switch nothing asks for demo-management data again with the demo person's session (it would only be refused)
+    const order = f.mock.calls.map((c) => `${(c[1] as RequestInit | undefined)?.method ?? "GET"} ${String(c[0])}`);
+    const at = order.indexOf("POST /api/demo/view-as/d1");
+    expect(order.slice(at + 1).filter((x) => x.startsWith("GET /api/demo/"))).toEqual([]);
     await userEvent.click(screen.getByRole("button", { name: "Stop viewing" }));
     await waitFor(() => expect(calls(f, "/api/demo/stop-viewing", "POST")).toHaveLength(1));
     await waitFor(() => expect(screen.queryByText(/This view is read only/)).toBeNull());

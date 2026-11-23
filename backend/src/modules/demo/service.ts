@@ -82,13 +82,23 @@ export class DemoService {
     // roles the seed hands out are the organization's own role templates; one that was archived is simply not given
     const roleIds = new Map<RoleChoice, string | undefined>(Object.keys(ROLE_KEY).map((k) => [k as RoleChoice, repo.roleId(ROLE_KEY[k as RoleChoice])]));
 
+    // Names must be unique among active siblings. An organization that already has an "Engineering" department or a "Mentor"
+    // designation keeps its own; the demo one is called "Engineering (demo)" so loading never fails or merges with real data.
+    const structure = this.o.store.structure(tdb);
+    const taken = {
+      department: new Set(structure.departments().filter((d) => d.archived_at === null && d.parent_id === null).map((d) => d.name.toLowerCase())),
+      family: new Set(structure.roleFamilies().filter((f) => f.archived_at === null).map((f) => f.name.toLowerCase())),
+      designation: new Set(structure.designations().filter((d) => d.archived_at === null).map((d) => d.name.toLowerCase())),
+    };
+    const free = (kind: keyof typeof taken, name: string): string => (taken[kind].has(name.toLowerCase()) ? `${name} (demo)` : name);
+
     this.o.store.transaction(() => {
       const familyId = new Map(company.roleFamilies.map((f) => [f.key, newId()]));
-      for (const f of company.roleFamilies) repo.insertRoleFamily({ id: familyId.get(f.key)!, name: f.name, now });
+      for (const f of company.roleFamilies) repo.insertRoleFamily({ id: familyId.get(f.key)!, name: free("family", f.name), now });
       const designationId = new Map(company.designations.map((d) => [d.name, newId()]));
-      for (const d of company.designations) repo.insertDesignation({ id: designationId.get(d.name)!, familyId: familyId.get(d.familyKey)!, name: d.name, now });
+      for (const d of company.designations) repo.insertDesignation({ id: designationId.get(d.name)!, familyId: familyId.get(d.familyKey)!, name: free("designation", d.name), now });
       const deptId = new Map(company.departments.map((d) => [d.key, newId()]));
-      for (const d of company.departments) repo.insertDepartment({ id: deptId.get(d.key)!, name: d.name, description: d.description, now });
+      for (const d of company.departments) repo.insertDepartment({ id: deptId.get(d.key)!, name: free("department", d.name), description: d.description, now });
       const teamId = new Map(company.teams.map((t) => [t.key, newId()]));
       for (const t of company.teams) repo.insertTeam({ id: teamId.get(t.key)!, departmentId: deptId.get(t.deptKey)!, parentTeamId: t.parentKey ? teamId.get(t.parentKey)! : null, name: t.name, now });
 

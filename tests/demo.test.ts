@@ -69,6 +69,26 @@ describe("Load demo data", () => {
     expect(tree.find((n) => n.childCount >= 6)).toBeTruthy(); // the CEO with the vice presidents and the chief of staff below
   });
 
+  it("loads next to the organization's own structure even when the names collide (the demo ones are called \"... (demo)\"), and removes cleanly", async () => {
+    const { owner } = await setup();
+    const dept = await created("/api/departments", { name: "Engineering" }, owner);
+    const fam = await created("/api/role-families", { name: "Sales" }, owner);
+    await created("/api/designations", { name: "Mentor", roleFamilyId: fam }, owner);
+    await created("/api/designations", { name: "Software Engineer" }, owner);
+    const r = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const s = (await get(t.app, "/api/organization/structure", owner)).body.data as { departments: { id: string; name: string; isDemo: boolean }[]; roleFamilies: { name: string; isDemo: boolean }[]; designations: { name: string; isDemo: boolean }[] };
+    expect(s.departments.find((d) => d.id === dept)).toMatchObject({ name: "Engineering", isDemo: false });
+    expect(s.departments.filter((d) => d.name === "Engineering (demo)" && d.isDemo)).toHaveLength(1);
+    expect(s.roleFamilies.filter((f) => f.name === "Sales (demo)" && f.isDemo)).toHaveLength(1);
+    expect(s.designations.filter((d) => d.name === "Mentor (demo)" && d.isDemo)).toHaveLength(1);
+    expect(s.designations.filter((d) => d.name === "Software Engineer (demo)" && d.isDemo)).toHaveLength(1);
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    const after = (await get(t.app, "/api/organization/structure", owner)).body.data as { departments: { name: string }[]; designations: { name: string }[] };
+    expect(after.departments.map((d) => d.name)).toEqual(["Engineering"]);
+    expect(after.designations.map((d) => d.name).sort()).toEqual(["Mentor", "Software Engineer"]);
+  });
+
   it("is the same company for the same organization, with unique harmless logins that can never sign in", async () => {
     const { owner } = await setup();
     await post(t.app, "/api/demo/load", undefined, owner);

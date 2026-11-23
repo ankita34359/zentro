@@ -24,9 +24,10 @@ export default function DemoPage() {
   const client = useQueryClient();
   const switched = useSwitchedSession();
   const navigate = useNavigate();
-  const status = useQuery({ queryKey: ["demo", "status"], queryFn: getDemoStatus, retry: false });
+  const [leaving, setLeaving] = useState(false); // set while switching to a demo person: this page stops asking for anything
+  const status = useQuery({ queryKey: ["demo", "status"], queryFn: getDemoStatus, retry: false, enabled: !leaving });
   const loaded = status.data?.loaded === true;
-  const personas = useQuery({ queryKey: ["demo", "personas"], queryFn: getPersonas, enabled: loaded, retry: false });
+  const personas = useQuery({ queryKey: ["demo", "personas"], queryFn: getPersonas, enabled: loaded && !leaving, retry: false });
   const [confirm, setConfirm] = useState<null | "load" | "remove">(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [blockers, setBlockers] = useState<Blocker[]>([]);
@@ -52,7 +53,8 @@ export default function DemoPage() {
   });
   const view = useMutation({
     mutationFn: (id: string) => viewAs(id),
-    onSuccess: (r) => { switched(r.me); navigate("/overview"); },
+    // leave this page first: it asks for demo data, which the person being viewed may not see (a refused request is noise, not harm)
+    onSuccess: (r) => { setLeaving(true); navigate("/overview"); setTimeout(() => switched(r.me), 0); },
     onError: (e) => setProblem(problemText(e)),
   });
 
