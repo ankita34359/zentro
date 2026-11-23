@@ -64,7 +64,7 @@ describe("Load demo data", () => {
     expect((await audit(owner))[0]!.summary).toMatch(/^Loaded demo data: \d+ people, 6 departments, 12 teams, \d+ tasks$/);
     // the company is real data the rest of the app reads
     const dirs = (await get(t.app, "/api/employees?limit=500", owner)).body.data;
-    expect(dirs.total).toBe(c.people + 1);
+    expect(dirs.total).toBe(c.people! + 1);
     const tree = (await get(t.app, "/api/hierarchy/tree?depth=2", owner)).body.data.nodes as { name: string; childCount: number }[];
     expect(tree.find((n) => n.childCount >= 6)).toBeTruthy(); // the CEO with the vice presidents and the chief of staff below
   });
