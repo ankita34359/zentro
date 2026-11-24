@@ -111,3 +111,22 @@ describe("no secret reaches a response, a log line or the audit log (batch K)", 
     }
   });
 });
+
+describe("unexpected errors (batch K)", () => {
+  it("answer with a plain message and a reference id that is in the server's log, and never a stack, a path or the error's own text", async () => {
+    t = makeAuthApp({ extraRoutes: (registry) => registry.add({ method: "get", path: "/api/test-boom", access: { kind: "public", why: "test only" }, summary: "throws", handler: () => { throw new Error("secret detail at /home/user/zentro/backend/src/x.ts:12 password=hunter2"); } }) });
+    const res = await get(t.app, "/api/test-boom");
+    expect(res.status).toBe(500);
+    expect(res.body.error).toEqual({ code: "internal_error", message: "Something went wrong" });
+    const ref = res.body.meta.requestId as string;
+    expect(ref).toBeTruthy();
+    expect(res.text).not.toMatch(/secret detail|hunter2|\/home\/|\.ts:|at Object/);
+    expect(t.lines.some((l) => l.includes('"msg":"unhandled error"') && l.includes(ref))).toBe(true); // the same reference is in the log
+    // a request that is not valid JSON, or too big, is a plain 4xx, not a crash
+    const bad = await request(t.app).post("/api/auth/login").set("Origin", "https://zentro.test").set("Content-Type", "application/json").send("{not json");
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.code).toBe("invalid_json");
+    const big = await post(t.app, "/api/auth/login", { email: "a@b.co", password: "x".repeat(200_000) });
+    expect(big.status).toBe(413);
+  });
+});
