@@ -20,7 +20,7 @@ export interface ModelView {
 }
 export interface TemplateView { key: string; name: string; description: string; components: { label: string; weight: number; providerKey: string }[] }
 export type DataState = "ok" | "insufficient" | "missing";
-export interface Contributor { ref: { type: string; id: string }; label: string; value: number | null; target?: number | null; weight: number; note?: string }
+export interface Contributor { ref: { type: string; id: string }; label: string; value: number | null; target?: number | null; weight: number; note?: string; evidence?: { total: number; verified: number } }
 export interface ComponentResult { key: string; label: string; providerKey: string; weight: number; state: DataState; score: number | null; rawValue: number | null; effectiveWeight: number; points: number | null; sampleSize: number; minSample: number; coverage: number; contributors: Contributor[]; notes: string[] }
 export interface Explanation {
   formula: string;

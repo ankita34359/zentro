@@ -12,7 +12,7 @@ const withCaps = (caps: Record<string, string[]>) => ({ ...ME_READY, roles: [{ k
 const PERIOD = { id: "p1", name: "Q4 2026", periodType: "quarter", startDate: "2026-10-01", endDate: "2026-12-31", status: "open", closedAt: null, isDemo: false, scorecards: 1 };
 const SUMMARY = { scoreId: "s2", runNumber: 2, status: "provisional", total: 84.3, band: "On target", confidence: 0.46, confidenceLabel: "low", weightCoverage: 0.7, modelName: "Employee", modelVersion: 1, computedAt: "2026-11-23T10:00:00.000Z", trigger: "manual" };
 const COMPONENTS = [
-  { key: "okr", label: "OKR achievement", providerKey: "okr.attainment", state: "ok", score: 80, weight: 0.4, effectiveWeight: 0.5714, points: 45.7, sampleSize: 1, minSample: 1, coverage: 1, stateText: "Enough data", contributors: [{ ref: { type: "key_result", id: "k1" }, label: "Activated accounts (Ship the onboarding)", value: 0.8, weight: 1 }], notes: [] },
+  { key: "okr", label: "OKR achievement", providerKey: "okr.attainment", state: "ok", score: 80, weight: 0.4, effectiveWeight: 0.5714, points: 45.7, sampleSize: 1, minSample: 1, coverage: 1, stateText: "Enough data", contributors: [{ ref: { type: "key_result", id: "k1" }, label: "Activated accounts (Ship the onboarding)", value: 0.8, weight: 1, evidence: { total: 2, verified: 1 } }], notes: [] },
   { key: "kpi", label: "KPI achievement", providerKey: "kpi.attainment", state: "ok", score: 90, weight: 0.3, effectiveWeight: 0.4286, points: 38.6, sampleSize: 6, minSample: 1, coverage: 1, stateText: "Enough data", contributors: [], notes: [] },
   { key: "delivery", label: "Delivery and reliability", providerKey: "tasks.delivery", state: "missing", score: null, weight: 0.15, effectiveWeight: 0, points: null, sampleSize: 0, minSample: 5, coverage: 0, stateText: "No data recorded", contributors: [], notes: ["No task was due in this period"] },
   { key: "quality", label: "Quality and business impact", providerKey: "quality.impact", state: "insufficient", score: null, weight: 0.15, effectiveWeight: 0, points: null, sampleSize: 1, minSample: 3, coverage: 0, stateText: "Not enough data (1 of 3 needed)", contributors: [], notes: [] },
@@ -49,6 +49,7 @@ describe("Performance Intelligence (stage 5.2)", () => {
     const parts = within(card).getByRole("list", { name: "What the score is made of" });
     expect(within(parts).getByText("OKR achievement")).toBeTruthy();
     expect(within(parts).getByText("Missing")).toBeTruthy(); // delivery: no data recorded
+    expect(within(parts).getByText(/2 evidence \(1 verified\)/)).toBeTruthy(); // evidence beside the record, not in the score
     expect(within(parts).getAllByText("No score")).toHaveLength(2); // never "0"
     expect(within(parts).getByText("Not enough data")).toBeTruthy(); // quality: some data, too little
     expect(within(parts).queryByText("0.0")).toBeNull();

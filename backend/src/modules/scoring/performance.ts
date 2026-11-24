@@ -12,6 +12,7 @@ import { canonicalJson } from "./engine/canonical.js";
 import { computeScore, ENGINE_VERSION } from "./engine/engine.js";
 import { roundHalfUp1 } from "./engine/math.js";
 import type { ComponentResult, Explanation, ModelDef, ScoreInputs, ScoreResult } from "./engine/types.js";
+import { evidenceVisible } from "../evidence/visibility.js";
 import { seedTemplates } from "./models.js";
 import { runScore, scoringOrder, type RunOutcome, type Trigger } from "./runner.js";
 import type { ModelRow, PeriodRow, ScoreComponentRow, ScoreRow, ScorecardRow } from "./repositories/scoring.js";
@@ -22,7 +23,7 @@ export type { Trigger } from "./runner.js";
 export interface PeriodView { id: string; name: string; periodType: string; startDate: string; endDate: string; status: "open" | "closed" | "locked"; closedAt: string | null; isDemo: boolean; scorecards: number }
 export interface ScoreSummary { scoreId: string; runNumber: number; status: "final" | "provisional" | "insufficient"; total: number | null; band: string | null; confidence: number; confidenceLabel: string; weightCoverage: number; modelName: string; modelVersion: number; computedAt: string; trigger: string }
 export interface ScorecardSummary extends ScoreSummary { scorecardId: string; subject: { id: string; name: string }; periodId: string; isDemo: boolean }
-export interface ComponentView { key: string; label: string; providerKey: string; state: "ok" | "insufficient" | "missing"; score: number | null; weight: number; effectiveWeight: number; points: number | null; sampleSize: number; minSample: number; coverage: number; stateText: string; contributors: { ref: { type: string; id: string }; label: string; value: number | null; target?: number | null; weight: number; note?: string }[]; notes: string[] }
+export interface ComponentView { key: string; label: string; providerKey: string; state: "ok" | "insufficient" | "missing"; score: number | null; weight: number; effectiveWeight: number; points: number | null; sampleSize: number; minSample: number; coverage: number; stateText: string; contributors: { ref: { type: string; id: string }; label: string; value: number | null; target?: number | null; weight: number; note?: string; evidence?: { total: number; verified: number } }[]; notes: string[] }
 export interface ScoreDetail extends ScoreSummary {
   scorecardId: string;
   subject: { id: string; name: string };
@@ -404,16 +405,32 @@ export class PerformanceService {
     const period = w.cards.period(card.period_id)!;
     const model = w.models.model(s.scoring_model_id);
     const comps = acc.components ? w.cards.componentsOf(s.id) : [];
+    const ev = acc.components ? this.evidenceCounts(w, caps, me) : new Map<string, { total: number; verified: number }>();
     const expl = JSON.parse(s.explanation_json) as Explanation;
     return {
       ...this.summary(s, model, expl.band), scorecardId: card.id, subject: { id: subject, name: w.names.get(subject) ?? "Former member" },
       period: { id: period.id, name: period.name, startDate: period.start_date, endDate: period.end_date, status: period.status },
-      componentsHidden: !acc.components, components: comps.map((c) => this.componentView(c)), explanation: acc.components ? expl : null, engineVersion: s.engine_version, isLatest: card.latest_score_id === s.id,
+      componentsHidden: !acc.components, components: comps.map((c) => this.componentView(c, ev)), explanation: acc.components ? expl : null, engineVersion: s.engine_version, isLatest: card.latest_score_id === s.id,
     };
   }
-  private componentView(c: ScoreComponentRow): ComponentView {
+  /** Evidence the viewer may see, counted per record: how many pieces and how many verified. It is shown beside the numbers; it does not change a score. */
+  private evidenceCounts(w: ReturnType<PerformanceService["world"]>, caps: Capabilities, me: string): Map<string, { total: number; verified: number }> {
+    const repo = this.o.store.evidence(w.tdb);
+    const seen = new Map(repo.all().filter((e) => evidenceVisible(caps, me, e)).map((e) => [e.id, e.verification_status === "verified"]));
+    const out = new Map<string, { total: number; verified: number }>();
+    for (const l of repo.links()) {
+      if (!seen.has(l.evidence_id)) continue;
+      const k = `${l.target_type}:${l.target_id}`;
+      const x = out.get(k) ?? { total: 0, verified: 0 };
+      x.total += 1;
+      if (seen.get(l.evidence_id)) x.verified += 1;
+      out.set(k, x);
+    }
+    return out;
+  }
+  private componentView(c: ScoreComponentRow, ev: Map<string, { total: number; verified: number }> = new Map()): ComponentView {
     const stateText = c.data_state === "ok" ? "Enough data" : c.data_state === "insufficient" ? `Not enough data (${c.sample_size} of ${c.min_sample} needed)` : "No data recorded";
-    return { key: c.component_key, label: c.label, providerKey: c.provider_key, state: c.data_state as ComponentView["state"], score: c.normalized_score, weight: c.weight, effectiveWeight: c.effective_weight, points: c.contribution_points === null ? null : Math.round(c.contribution_points * 10) / 10, sampleSize: c.sample_size, minSample: c.min_sample, coverage: c.coverage, stateText, contributors: JSON.parse(c.inputs_json) as ComponentView["contributors"], notes: JSON.parse(c.notes_json) as string[] };
+    return { key: c.component_key, label: c.label, providerKey: c.provider_key, state: c.data_state as ComponentView["state"], score: c.normalized_score, weight: c.weight, effectiveWeight: c.effective_weight, points: c.contribution_points === null ? null : Math.round(c.contribution_points * 10) / 10, sampleSize: c.sample_size, minSample: c.min_sample, coverage: c.coverage, stateText, contributors: (JSON.parse(c.inputs_json) as ComponentView["contributors"]).map((x) => (ev.has(`${x.ref.type}:${x.ref.id}`) ? { ...x, evidence: ev.get(`${x.ref.type}:${x.ref.id}`)! } : x)), notes: JSON.parse(c.notes_json) as string[] };
   }
 
   /**
