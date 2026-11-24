@@ -294,7 +294,7 @@ function ComponentRow({ c }: { c: ScoreComponent }) {
           <summary className="text-label font-medium text-primary-ink">Records behind this ({c.contributors.length})</summary>
           {c.contributors.length > 0 && (
             <ul className="mt-2 space-y-1 text-label">
-              {c.contributors.map((x) => <li key={`${x.ref.type}:${x.ref.id}`} className="flex flex-wrap justify-between gap-2"><span>{x.label}{x.note ? <span className="text-muted-foreground"> ({x.note})</span> : null}</span><span className="tabular-nums text-muted-foreground">{x.value === null ? "no value" : x.value <= 1 && c.providerKey !== "quality.impact" ? pct(x.value) : x.value.toFixed(1)}</span></li>)}
+              {c.contributors.map((x) => <li key={`${x.ref.type}:${x.ref.id}`} className="flex flex-wrap justify-between gap-2"><span>{x.label}{x.note ? <span className="text-muted-foreground"> ({x.note})</span> : null}{x.evidence ? <span className="text-caption text-muted-foreground"> · {x.evidence.total} evidence ({x.evidence.verified} verified)</span> : null}</span><span className="tabular-nums text-muted-foreground">{x.value === null ? "no value" : x.value <= 1 && c.providerKey !== "quality.impact" ? pct(x.value) : x.value.toFixed(1)}</span></li>)}
             </ul>
           )}
           {c.notes.length > 0 && <ul className="mt-2 list-disc pl-5 text-caption text-muted-foreground">{c.notes.map((n) => <li key={n}>{n}</li>)}</ul>}

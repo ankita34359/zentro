@@ -1,3 +1,4 @@
+import { EvidencePanel } from "@/components/common/EvidencePanel";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
@@ -111,6 +112,7 @@ function Body({ id }: { id: string }) {
         <AlignmentSection o={o} busy={run.isPending} act={act} />
         <LinkedTasks id={id} />
         {(o.can.edit || o.can.publish || o.can.archive) && <ManageSection o={o} busy={run.isPending} act={act} onGone={() => undefined} />}
+        <EvidencePanel targetType="objective" targetId={id} />
         <History id={id} />
       </div>
     </div>

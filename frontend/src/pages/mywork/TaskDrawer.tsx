@@ -1,3 +1,4 @@
+import { EvidencePanel } from "@/components/common/EvidencePanel";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Pencil, Trash2, UserMinus, UserPlus, X } from "lucide-react";
@@ -123,6 +124,7 @@ function Body({ id, today }: { id: string; today: string }) {
         <PeopleSection t={t} busy={run.isPending} act={act} />
         <AlignmentSection t={t} busy={run.isPending} act={act} />
         {(t.can.edit || t.can.editEstimate) && <EditSection t={t} busy={run.isPending} act={act} />}
+        <EvidencePanel targetType="task" targetId={id} />
         <CommentsSection id={id} canComment={t.can.comment} onProblem={setProblem} />
         <HistorySection id={id} />
       </div>
