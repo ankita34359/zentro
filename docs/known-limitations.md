@@ -191,3 +191,11 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **Team Performance by date range** counts tasks for exactly those dates, but scores belong to scoring periods: the period that overlaps the range most is used, and the page says how much of the range it covers. A range that crosses several periods is not blended.
 - **The Leadership waterfall** shows only what the server already computed; objectives with no data add nothing and say "no data".
 
+## Added in batch L (viaSocket automations, export)
+
+- **One webhook destination per organization**, sent by the background tick (up to a minute of delay, longer while retrying). There is no retry button and no way to view a past message in the log (only its result).
+- **Only business events are sent**; ones the page lists as Recorded or Planned are not. An event type switched on later never sends what happened while it was off.
+- **Incoming endpoints act as the person who made them** and stop if that person is no longer an active administrator. A KPI endpoint records for the organization as a whole.
+- **The export is read live and built in memory**; for a very large organization it will be slow (at most 6 an hour per person). Reviews are not exported at all, by design.
+- **Demo data in a webhook:** loading or removing demo data does not itself send events, but acting on demo records afterwards does, like any other record.
+

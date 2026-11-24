@@ -41,6 +41,14 @@ import { DashboardService } from "./modules/dashboards/service.js";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.js";
 import { securityHeaders } from "./http/securityHeaders.js";
 import { apiLimit } from "./http/apiLimit.js";
+import { findInboundEndpoint } from "./db/inbound.js";
+import { registerIntegrationRoutes } from "./modules/integrations/routes.js";
+import { WebhookService } from "./modules/integrations/webhooks.js";
+import { InboundService } from "./modules/integrations/inbound.js";
+import { FetchSender, type WebhookSender } from "./modules/integrations/sender.js";
+import { dispatchJob } from "./jobs/jobs/integrations.js";
+import { registerExportRoutes } from "./modules/exports/routes.js";
+import { ExportService } from "./modules/exports/service.js";
 import { registerAiRoutes } from "./modules/ai/routes.js";
 import { AiService } from "./modules/ai/service.js";
 import { AiContextBuilder } from "./modules/ai/context.js";
@@ -93,6 +101,8 @@ export interface AppOptions {
   delivery?: LinkDelivery;
   /** The AI provider. Production uses Anthropic (key from the server's settings); tests pass a fake and never touch the network. */
   aiProvider?: AiProvider;
+  /** How outgoing webhooks leave the server. Tests pass a fake receiver and never touch the network. */
+  webhookSender?: WebhookSender;
   /** Calls one address may make to the API in a minute (a gentle general limit; sign-in, reset, invitations and uploads have strict ones of their own). Tests lower it. */
   apiRequestsPerMinute?: number;
   /** Teams, departments and reporting lines. The default reads the real tables (stage 2.6); tests may inject a fake. */
@@ -143,8 +153,8 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerMeasurementRoutes(registry, { permissions, measurements: measurementService });
   registerModelRoutes(registry, { permissions, models: new ModelService({ store, auth, audit }) });
   registerPerformanceRoutes(registry, { permissions, performance: performanceService });
-  registerEvidenceRoutes(registry, { permissions, evidence: new EvidenceService({ store, auth, audit, tasks: taskService, okr: okrService }) });
-  registerReviewRoutes(registry, { permissions, reviews: new ReviewService({ store, auth, audit }) });
+  registerEvidenceRoutes(registry, { permissions, evidence: new EvidenceService({ store, auth, audit, tasks: taskService, okr: okrService, events }) });
+  registerReviewRoutes(registry, { permissions, reviews: new ReviewService({ store, auth, audit, events }) });
   const mentorshipService = new MentorshipService({ store, auth, audit });
   registerMentorshipRoutes(registry, { permissions, mentorship: mentorshipService });
   registerComparisonRoutes(registry, { permissions, comparison: new ComparisonService({ store, auth, audit }) });
@@ -155,6 +165,11 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const alignmentService = new AlignmentService({ store, auth, audit, okr: okrService });
   const dashboardService = new DashboardService({ store, auth, okr: okrService, alignment: alignmentService, measurements: measurementService, performance: performanceService, mentorship: mentorshipService });
   registerDashboardRoutes(registry, { permissions, dashboards: dashboardService });
+  const isProd = opts.config.nodeEnv === "production";
+  const webhookService = new WebhookService({ store, auth, audit, encryptionKey: opts.config.encryptionKey, sender: opts.webhookSender ?? new FetchSender(!isProd), allowPrivateHosts: !isProd && opts.webhookSender === undefined ? true : false });
+  if (!opts.jobs) jobs.register(dispatchJob(webhookService));
+  registerIntegrationRoutes(registry, { permissions, webhooks: webhookService, inbound: new InboundService({ lookup: (id) => findInboundEndpoint(opts.db, id), store, auth, audit, permissions, tasks: taskService, measurements: measurementService, kpis: kpiService }) });
+  registerExportRoutes(registry, { permissions, exports: new ExportService({ store, auth, audit }) });
   const aiProvider: AiProvider = opts.aiProvider ?? new AnthropicProvider();
   registerAiRoutes(registry, { permissions, ai: new AiService({ store, auth, audit, provider: aiProvider, builder: new AiContextBuilder({ overview: overviewService, dashboards: dashboardService, okr: okrService, kpi: kpiService, tasks: taskService }) }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });

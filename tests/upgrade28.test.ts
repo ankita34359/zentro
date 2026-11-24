@@ -101,7 +101,7 @@ describe("upgrading a batch B database (migration 0009) to the demo data framewo
     const safety = new Database(path.join(dataDir, "backups", restore.preRestoreBackup!), { readonly: true });
     expect((safety.prepare("SELECT COUNT(*) n FROM organization_memberships WHERE is_demo = 1").get() as { n: number }).n).toBeGreaterThan(55); // kept in the safety backup
     safety.close();
-    expect(migrate(reopened, migrationsDir).applied).toEqual(["0010_demo_data.sql", "0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql", "0015_scoring_models.sql", "0016_scorecards.sql", "0017_comparisons.sql", "0018_mentorship.sql", "0019_reviews.sql", "0020_evidence.sql", "0021_evidence_withdrawn_and_ai.sql"]);
+    expect(migrate(reopened, migrationsDir).applied).toEqual(["0010_demo_data.sql", "0011_objectives_and_task_links.sql", "0012_alignment_and_health.sql", "0013_kpi_definitions.sql", "0014_kpi_measurements.sql", "0015_scoring_models.sql", "0016_scorecards.sql", "0017_comparisons.sql", "0018_mentorship.sql", "0019_reviews.sql", "0020_evidence.sql", "0021_evidence_withdrawn_and_ai.sql", "0022_integrations_webhooks.sql"]);
     expect((await post(appOn(reopened).app, "/api/auth/login", { email: "owner@example.com", password: PASSWORD })).status).toBe(200);
     reopened.close();
   });
@@ -116,7 +116,7 @@ describe("upgrading a batch B database (migration 0009) to the demo data framewo
     await post(app, "/api/demo/load", undefined, cookie);
     const older = migrate(db, upTo(9)); // what the batch B build does when it starts on this database
     expect(older.applied).toEqual([]);
-    expect(older.unknownApplied).toEqual(["0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021"]);
+    expect(older.unknownApplied).toEqual(["0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022"]);
     // the older code reads the same tables (demo people and tasks are ordinary rows with is_demo = 1) and the real data is intact
     expect(count(db, "SELECT COUNT(*) n FROM tasks WHERE is_demo = 0")).toBe(1);
     expect(count(db, "SELECT COUNT(*) n FROM organization_memberships WHERE is_demo = 0")).toBe(2);

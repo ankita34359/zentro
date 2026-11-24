@@ -124,7 +124,8 @@ describe("Integrations status (batch G)", () => {
       expect(JSON.stringify(r.body)).not.toContain("sentinel-secret-value-123");
       const types = r.body.data.events.map((e: { type: string }) => e.type);
       expect(types).toEqual(expect.arrayContaining(["task.created", "objective.at_risk", "review.submitted", "period.closed"]));
-      expect(r.body.data.events.find((e: { type: string }) => e.type === "task.created")).toMatchObject({ status: "recorded", last30Days: expect.any(Number) });
+      expect(r.body.data.events.find((e: { type: string }) => e.type === "task.created")).toMatchObject({ status: "available", last30Days: expect.any(Number) });
+      expect(r.body.data.events.find((e: { type: string }) => e.type === "task.outcome_recorded")).toMatchObject({ status: "recorded" }); // kept, not sent yet
       expect(r.body.data.events.find((e: { type: string }) => e.type === "period.closed")).toMatchObject({ status: "planned", last30Days: null });
       expect((await get(t.app, "/api/integrations/status", emma.cookie)).status).toBe(403);
     } finally {

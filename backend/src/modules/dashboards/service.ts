@@ -1,4 +1,5 @@
 import { HttpError } from "../../lib/errors.js";
+import { WEBHOOK_EVENTS } from "../integrations/webhooks.js";
 import type { AuthStore } from "../auth/repositories/store.js";
 import type { AuthContext, AuthService } from "../auth/service.js";
 import type { Capabilities } from "../permissions/service.js";
@@ -65,6 +66,8 @@ export interface InsightsView { today: string; insights: Insight[]; ask: { enabl
 export const EVENT_CATALOG: { type: string; description: string; recorded: boolean }[] = [
   { type: "task.created", description: "A task was created.", recorded: true },
   { type: "task.assigned", description: "A task was assigned to someone.", recorded: true },
+  { type: "task.completed", description: "A task was completed.", recorded: true },
+  { type: "task.overdue", description: "An open task passed its due date.", recorded: true },
   { type: "task.reviewed", description: "A reviewer rated a finished task.", recorded: true },
   { type: "task.outcome_recorded", description: "The outcome of a finished task was written down.", recorded: true },
   { type: "daily_update.submitted", description: "Someone sent their daily update.", recorded: true },
@@ -72,14 +75,19 @@ export const EVENT_CATALOG: { type: string; description: string; recorded: boole
   { type: "kpi.measurement_recorded", description: "A KPI value was recorded or corrected.", recorded: true },
   { type: "kpi.threshold", description: "A KPI crossed a warning or critical threshold.", recorded: true },
   { type: "kpi.measurement_missed", description: "A KPI period ended with no value.", recorded: true },
-  { type: "task.completed", description: "A task was completed.", recorded: false },
-  { type: "review.submitted", description: "A performance review was submitted.", recorded: false },
+  { type: "evidence.verified", description: "Evidence was verified, rejected or sent back for more information.", recorded: true },
+  { type: "review.submitted", description: "A performance review was submitted.", recorded: true },
   { type: "period.closed", description: "A performance period was closed.", recorded: false },
   { type: "score.finalized", description: "A final score was calculated.", recorded: false },
 ];
+const SENDABLE = new Set(WEBHOOK_EVENTS.map((e) => e.type));
 export interface IntegrationsView {
-  viaSocket: { connected: false; status: string; settings: { name: string; set: boolean }[] };
-  events: { type: string; description: string; status: "recorded" | "planned"; last30Days: number | null }[];
+  viaSocket: { connected: boolean; status: string; settings: { name: string; set: boolean }[] };
+  /** The webhook and incoming endpoints are real (batch L). */
+  automations: { webhook: { configured: boolean; enabled: boolean }; endpoints: number };
+  /** Still not built: shown as Planned. */
+  planned: { name: string; note: string }[];
+  events: { type: string; description: string; status: "available" | "recorded" | "planned"; last30Days: number | null }[];
   steps: string[];
   note: string;
 }
@@ -396,16 +404,26 @@ export class DashboardService {
     const counts = this.o.store.events(tdb).countsByType(since);
     // only WHETHER a setting exists is read, never its value
     const settings = VIASOCKET_SETTINGS.map((name) => ({ name, set: (process.env[name] ?? "") !== "" }));
+    const hook = this.o.store.integrations(tdb).settings();
+    const webhook = { configured: Boolean(hook?.url_enc), enabled: hook?.enabled === 1 && Boolean(hook?.url_enc) };
+    const endpoints = this.o.store.integrations(tdb).endpoints().length;
     return {
-      viaSocket: { connected: false, status: "Not connected", settings },
-      events: EVENT_CATALOG.map((e) => ({ type: e.type, description: e.description, status: e.recorded ? "recorded" : "planned", last30Days: e.recorded ? counts[e.type] ?? 0 : null })),
-      steps: [
-        "Create a viaSocket project and note its project and organization ids.",
-        "Ask whoever runs the server to add the three settings listed above (their names only are shown here; values are never shown).",
-        "Restart Zentro, then come back to this page: the status will say what is still missing.",
-        "Connecting and building workflows inside Zentro comes in a later version; today events are recorded so they are ready to send.",
+      viaSocket: { connected: webhook.enabled, status: webhook.enabled ? "Sending events" : webhook.configured ? "Address saved, switched off" : "Not connected", settings },
+      automations: { webhook, endpoints },
+      planned: [
+        { name: "The viaSocket flow builder inside Zentro (stages 8.1 and 8.2)", note: "Today you build flows in viaSocket itself and connect them with the webhook address and the incoming endpoints." },
+        { name: "Notification channels, report distribution and inbound evidence (8.5)", note: "Not built." },
+        { name: "AI-approved integration actions (8.6)", note: "Not built." },
+        { name: "Alerts (M91)", note: "Planned for its own later batch." },
       ],
-      note: "Early version. Zentro records these events now; nothing is sent to viaSocket yet.",
+      events: EVENT_CATALOG.map((e) => ({ type: e.type, description: e.description, status: SENDABLE.has(e.type) ? "available" as const : e.recorded ? "recorded" as const : "planned" as const, last30Days: e.recorded ? counts[e.type] ?? 0 : null })),
+      steps: [
+        "In viaSocket, create a flow that starts with a webhook and copy the address it gives you.",
+        "Below, under Send events, paste that address, press Save, and copy the signing secret shown once (it is never shown again).",
+        "Switch on the events you want, switch the webhook on, and press Send test event: the delivery log below shows whether viaSocket answered.",
+        "To send things INTO Zentro, create an incoming endpoint below, copy its token (shown once) and use the endpoint's address and token in a viaSocket \"send a request\" step.",
+      ],
+      note: "Available events are sent to your webhook when switched on. Recorded events are kept in Zentro but not sent yet. Planned events do not exist yet.",
     };
   }
 }

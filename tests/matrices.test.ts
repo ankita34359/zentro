@@ -99,7 +99,8 @@ describe("permission matrix: every role template × every route that needs a per
 
   it("a route with a path parameter is marked takesEntityId (so the tenancy matrix covers it)", async () => {
     t = makeAuthApp();
-    for (const route of t.registry.list()) if (route.path.includes(":")) expect(route.takesEntityId, `${route.method} ${route.path}`).toBe(true);
+    // a public route that takes an id (the incoming endpoint) is authenticated by that endpoint's own token, and tests/integrations.test.ts proves another organization's token or id is a plain 401
+    for (const route of t.registry.list()) if (route.path.includes(":") && route.access.kind !== "public") expect(route.takesEntityId, `${route.method} ${route.path}`).toBe(true);
   });
 });
 
@@ -143,6 +144,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const mentoringA = ((await post(t.app, "/api/mentorship/assignments", { mentorId: personA.membershipId, menteeId: mentorB, goals: "Alpha secret goals" }, ownerA)).body.data as { id: string }).id;
     const reviewA = ((await post(t.app, "/api/performance/reviews", { periodId: periodA, subjectId: personA.membershipId, sharedSummary: "Alpha secret summary", privateNotes: "Alpha secret private note" }, ownerA)).body.data as { id: string }).id;
     const evidenceA = ((await post(t.app, "/api/evidence", { title: "Alpha secret evidence", externalRef: "https://example.com/alpha-secret", links: [{ type: "task", id: taskA }] }, ownerA)).body.data as { id: string }).id;
+    const endpointA = ((await post(t.app, "/api/integrations/endpoints", { name: "Alpha endpoint", kind: "task" }, ownerA)).body.data as { id: string }).id;
     const comparisonA = ((await post(t.app, "/api/performance/comparisons", { name: "Alpha secret comparison", periodId: periodA }, ownerA)).body.data as { id: string }).id;
     const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
@@ -238,6 +240,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/evidence/:id/links": { params: { id: evidenceA }, body: { type: "task", id: taskA } },
       "/api/evidence/:id/verify": { params: { id: evidenceA }, body: { status: "verified" } },
       "/api/evidence/:id/withdraw": { params: { id: evidenceA } },
+      "/api/integrations/endpoints/:id": { params: { id: endpointA } },
       "/api/performance/compare": { params: {}, body: { periodId: periodA } },
       "/api/performance/compare/difference": { params: {}, body: { periodId: periodA, a: personA.membershipId, b: personA.membershipId } },
       "/api/performance/comparisons": { params: {}, body: { name: "Hacked by B", periodId: periodA } },
