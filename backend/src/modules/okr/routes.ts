@@ -19,9 +19,9 @@ const keyResultBody = z.object({
   unit: z.string().max(20).nullable().optional(),
   direction: z.enum(["increase", "decrease"]).optional(),
   method: z.enum(["linear", "binary", "manual"]).optional(),
-  startValue: z.number().optional(),
-  targetValue: z.number(),
-  weight: z.number().optional(),
+  startValue: z.number().min(-1e12).max(1e12).optional(),
+  targetValue: z.number().min(-1e12).max(1e12),
+  weight: z.number().min(-1e12).max(1e12).optional(),
   ownerId: uuid.nullable().optional(),
   dueDate: day.nullable().optional(),
 }).strict();
@@ -64,7 +64,7 @@ export function registerOkrRoutes(registry: RouteRegistry, deps: { permissions: 
     schema: {
       body: z.object({
         level: z.enum(LEVELS), title: z.string().min(1).max(160), description: z.string().max(4000).optional(), objectiveType: z.enum(OBJECTIVE_TYPES).optional(),
-        startDate: day, endDate: day, priority: z.enum(PRIORITIES).optional(), weight: z.number().optional(), departmentId: uuid.nullable().optional(), teamId: uuid.nullable().optional(), ownerId: uuid.nullable().optional(),
+        startDate: day, endDate: day, priority: z.enum(PRIORITIES).optional(), weight: z.number().min(-1e12).max(1e12).optional(), departmentId: uuid.nullable().optional(), teamId: uuid.nullable().optional(), ownerId: uuid.nullable().optional(),
         lifecycle: z.enum(["draft", "active"]).optional(), keyResults: z.array(keyResultBody).max(12).optional(),
       }).strict(),
     },
@@ -85,7 +85,7 @@ export function registerOkrRoutes(registry: RouteRegistry, deps: { permissions: 
     access: { kind: "permission", key: "okr.view" },
     takesEntityId: true,
     summary: "Change an objective: `{title?, description?, objectiveType?, startDate?, endDate?, priority?, weight?, ownerId?, lifecycle?}`. Needs `okr.edit` over it (403 otherwise). Lifecycle moves: draft→active|cancelled, active→draft|completed|cancelled, completed→active, cancelled→draft (409 invalid_transition). Audited",
-    schema: { params: idParams, body: z.object({ title: z.string().min(1).max(160).optional(), description: z.string().max(4000).optional(), objectiveType: z.enum(OBJECTIVE_TYPES).optional(), startDate: day.optional(), endDate: day.optional(), priority: z.enum(PRIORITIES).optional(), weight: z.number().optional(), ownerId: uuid.nullable().optional(), lifecycle: z.enum(LIFECYCLES).optional() }).strict() },
+    schema: { params: idParams, body: z.object({ title: z.string().min(1).max(160).optional(), description: z.string().max(4000).optional(), objectiveType: z.enum(OBJECTIVE_TYPES).optional(), startDate: day.optional(), endDate: day.optional(), priority: z.enum(PRIORITIES).optional(), weight: z.number().min(-1e12).max(1e12).optional(), ownerId: uuid.nullable().optional(), lifecycle: z.enum(LIFECYCLES).optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => okr.update(a, r, c, id(v), v.body as Parameters<OkrService["update"]>[4]))),
   });
   registry.add({
@@ -133,7 +133,7 @@ export function registerOkrRoutes(registry: RouteRegistry, deps: { permissions: 
     access: { kind: "permission", key: "okr.edit" },
     takesEntityId: true,
     summary: "Change a key result: `{title?, description?, unit?, startValue?, targetValue?, weight?, ownerId?, dueDate?}`. Changing the numbers is written to the history as a target change. Audited",
-    schema: { params: idParams, body: z.object({ title: z.string().min(1).max(160).optional(), description: z.string().max(1000).optional(), unit: z.string().max(20).nullable().optional(), startValue: z.number().optional(), targetValue: z.number().optional(), weight: z.number().optional(), ownerId: uuid.nullable().optional(), dueDate: day.nullable().optional() }).strict() },
+    schema: { params: idParams, body: z.object({ title: z.string().min(1).max(160).optional(), description: z.string().max(1000).optional(), unit: z.string().max(20).nullable().optional(), startValue: z.number().min(-1e12).max(1e12).optional(), targetValue: z.number().min(-1e12).max(1e12).optional(), weight: z.number().min(-1e12).max(1e12).optional(), ownerId: uuid.nullable().optional(), dueDate: day.nullable().optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => okr.updateKeyResult(a, r, c, id(v), v.body as Parameters<OkrService["updateKeyResult"]>[4]))),
   });
   registry.add({
@@ -142,7 +142,7 @@ export function registerOkrRoutes(registry: RouteRegistry, deps: { permissions: 
     access: { kind: "permission", key: "okr.update_progress" },
     takesEntityId: true,
     summary: "Record an ACTUAL value for a key result: `{value, note?}`. Appends to the history (naming the value it replaces) and updates the current value; nothing is overwritten. Yes-or-no results take 0 or 1, manual ones 0 to 100. Only on an active objective (409 objective_not_active). Audited",
-    schema: { params: idParams, body: z.object({ value: z.number(), note: z.string().max(1000).optional() }).strict() },
+    schema: { params: idParams, body: z.object({ value: z.number().min(-1e12).max(1e12), note: z.string().max(1000).optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => okr.recordProgress(a, r, c, id(v), v.body as { value: number; note?: string })), 201),
   });
 }

@@ -90,7 +90,7 @@ export function registerMentorshipRoutes(registry: RouteRegistry, deps: { permis
     access: { kind: "permission", key: "mentorship.log" },
     takesEntityId: true,
     summary: "Rate how the mentoring is going, 1 to 5: `{periodId, value, note?}`. Only the mentor or the mentee; stored as mentor_entered or mentee_entered. Audited",
-    schema: { params: idParams, body: z.object({ periodId: uuid, value: z.number(), note: z.string().max(500).optional() }).strict() },
+    schema: { params: idParams, body: z.object({ periodId: uuid, value: z.number().min(-1e12).max(1e12), note: z.string().max(500).optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => mentorship.rate(a, r, c, id(v), v.body as { periodId: string; value: number; note?: string })), 201),
   });
   registry.add({

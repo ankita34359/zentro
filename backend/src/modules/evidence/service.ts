@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import type { TenantCtx } from "../../db/tenant.js";
+import type { TenantCtx, TenantDb } from "../../db/tenant.js";
 import { HttpError, notFound } from "../../lib/errors.js";
 import { newId } from "../../lib/ids.js";
+import { RateLimiter } from "../../lib/rateLimit.js";
 import type { AuditService } from "../audit/service.js";
 import type { AuthStore } from "../auth/repositories/store.js";
 import type { AuthContext, AuthService } from "../auth/service.js";
@@ -45,6 +46,8 @@ export interface EvidenceInput { title: string; evidenceType?: string; descripti
  * authenticated route that re-runs the same check, and another organization's file is "not found".
  */
 export class EvidenceService {
+  /** File uploads per person: every attempt counts (20 in 10 minutes), because a file is the one thing a person can make the server store in bulk. */
+  private readonly uploads = new RateLimiter({ max: 20, windowMs: 10 * 60_000, blockMs: 5 * 60_000, maxBlockMs: 60 * 60_000 });
   constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; tasks: TaskService; okr: OkrService }) {}
 
   private ctx(auth: AuthContext, requestId: string): TenantCtx {
@@ -200,6 +203,7 @@ export class EvidenceService {
     const w = this.world(ctx);
     const e = this.find(w, caps, ctx.membershipId, id);
     if (e.submitted_by_membership_id !== ctx.membershipId) throw new HttpError(403, "permission_denied", "Only the person who attached the evidence can add its file.");
+    this.checkUploadRate(w.tdb, ctx);
     if (w.repo.file(id)) throw new HttpError(409, "file_exists", "This evidence already has a file.");
     const filename = input.filename.replace(/[\\/\0\r\n"]/g, "_").trim().slice(0, 120);
     const ext = filename.includes(".") ? filename.split(".").pop()!.toLowerCase() : "";
@@ -216,6 +220,17 @@ export class EvidenceService {
       this.o.audit.record(w.tdb, ctx, { action: "evidence.file", entityType: "evidence", entityId: id, summary: `Attached the file "${filename}" (${data.length} bytes) to evidence "${e.title}"`, after: { filename, sizeBytes: data.length } });
     });
     return this.one(auth, requestId, caps, id);
+  }
+
+  private checkUploadRate(tdb: TenantDb, ctx: TenantCtx): void {
+    const key = ctx.membershipId;
+    const wait = this.uploads.retryAfterMs(key);
+    if (wait > 0) throw this.o.auth.tooMany(wait);
+    const block = this.uploads.fail(key);
+    if (block > 0) {
+      // the block starts now: the audit log records who was slowed down and for how long, never the file or anything about it
+      this.o.audit.record(tdb, ctx, { action: "security.rate_limited", entityType: "evidence", summary: "Too many file uploads in a short time; uploads are paused for this person", after: { limiter: "evidence_upload", blockedSeconds: Math.ceil(block / 1000) } });
+    }
   }
 
   /** The file, after the same visibility check as the evidence itself (another organization's or an unseen item is "not found"). */

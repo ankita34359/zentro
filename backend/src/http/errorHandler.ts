@@ -20,6 +20,8 @@ export function errorHandler(log: Logger) {
       return;
     }
     if (err instanceof HttpError) {
+      // a refused attempt is worth a line in the log (the route pattern and the wait only: never an address, an account or a secret)
+      if (err.code === "rate_limited") log.warn("rate limited", { requestId: res.locals.requestId, route: typeof req.route?.path === "string" ? `${req.baseUrl}${req.route.path}` : "unmatched", retryAfterSeconds: (err.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds });
       sendError(res, err.status, err.code, err.message, err.details);
       return;
     }

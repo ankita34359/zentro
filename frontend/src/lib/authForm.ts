@@ -11,7 +11,7 @@ export function problemText(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 429) {
       const s = Number((e.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds);
-      return Number.isFinite(s) && s > 0 ? `Too many attempts. Try again in ${s < 90 ? `${s} seconds` : `${Math.ceil(s / 60)} minutes`}.` : e.message;
+      return Number.isFinite(s) && s > 0 ? (s <= 90 ? "Too many attempts, try again in a minute." : `Too many attempts, try again in ${Math.ceil(s / 60)} minutes.`) : e.message;
     }
     return e.message;
   }
