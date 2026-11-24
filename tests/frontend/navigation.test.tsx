@@ -160,6 +160,11 @@ describe("routes", () => {
   });
 
   it("shows no sample numbers: the Overview has steps and live server facts only", async () => {
+    // an administrator: the Server status card is for them (the server says so in the Overview's flags)
+    stubFetch((url) => (url === "/api/overview"
+      ? envelope({ today: "2026-11-24", preset: "personal", personal: { unalignedOpen: 0, open: 0, overdue: 0, dueToday: 0, blocked: 0, completedRecently: 0, unreadNotifications: 0, next: null }, team: null, organization: null, objectives: null, kpis: null,
+          checklist: [{ key: "departments", label: "Create departments", to: "/settings/structure", done: false, stage: null }], flags: { demoLoaded: false, canManageDemo: false, canSetUp: true, canSeeServerStatus: true } })
+      : url === "/api/notifications" ? envelope({ notifications: [], unreadCount: 0, nextCursor: null }) : json(HEALTH_OK)));
     renderApp("/overview");
     await screen.findByText("2 of 2 applied");
     expect(screen.getByText("abc1234", { selector: "dd" })).toBeTruthy();

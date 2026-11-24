@@ -39,6 +39,10 @@ import { EvidenceService } from "./modules/evidence/service.js";
 import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { DashboardService } from "./modules/dashboards/service.js";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.js";
+import { registerAiRoutes } from "./modules/ai/routes.js";
+import { AiService } from "./modules/ai/service.js";
+import { AiContextBuilder } from "./modules/ai/context.js";
+import { AnthropicProvider, type AiProvider } from "./modules/ai/provider.js";
 import { OverviewService } from "./modules/overview/service.js";
 import { registerOverviewRoutes } from "./modules/overview/routes.js";
 import { OkrService } from "./modules/okr/service.js";
@@ -85,6 +89,8 @@ export interface AppOptions {
   guards?: Guards;
   /** Where invitation and reset links go besides the administrator's screen. Stage 2.2 default: nowhere (administrators copy links). Stage 8 supplies email. */
   delivery?: LinkDelivery;
+  /** The AI provider. Production uses Anthropic (key from the server's settings); tests pass a fake and never touch the network. */
+  aiProvider?: AiProvider;
   /** Teams, departments and reporting lines. The default reads the real tables (stage 2.6); tests may inject a fake. */
   hierarchy?: HierarchyProvider;
 }
@@ -138,10 +144,15 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const mentorshipService = new MentorshipService({ store, auth, audit });
   registerMentorshipRoutes(registry, { permissions, mentorship: mentorshipService });
   registerComparisonRoutes(registry, { permissions, comparison: new ComparisonService({ store, auth, audit }) });
-  registerKpiRoutes(registry, { permissions, kpis: new KpiService({ store, auth, audit }) });
-  registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService, measurements: measurementService }) });
+  const kpiService = new KpiService({ store, auth, audit });
+  registerKpiRoutes(registry, { permissions, kpis: kpiService });
+  const overviewService = new OverviewService({ store, auth, tasks: taskService, okr: okrService, measurements: measurementService });
+  registerOverviewRoutes(registry, { permissions, overview: overviewService });
   const alignmentService = new AlignmentService({ store, auth, audit, okr: okrService });
-  registerDashboardRoutes(registry, { permissions, dashboards: new DashboardService({ store, auth, okr: okrService, alignment: alignmentService, measurements: measurementService, performance: performanceService, mentorship: mentorshipService }) });
+  const dashboardService = new DashboardService({ store, auth, okr: okrService, alignment: alignmentService, measurements: measurementService, performance: performanceService, mentorship: mentorshipService });
+  registerDashboardRoutes(registry, { permissions, dashboards: dashboardService });
+  const aiProvider: AiProvider = opts.aiProvider ?? new AnthropicProvider();
+  registerAiRoutes(registry, { permissions, ai: new AiService({ store, auth, audit, provider: aiProvider, builder: new AiContextBuilder({ overview: overviewService, dashboards: dashboardService, okr: okrService, kpi: kpiService, tasks: taskService }) }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);

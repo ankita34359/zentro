@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
 import { Link } from "react-router";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -8,6 +7,7 @@ import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getInsights } from "@/services/dashboards";
+import { AskAi } from "./AskAi";
 import { EarlyVersion } from "./parts";
 
 /** AI Intelligence (stage 7.1, first version): insights from plain rules over the person's own data. No AI model is called. */
@@ -16,12 +16,8 @@ export default function InsightsPage() {
   return (
     <>
       <PageHeader eyebrow="Insight" title="AI Intelligence" description="Insights from your data, worked out by plain rules, each with its numbers." />
-      <EarlyVersion>No AI is connected yet. Everything below is counted by simple rules from your own records.</EarlyVersion>
-      <div className="mb-6 space-y-2 rounded-xl border border-dashed bg-muted/30 p-4" role="group" aria-label="Ask AI">
-        <label htmlFor="ask-ai" className="flex items-center gap-2 text-label font-semibold"><Sparkles aria-hidden="true" className="size-4" /> Ask AI <Badge variant="dashed">Not available</Badge></label>
-        <input id="ask-ai" disabled placeholder="Ask a question about your data" className="h-10 w-full cursor-not-allowed rounded-lg border border-input bg-muted px-3 text-body text-muted-foreground" />
-        <p className="text-caption text-muted-foreground">{q.data?.ask.reason ?? "An AI provider has to be connected first."}</p>
-      </div>
+      <EarlyVersion>The insights below are counted by plain rules from your own records. AI answers appear above them only when AI is connected.</EarlyVersion>
+      <AskAi />
       {q.isPending ? <PageSkeleton /> : q.isError ? <ErrorState title="Insights could not be loaded" error={q.error} onRetry={() => void q.refetch()} /> : q.data.insights.length === 0 ? (
         <EmptyState illustration="chart" title="Nothing needs attention right now">No objective is behind pace, no task is overdue, and no KPI has missing months among the records you can see.</EmptyState>
       ) : (
