@@ -18,4 +18,10 @@ export class AutomationEventsRepository {
       ? (this.tdb.get<{ n: number }>("SELECT COUNT(*) AS n FROM automation_events WHERE organization_id = @organization_id AND event_type = @eventType", { eventType })?.n ?? 0)
       : (this.tdb.get<{ n: number }>("SELECT COUNT(*) AS n FROM automation_events WHERE organization_id = @organization_id")?.n ?? 0);
   }
+
+  /** How many events of each type were recorded since a moment (ISO), newest-agnostic: for the Integrations page. */
+  countsByType(sinceIso: string): Record<string, number> {
+    const rows = this.tdb.all<{ event_type: string; n: number }>("SELECT event_type, COUNT(*) AS n FROM automation_events WHERE organization_id = @organization_id AND occurred_at >= @sinceIso GROUP BY event_type", { sinceIso });
+    return Object.fromEntries(rows.map((r) => [r.event_type, r.n]));
+  }
 }

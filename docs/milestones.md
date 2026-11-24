@@ -92,16 +92,16 @@ The blueprint (this document set) is Milestone 0. Stage 1.1 comes first because 
 | ID | Stage | Delivers | Live check | Needs from you | Size |
 | --- | --- | --- | --- | --- | --- |
 | 6.1 | Overview dashboard (live, batch C) | Capability-adaptive widgets, getting-started checklist | View as employee, manager, department head, CEO: different widgets, all from real rows | | M |
-| 6.2 | Team Performance | Team page and manager/department views | Open a team: objectives, KPIs, task distribution, members, mentorship | | M |
+| 6.2 | Team Performance (first read-only version, batch G) | Team page and manager/department views | Open a team: objectives, KPIs, task distribution, members, mentorship | | M |
 | 6.3 | Performance Intelligence page | Scorecards, compare, trends, evidence tabs with charts | Walk the tabs with demo data; chart gaps for missing data; "view as table" | | M |
-| 6.4 | Leadership dashboard | Company performance, strategic objectives, department contribution, executive KPIs, risks, drill-down, waterfall | Click Company → Department → Team → Individual | | L |
+| 6.4 | Leadership dashboard (first read-only version, batch G) | Company performance, strategic objectives, department contribution, executive KPIs, risks, drill-down, waterfall | Click Company → Department → Team → Individual | | L |
 | 6.5 | Historical analytics | Date-range filter everywhere (7 days to custom), period comparison | Switch presets; compare this and last quarter | | M |
 
 ## 8. Milestone 7: AI Intelligence
 
 | ID | Stage | Delivers | Live check | Needs from you | Size |
 | --- | --- | --- | --- | --- | --- |
-| 7.1 | Provider wrapper and run logging | `AiProvider` interface, viaSocket provider, Anthropic provider stub, settings, `agent_runs`/`agent_run_steps`, **"AI is not configured"** states, fake-provider test suite, model ids verified against viaSocket's current `ai.md` | AI Intelligence shows "AI is not configured" until you set the keys; after Apply, "Test AI connection" works; the run appears in history | viaSocket keys on Embarko; workspace AI credits | M |
+| 7.1 | Provider wrapper and run logging (only the rule-based insights page exists, batch G; no provider) | `AiProvider` interface, viaSocket provider, Anthropic provider stub, settings, `agent_runs`/`agent_run_steps`, **"AI is not configured"** states, fake-provider test suite, model ids verified against viaSocket's current `ai.md` | AI Intelligence shows "AI is not configured" until you set the keys; after Apply, "Test AI connection" works; the run appears in history | viaSocket keys on Embarko; workspace AI credits | M |
 | 7.2 | Tools, orchestrator, chat, Performance Analysis | Tool layer, orchestrator, grounding and number guards, chat with references, first agent | Ask "Explain my score": the answer cites records; numbers match the scorecard; an out-of-scope question is refused politely | | L |
 | 7.3 | Daily Planner and Copilot | Planner agent with rule ranking and validated task ids | My Work → "My plan for today": every item is a real task with its objective | | M |
 | 7.4 | Risk Detection | Detectors, hourly job, AI explanations, projections with intervals | Demo risks appear **without AI** labelled "Rule-based"; with AI the explanation and corrective actions are added; a projection shows its interval or "insufficient history" | | L |
@@ -113,7 +113,7 @@ The blueprint (this document set) is Milestone 0. Stage 1.1 comes first because 
 
 | ID | Stage | Delivers | Live check | Needs from you | Size |
 | --- | --- | --- | --- | --- | --- |
-| 8.1 | Embed spike and token | Live proof the embed renders on Embarko with a real token; `POST /integrations/viasocket/token`; `ViaSocketEmbed` + `useViaSocketEmbedToken`; Integrations page; `check:viasocket`; re-verify the two component names | Integrations shows the embedded viaSocket UI; connect an app inside it | viaSocket keys typed on Embarko (see [viasocket-integration](viasocket-integration.md) section 9) | M |
+| 8.1 | Embed spike and token (only the status page exists, batch G; nothing is connected) | Live proof the embed renders on Embarko with a real token; `POST /integrations/viasocket/token`; `ViaSocketEmbed` + `useViaSocketEmbedToken`; Integrations page; `check:viasocket`; re-verify the two component names | Integrations shows the embedded viaSocket UI; connect an app inside it | viaSocket keys typed on Embarko (see [viasocket-integration](viasocket-integration.md) section 9) | M |
 | 8.2 | Slots and connected accounts | Flow events, server read-back, encrypted storage, slot cards, test send, `viasocket.sync`, alerts endpoint | Build a Slack flow in the embed, bind it to `notify_slack`, press Test: a labelled message arrives; pause the flow in viaSocket and see the slot turn paused after sync | You build the Slack/Gmail flows; add the alert addresses | L |
 | 8.3 | Events, outbox, dispatcher | Event catalog, rules, transactional outbox, dispatcher with backoff, execution history, retry/cancel, idempotency | Assign a task: a message goes out; break the flow: attempts back off and end `dead` with an admin notification; retry works; repeating the action does not duplicate | | L |
 | 8.4 | Backend-triggered workflows | The eight events from master section 14.B wired with dedupe keys, quiet hours, content policy, daily-update summary | Trigger each event (using "send test event" in Rules) and see it in history | | L |
