@@ -35,6 +35,8 @@ import { EventWriter } from "./modules/automation/events.js";
 import { NotificationService } from "./modules/notifications/service.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { TaskService } from "./modules/tasks/service.js";
+import { DashboardService } from "./modules/dashboards/service.js";
+import { registerDashboardRoutes } from "./modules/dashboards/routes.js";
 import { OverviewService } from "./modules/overview/service.js";
 import { registerOverviewRoutes } from "./modules/overview/routes.js";
 import { OkrService } from "./modules/okr/service.js";
@@ -134,6 +136,8 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerComparisonRoutes(registry, { permissions, comparison: new ComparisonService({ store, auth, audit }) });
   registerKpiRoutes(registry, { permissions, kpis: new KpiService({ store, auth, audit }) });
   registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService, measurements: measurementService }) });
+  const alignmentService = new AlignmentService({ store, auth, audit, okr: okrService });
+  registerDashboardRoutes(registry, { permissions, dashboards: new DashboardService({ store, auth, okr: okrService, alignment: alignmentService, measurements: measurementService, performance: performanceService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);
