@@ -41,6 +41,8 @@ import { DashboardService } from "./modules/dashboards/service.js";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.js";
 import { securityHeaders } from "./http/securityHeaders.js";
 import { apiLimit } from "./http/apiLimit.js";
+import { registerExportRoutes } from "./modules/exports/routes.js";
+import { ExportService } from "./modules/exports/service.js";
 import { registerAiRoutes } from "./modules/ai/routes.js";
 import { AiService } from "./modules/ai/service.js";
 import { AiContextBuilder } from "./modules/ai/context.js";
@@ -155,6 +157,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   const alignmentService = new AlignmentService({ store, auth, audit, okr: okrService });
   const dashboardService = new DashboardService({ store, auth, okr: okrService, alignment: alignmentService, measurements: measurementService, performance: performanceService, mentorship: mentorshipService });
   registerDashboardRoutes(registry, { permissions, dashboards: dashboardService });
+  registerExportRoutes(registry, { permissions, exports: new ExportService({ store, auth, audit }) });
   const aiProvider: AiProvider = opts.aiProvider ?? new AnthropicProvider();
   registerAiRoutes(registry, { permissions, ai: new AiService({ store, auth, audit, provider: aiProvider, builder: new AiContextBuilder({ overview: overviewService, dashboards: dashboardService, okr: okrService, kpi: kpiService, tasks: taskService }) }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });

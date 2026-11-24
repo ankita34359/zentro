@@ -584,8 +584,13 @@ export function buildDemoCompany(seed: string, today = "2026-02-14"): DemoCompan
         const start = -mbetween(150, 230);
         const cadence = 14;
         const activities: DemoMentorship["activities"] = [];
+        // which sessions were logged is a fixed pattern, not a coin toss: the sparse mentor logs one in five, the others all but one in eight. A coin toss made the
+        // gap between the two mentors differ from one organization to the next (the demo is seeded from the organization's id), and sometimes vanish.
+        let slot = 0;
         for (let d = start + mbetween(3, 10); d <= -2; d += cadence + mbetween(-3, 5)) {
-          if (mr() < (sparse ? 0.18 : 0.88)) {
+          const logged = sparse ? slot % 5 === 0 : slot % 8 !== 7;
+          slot += 1;
+          if (logged) {
             const x = mpick(SESSIONS);
             activities.push({ dayOffset: d, type: x.type, minutes: mpick([30, 45, 60]), summary: x.summary });
           }

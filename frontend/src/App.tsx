@@ -16,6 +16,7 @@ import {
   AuditPage,
   AiSettingsPage,
   SystemPage,
+  ExportPage,
   StructurePage,
   DemoPage,
   DesignPage,
@@ -102,6 +103,7 @@ export function AppRoutes() {
           </Route>
           <Route element={<RequireCapability any={["org.settings"]} />}>
             <Route path="/settings/system" element={<SystemPage />} />
+            <Route path="/settings/export" element={<ExportPage />} />
           </Route>
           <Route element={<RequireCapability any={["ai.configure"]} />}>
             <Route path="/settings/ai" element={<AiSettingsPage />} />

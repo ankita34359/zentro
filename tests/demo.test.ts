@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Response } from "supertest";
 import request from "supertest";
 import { ORIGIN, type TestApp } from "./helpers/app.js";
@@ -6,7 +6,7 @@ import { get, makeAuthApp, post, signUpWithOrg } from "./helpers/auth.js";
 import { roleIds } from "./helpers/roles.js";
 
 let t: TestApp;
-afterEach(() => t?.cleanup());
+afterEach(() => { vi.useRealTimers(); t?.cleanup(); });
 
 const send = (method: "patch" | "delete", path: string, body: Record<string, unknown> | undefined, cookie: string) => {
   const r = request(t.app)[method](path).set("Origin", ORIGIN).set("Cookie", cookie);
@@ -582,7 +582,15 @@ describe("Demo scores (stage 5.2)", () => {
     expect(other.hiddenCount).toBe(all.cohortSize);
   });
 
+  // The cause of the old flake (it was neither timing nor test order). Two things made "one mentor logs far less than the other" unreliable:
+  // 1. the demo company is generated from a random stream seeded with the ORGANIZATION'S ID, which is a new random id in every test, and each mentoring
+  //    session was logged by a coin toss (18% for the sparse mentor, 88% for the others). So the gap between the two mentors' activity scores differed
+  //    from run to run (19 and 11 points were seen, against a bar of 20). The seed now logs a fixed pattern (one in five, and all but one in eight).
+  // 2. the sessions are seeded a fixed number of days before TODAY, but scores belong to a calendar quarter, so on some days of a quarter the
+  //    figures move (early in a quarter there is no activity score at all). The test fixes the clock in the middle of a quarter, and the second test
+  //    below checks that on any day the numbers are honest.
   it("the demo has mentors with mentees, activities and a measured effect; a real assignment involving a demo person stops the removal; removal takes the rest", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-24T10:00:00Z") });
     const { owner } = await setup();
     const load = await post(t.app, "/api/demo/load", undefined, owner);
     expect(load.body.data.counts.mentorships).toBeGreaterThanOrEqual(5);
@@ -666,4 +674,26 @@ describe("Demo scores (stage 5.2)", () => {
     expect(Object.values(demoRows()).every((n) => n === 0)).toBe(true);
     expect(one<{ archived_at: string | null }>("SELECT archived_at FROM organization_memberships WHERE id = ?", id).archived_at).not.toBeNull(); // the real person stays
   });
+
+  it("whatever day the demo is loaded (every week of two quarters), mentoring activity is a real score between 0 and 100 or 'no data', never NaN or an invented zero", async () => {
+    for (const d of ["2026-10-01", "2026-10-15", "2026-11-01", "2026-12-01", "2027-01-05", "2027-02-10", "2027-03-30"]) {
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date(`${d}T10:00:00Z`) });
+      const { owner } = await setup();
+      expect((await post(t.app, "/api/demo/load", undefined, owner)).status, d).toBe(201);
+      const periods = (await get(t.app, "/api/performance/periods", owner)).body.data as { id: string; status: string }[];
+      const cur = periods.find((p) => p.status === "open");
+      if (!cur) continue;
+      const e = (await get(t.app, `/api/mentorship/effectiveness?periodId=${cur.id}`, owner)).body.data;
+      for (const m of e.mentors as { activity: { value: number | null; state: string } }[]) {
+        if (m.activity.value === null) expect(m.activity.state, d).not.toBe("ok");
+        else {
+          expect(Number.isFinite(m.activity.value), d).toBe(true);
+          expect(m.activity.value, d).toBeGreaterThan(0);
+          expect(m.activity.value, d).toBeLessThanOrEqual(100);
+        }
+      }
+      t.cleanup();
+      vi.useRealTimers();
+    }
+  }, 120_000);
 });

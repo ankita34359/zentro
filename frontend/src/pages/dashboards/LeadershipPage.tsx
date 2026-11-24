@@ -56,7 +56,7 @@ export default function LeadershipPage() {
                           {o.contributors.length === 0 ? <p className="text-caption text-muted-foreground">No department or team objective is linked to this one yet.</p> : (
                             <ul className="space-y-1">{o.contributors.map((c) => <li key={c.id} className="flex flex-wrap items-center gap-2 text-label"><span className="font-medium">{c.department ?? c.level}</span><span className="text-muted-foreground">{c.title}</span><HealthBadge health={c.health as Health | null} /><span className="tabular-nums text-muted-foreground">{pct(c.attainmentPct)}{c.contributionPct !== null ? `, adds ${c.contributionPct} points` : ""}</span></li>)}</ul>
                           )}
-                          {o.contributors.length > 0 && <div className="mt-3"><Waterfall title={o.title} total={o.attainmentPct} contributors={o.contributors.map((c) => ({ id: c.id, label: c.department ?? c.title, points: c.contributionPct }))} /></div>}
+                          {o.contributors.length > 0 && <div className="mt-3"><Waterfall title={o.title} total={o.attainmentPct} contributors={o.contributors.map((c) => ({ id: c.id, label: c.department && c.department !== c.title ? `${c.title} (${c.department})` : c.title, points: c.contributionPct }))} /></div>}
                         </div>
                       </CardContent>
                     </Card>
