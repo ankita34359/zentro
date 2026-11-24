@@ -39,6 +39,8 @@ import { EvidenceService } from "./modules/evidence/service.js";
 import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { DashboardService } from "./modules/dashboards/service.js";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.js";
+import { securityHeaders } from "./http/securityHeaders.js";
+import { apiLimit } from "./http/apiLimit.js";
 import { registerAiRoutes } from "./modules/ai/routes.js";
 import { AiService } from "./modules/ai/service.js";
 import { AiContextBuilder } from "./modules/ai/context.js";
@@ -91,6 +93,8 @@ export interface AppOptions {
   delivery?: LinkDelivery;
   /** The AI provider. Production uses Anthropic (key from the server's settings); tests pass a fake and never touch the network. */
   aiProvider?: AiProvider;
+  /** Calls one address may make to the API in a minute (a gentle general limit; sign-in, reset, invitations and uploads have strict ones of their own). Tests lower it. */
+  apiRequestsPerMinute?: number;
   /** Teams, departments and reporting lines. The default reads the real tables (stage 2.6); tests may inject a fake. */
   hierarchy?: HierarchyProvider;
 }
@@ -158,7 +162,9 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   opts.extraRoutes?.(registry);
 
   app.use(requestId);
+  app.use(securityHeaders);
   app.use(requestLog(opts.log));
+  app.use("/api", apiLimit({ perMinute: opts.apiRequestsPerMinute ?? 600, log: opts.log }));
   app.use(compressText());
   app.use(revalidateHealthz);
   app.use(sameOriginCheck(opts.config.appUrl));

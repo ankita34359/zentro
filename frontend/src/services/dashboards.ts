@@ -3,6 +3,7 @@ import { api } from "@/services/api";
 export interface ObjectiveLine { id: string; title: string; health: string | null; attainmentPct: number | null; elapsedPct: number; dataState: string }
 export interface MemberScore { total: number | null; status: string; confidence: number; confidenceLabel: string; scoreId: string; scorecardId: string }
 export interface TeamCard {
+  activity: null | { completed: number; due: number; dueOnTime: number; sample: number };
   id: string; name: string; department: string | null; memberCount: number;
   members: { id: string; name: string; role: string; score: MemberScore | null }[]; hiddenMembers: number;
   average: null | { value: number; n: number; of: number; note: string | null };
@@ -12,7 +13,8 @@ export interface TeamCard {
   tasks: null | { open: number; overdue: number; done: number; blocked: number };
 }
 export interface TeamComparison { department: string; teams: { id: string; name: string; average: number | null; n: number; eligible: boolean; rank: number | null }[]; note: string }
-export interface TeamPerformance { today: string; period: { id: string; name: string; status: string } | null; periods: { id: string; name: string; status: string }[]; teams: TeamCard[]; comparisons: TeamComparison[] }
+export interface TeamRange { preset: string; label: string; from: string; to: string; days: number; scores: { period: { id: string; name: string; start: string; end: string } | null; coveragePct: number; note: string } }
+export interface TeamPerformance { range: TeamRange | null; today: string; period: { id: string; name: string; status: string } | null; periods: { id: string; name: string; status: string }[]; teams: TeamCard[]; comparisons: TeamComparison[] }
 export interface ContributionLine { id: string; title: string; level: string; department: string | null; owner: string | null; health: string | null; attainmentPct: number | null; contributionPct: number | null }
 export interface TrendPoint { date: string; value: number | null }
 export interface DrillPerson { id: string; name: string; score: MemberScore | null }
@@ -38,7 +40,12 @@ export interface IntegrationsView {
   steps: string[];
   note: string;
 }
-export const getTeamPerformance = (periodId?: string) => api<TeamPerformance>(`/api/team-performance${periodId ? `?periodId=${periodId}` : ""}`);
+export interface TeamPerformanceQuery { periodId?: string; range?: "this_month" | "last_month" | "this_quarter" | "custom"; from?: string; to?: string }
+export const getTeamPerformance = (q: TeamPerformanceQuery = {}) => {
+  const p = new URLSearchParams();
+  if (q.range) { p.set("range", q.range); if (q.range === "custom") { if (q.from) p.set("from", q.from); if (q.to) p.set("to", q.to); } } else if (q.periodId) p.set("periodId", q.periodId);
+  return api<TeamPerformance>(`/api/team-performance${p.size ? `?${p}` : ""}`);
+};
 export const getLeadership = (q: { range?: string; from?: string; to?: string } = {}) => api<LeadershipView>(`/api/leadership/overview${q.from && q.to ? `?from=${q.from}&to=${q.to}` : q.range ? `?range=${q.range}` : ""}`);
 export const getInsights = () => api<InsightsView>("/api/ai/insights");
 export const getIntegrations = () => api<IntegrationsView>("/api/integrations/status");

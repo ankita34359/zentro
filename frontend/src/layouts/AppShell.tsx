@@ -5,6 +5,8 @@ import { Brand } from "@/components/common/Brand";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { DemoBanner } from "@/components/common/DemoBanner";
 import { NotificationBell } from "@/components/common/NotificationBell";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { StatusPill } from "@/components/common/StatusPill";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { UserMenu } from "@/components/common/UserMenu";
@@ -88,6 +90,7 @@ export function AppShell() {
       )}
 
       <div className="lg:pl-[var(--sidebar-width)]">
+        <OfflineBanner />
         <DemoBanner />
         <header className="sticky top-0 z-20 flex h-[var(--header-height)] items-center gap-2 border-b border-border/70 bg-header px-4 backdrop-blur-md backdrop-saturate-150 sm:px-6">
           <Button
@@ -117,7 +120,7 @@ export function AppShell() {
         <main id="main" ref={mainRef} tabIndex={-1} className="mx-auto w-full max-w-[var(--page-max-width)] px-4 py-8 outline-none sm:px-6 lg:px-8">
           <Suspense fallback={<PageSkeleton />}>
             <PageTransition key={pathname.split("/")[1] ?? ""}>
-              <Outlet />
+              <ErrorBoundary resetKey={pathname}><Outlet /></ErrorBoundary>
             </PageTransition>
           </Suspense>
         </main>

@@ -128,7 +128,7 @@ export function registerTaskRoutes(registry: RouteRegistry, deps: { permissions:
     access: { kind: "permission", key: "task.view" },
     takesEntityId: true,
     summary: "Record what a finished (or under-review) task achieved: `{summary, value?, recordOnKeyResult?}`. The people doing the task, its creator and `task.edit` over them may. With `recordOnKeyResult` and a `value`, the value is also recorded as the linked key result's actual value in the same transaction (needs `okr.update_progress` over it; history source task_outcome). A new outcome clears an earlier review. 409 not_finished, no_key_result. Audited",
-    schema: { params: idParams, body: z.object({ summary: z.string().min(1).max(2000), value: z.number().nullable().optional(), recordOnKeyResult: z.boolean().optional() }).strict() },
+    schema: { params: idParams, body: z.object({ summary: z.string().min(1).max(2000), value: z.number().min(-1e12).max(1e12).nullable().optional(), recordOnKeyResult: z.boolean().optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => tasks.recordOutcome(a, r, c, id(v), v.body as Parameters<TaskService["recordOutcome"]>[4])), 201),
   });
   registry.add({

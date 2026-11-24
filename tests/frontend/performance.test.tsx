@@ -185,6 +185,20 @@ describe("Performance Intelligence (stage 5.2)", () => {
     expect(screen.queryByRole("form", { name: "Save this comparison" })).toBeNull();
   });
 
+  it("Compare, for the Owner with no role family of their own: asks them to choose one (instead of an empty page) and then compares that family", async () => {
+    setMe(withCaps({ "performance.compare": ["all_in_scope"] }));
+    const base = { period: { id: "p1", name: "Q4 2026", status: "open" }, filters: { departmentId: null, minTenureDays: 30, includeInsufficient: false, subjectIds: [] }, cohortSize: 0, excluded: { insufficient: 0, tenure: 0 }, normalization: "percentile", notes: [], you: null, entries: [] };
+    const f = server([PERIOD], (url) => (url.startsWith("/api/performance/compare?") ? envelope({ ...base, roleFamily: url.includes("roleFamilyId=f1") ? { id: "f1", name: "Engineers" } : null }) : undefined));
+    renderApp("/performance?tab=compare");
+    const card = await screen.findByLabelText("Choose a role family");
+    expect(card.textContent).toMatch(/You are not in a role family yourself/);
+    expect(screen.queryByText("No role family")).toBeNull();
+    await userEvent.selectOptions(within(card).getByLabelText("Role family to compare"), "f1");
+    expect(await screen.findByText(/Engineers, Q4 2026/)).toBeTruthy();
+    expect(f.mock.calls.some((c) => String(c[0]).includes("roleFamilyId=f1"))).toBe(true);
+    expect(screen.queryByLabelText("Choose a role family")).toBeNull();
+  });
+
   it("Compare, with permission: names and ranks, a note for people outside the viewer's scope, why two people differ, and saving a snapshot", async () => {
     setMe(withCaps({ "performance.compare": ["all_in_scope"] }));
     const entry = (id: string, name: string, total: number, rank: number) => ({ subject: { id, name }, total, status: "provisional", band: null, model: "Employee v1", rank, percentile: 50, zScore: null, isYou: false, context: { tenureDays: 120, teamSize: 5, taskLoad: 12, dataCoverage: 0.7, confidence: "medium", evidence: 1 } });

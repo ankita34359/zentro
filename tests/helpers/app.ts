@@ -48,6 +48,7 @@ export function makeTestApp(over: Partial<AppOptions> = {}): TestApp {
     cronSecret: CRON,
     migrationsTotal: result.total,
     log: createLogger("debug", (l) => lines.push(l)),
+    apiRequestsPerMinute: 1_000_000, // the matrices send thousands of calls from one address; the limit has its own tests
     ...over,
   });
   return {

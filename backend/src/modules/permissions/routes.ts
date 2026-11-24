@@ -149,8 +149,8 @@ export function registerRoleRoutes(registry: RouteRegistry, deps: { auth: AuthSe
           roleId: uuid,
           scopeType: z.string().max(20).optional(),
           scopeId: uuid.nullable().optional(),
-          validFrom: z.string().datetime({ offset: true }).optional(),
-          validTo: z.string().datetime({ offset: true }).nullable().optional(),
+          validFrom: z.string().max(40).datetime({ offset: true }).optional(),
+          validTo: z.string().max(40).datetime({ offset: true }).nullable().optional(),
         })
         .strict(),
     },

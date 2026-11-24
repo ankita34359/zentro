@@ -7,7 +7,7 @@ import { authOf } from "../auth/guards.js";
 import type { AuthService } from "../auth/service.js";
 import type { AuditService } from "./service.js";
 
-const iso = z.string().datetime({ offset: true }).optional();
+const iso = z.string().max(40).datetime({ offset: true }).optional();
 
 export function registerAuditRoutes(registry: RouteRegistry, deps: { auth: AuthService; audit: AuditService }): void {
   registry.add({

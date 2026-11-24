@@ -32,8 +32,8 @@ export function registerKpiRoutes(registry: RouteRegistry, deps: { permissions: 
     direction: z.enum(DIRECTIONS).optional(),
     frequency: z.enum(FREQUENCIES).optional(),
     aggregation: z.enum(AGGREGATIONS).optional(),
-    defaultTarget: z.number().nullable().optional(),
-    defaultTargetMax: z.number().nullable().optional(),
+    defaultTarget: z.number().min(-1e12).max(1e12).nullable().optional(),
+    defaultTargetMax: z.number().min(-1e12).max(1e12).nullable().optional(),
   };
 
   registry.add({
@@ -91,7 +91,7 @@ export function registerKpiRoutes(registry: RouteRegistry, deps: { permissions: 
     access: { kind: "permission", key: "kpi.assign" },
     takesEntityId: true,
     summary: "Give a KPI, with a target, to a person, team, department, designation or role family: `{assigneeId | teamId | departmentId | designationId | roleFamilyId (exactly one), targetValue?, targetMax?, weight?, effectiveFrom?, effectiveTo?}`. A person, team or department must be inside the caller's `kpi.assign` scope (403 outside_scope); a designation or role family needs it over everyone, and covers everyone who holds it at calculation time. The KPI's default target is used when none is given. 409 already_assigned for the same subject and dates. Audited",
-    schema: { params: idParams, body: z.object({ assigneeId: uuid.optional(), teamId: uuid.optional(), departmentId: uuid.optional(), designationId: uuid.optional(), roleFamilyId: uuid.optional(), targetValue: z.number().optional(), targetMax: z.number().nullable().optional(), weight: z.number().optional(), effectiveFrom: day.optional(), effectiveTo: day.nullable().optional() }).strict() },
+    schema: { params: idParams, body: z.object({ assigneeId: uuid.optional(), teamId: uuid.optional(), departmentId: uuid.optional(), designationId: uuid.optional(), roleFamilyId: uuid.optional(), targetValue: z.number().min(-1e12).max(1e12).optional(), targetMax: z.number().min(-1e12).max(1e12).nullable().optional(), weight: z.number().min(-1e12).max(1e12).optional(), effectiveFrom: day.optional(), effectiveTo: day.nullable().optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => kpis.assign(a, r, c, id(v), v.body as AssignmentInput)), 201),
   });
   registry.add({
@@ -100,7 +100,7 @@ export function registerKpiRoutes(registry: RouteRegistry, deps: { permissions: 
     access: { kind: "permission", key: "kpi.assign" },
     takesEntityId: true,
     summary: "Change an assignment's target, weight or end date: `{targetValue?, targetMax?, weight?, effectiveTo?}`. The caller needs `kpi.assign` over the subject. 409 already_ended. Audited with before and after",
-    schema: { params: z.object({ id: uuid, aid: uuid }), body: z.object({ targetValue: z.number().optional(), targetMax: z.number().nullable().optional(), weight: z.number().optional(), effectiveTo: day.nullable().optional() }).strict() },
+    schema: { params: z.object({ id: uuid, aid: uuid }), body: z.object({ targetValue: z.number().min(-1e12).max(1e12).optional(), targetMax: z.number().min(-1e12).max(1e12).nullable().optional(), weight: z.number().min(-1e12).max(1e12).optional(), effectiveTo: day.nullable().optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => kpis.updateAssignment(a, r, c, id(v), (v.params as { aid: string }).aid, v.body as Parameters<KpiService["updateAssignment"]>[5]))),
   });
   registry.add({
@@ -127,7 +127,7 @@ export function registerKpiRoutes(registry: RouteRegistry, deps: { permissions: 
     access: { kind: "permission", key: "kpi.configure" },
     takesEntityId: true,
     summary: "Replace the KPI's thresholds: `{thresholds: [{level: excellent|warning|critical, comparator: lt|lte|gt|gte, basis?: absolute|percent_of_target, value, notify?}]}`, at most one per level (400 duplicate_level). The earlier list is kept in the audit entry",
-    schema: { params: idParams, body: z.object({ thresholds: z.array(z.object({ level: z.enum(LEVELS), comparator: z.enum(COMPARATORS), basis: z.enum(BASES).optional(), value: z.number(), notify: z.boolean().optional() }).strict()).max(3) }).strict() },
+    schema: { params: idParams, body: z.object({ thresholds: z.array(z.object({ level: z.enum(LEVELS), comparator: z.enum(COMPARATORS), basis: z.enum(BASES).optional(), value: z.number().min(-1e12).max(1e12), notify: z.boolean().optional() }).strict()).max(3) }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => kpis.setThresholds(a, r, c, id(v), (v.body as { thresholds: Parameters<KpiService["setThresholds"]>[4] }).thresholds))),
   });
 }

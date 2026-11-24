@@ -44,3 +44,39 @@ export function Sparkline({ points, label, unit = "" }: { points: { date: string
   );
 }
 export const delta = (n: number | null, unit = " points"): string => (n === null ? "no comparison" : n === 0 ? "no change" : `${n > 0 ? "+" : "−"}${Math.abs(n)}${unit}`);
+
+/**
+ * A waterfall of how a company objective's progress is made up: each linked department or team objective adds the points the server already
+ * worked out (its share of the parent × its own progress), stacked from the left, and the last bar is the objective's own progress. Nothing
+ * is calculated here beyond placing the bars: an objective with no data adds nothing and says "no data" (it is never drawn as zero), and the
+ * text beside every bar carries the same numbers for anyone who cannot see the chart.
+ */
+export function Waterfall({ title, contributors, total }: { title: string; contributors: { id: string; label: string; points: number | null }[]; total: number | null }) {
+  const rows: { id: string; label: string; start: number; width: number; points: number | null }[] = [];
+  let running = 0;
+  for (const c of contributors) {
+    const width = c.points ?? 0;
+    rows.push({ id: c.id, label: c.label, start: running, width, points: c.points });
+    running += width;
+  }
+  const clamp = (n: number): number => Math.max(0, Math.min(100, n));
+  return (
+    <figure aria-label={`How the progress of ${title} is made up`} className="space-y-1">
+      <figcaption className="text-caption text-muted-foreground">Each bar adds the points one linked objective contributes; the last bar is this objective's own progress. Scale: 0 to 100%.</figcaption>
+      <ul className="space-y-1">
+        {rows.map((r) => (
+          <li key={r.id} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-2 text-caption">
+            <span className="truncate">{r.label}</span>
+            <span className="relative h-3 rounded bg-muted" aria-hidden="true">{r.points !== null && <span className="absolute top-0 h-3 rounded bg-primary/70" style={{ left: `${clamp(r.start)}%`, width: `${clamp(r.width)}%` }} />}</span>
+            <span className="tabular-nums text-muted-foreground">{r.points === null ? "no data" : `+${r.points} points`}</span>
+          </li>
+        ))}
+        <li className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-2 border-t pt-1 text-caption font-medium">
+          <span>This objective</span>
+          <span className="relative h-3 rounded bg-muted" aria-hidden="true">{total !== null && <span className="absolute left-0 top-0 h-3 rounded bg-on-track" style={{ width: `${clamp(total)}%` }} />}</span>
+          <span className="tabular-nums">{total === null ? "no data" : `${total}%`}</span>
+        </li>
+      </ul>
+    </figure>
+  );
+}

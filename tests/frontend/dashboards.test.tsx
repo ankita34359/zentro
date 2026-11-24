@@ -51,6 +51,30 @@ describe("Team Performance (stage 6.2)", () => {
     expect(screen.getByText("Team average: no score you can see yet.")).toBeTruthy();
     expect(screen.queryByText("Mentoring")).toBeNull();
   });
+  it("a date range (this month, last month, this quarter, custom) asks the server for exactly those dates and shows what the scores rest on and the tasks counted in them", async () => {
+    setMe(withCaps({ "org.view": ["my_teams"] }));
+    const range = { preset: "last_month", label: "Last month", from: "2026-10-01", to: "2026-10-31", days: 31, scores: { period: { id: "p1", name: "Q4 2026", start: "2026-10-01", end: "2026-12-31" }, coveragePct: 100, note: "Scores come from the scoring period \"Q4 2026\" (2026-10-01 to 2026-12-31), which covers 100% of this range. Task numbers below are counted for exactly the dates you picked." } };
+    const f = stubFetch((url) => {
+      if (url.startsWith("/api/team-performance")) return envelope({ range: url.includes("range=") ? range : null, today: "2026-11-24", period: { id: "p1", name: "Q4 2026", status: "open" }, periods: [{ id: "p1", name: "Q4 2026", status: "open" }], comparisons: [], teams: [team({ activity: url.includes("range=") ? { completed: 4, due: 6, dueOnTime: 5, sample: 12 } : null })] });
+      return url === "/api/notifications" ? envelope({ notifications: [], unreadCount: 0, nextCursor: null }) : json(HEALTH_OK);
+    });
+    renderApp("/team-performance");
+    await screen.findByRole("list", { name: "Teams" });
+    expect(screen.queryByText("Tasks in these dates")).toBeNull(); // no range: the page is as it was
+    await userEvent.selectOptions(screen.getByLabelText("Dates"), "last_month");
+    expect(await screen.findByText("Tasks in these dates")).toBeTruthy();
+    expect(screen.getByText(/4 finished · 6 fell due \(5 finished by their due date\)/)).toBeTruthy();
+    expect(screen.getByText(/Counted from 12 tasks of the people in this team that you may see/)).toBeTruthy();
+    const info = screen.getByLabelText("What this range shows");
+    expect(info.textContent).toMatch(/Last month \(2026-10-01 to 2026-10-31, 31 days\)/);
+    expect(info.textContent).toMatch(/covers 100% of this range/);
+    expect(f.mock.calls.some((c) => String(c[0]) === "/api/team-performance?range=last_month")).toBe(true);
+    await userEvent.selectOptions(screen.getByLabelText("Dates"), "custom");
+    await userEvent.type(screen.getByLabelText("From"), "2026-10-05");
+    await userEvent.type(screen.getByLabelText("To"), "2026-10-20");
+    await userEvent.click(screen.getByRole("button", { name: "Show" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => String(c[0]) === "/api/team-performance?range=custom&from=2026-10-05&to=2026-10-20")).toBe(true));
+  });
   it("an empty list shows the empty state", async () => {
     setMe(withCaps({}));
     serve({ "/api/team-performance": { today: "x", period: null, periods: [], comparisons: [], teams: [] } });
@@ -75,6 +99,12 @@ describe("Leadership (stages 6.4 and 6.5)", () => {
     expect(within(kpis).getByText("Annual recurring revenue")).toBeTruthy();
     expect(within(kpis).getByText(/Oct: 10\.4 \$M · target 12 \$M · warning · 1 missing/)).toBeTruthy();
     expect(within(screen.getByText("Who contributes").parentElement!).getByText(/adds 30 points/)).toBeTruthy();
+    // the waterfall uses only numbers the server already worked out: the contribution in points, then the objective's own progress
+    const wf = screen.getAllByRole("figure")[0]!;
+    expect(wf.getAttribute("aria-label")).toMatch(/^How the progress of .* is made up$/);
+    expect(within(wf).getByText("+30 points")).toBeTruthy();
+    expect(within(wf).getByText("Engineering")).toBeTruthy();
+    expect(within(wf).getByText("This objective")).toBeTruthy();
     const drill = screen.getByRole("region", { name: "Drill-down" });
     expect(within(drill).getByText(/Engineering/)).toBeTruthy();
     expect(within(drill).getByText(/average 77\.5 \(from 2\)/)).toBeTruthy();

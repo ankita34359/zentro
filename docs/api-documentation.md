@@ -275,6 +275,7 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | GET / PATCH | `/api/evidence/:id` | `evidence.view` (scope, confidentiality) | |
 | POST | `/api/evidence/:id/verify` | `evidence.verify` (scope) | `{status, note}` |
 | POST | `/api/evidence/:id/withdraw` | `evidence.submit` (the person who attached it; only while `unverified`) | no body; hides it, removes its file, audited (409 `not_withdrawable`) |
+| GET | `/api/system` | `org.settings` | App version, migrations, database size, the daily backup (last run, copies by name, newest), background jobs. Never a path or a file's contents |
 | GET | `/api/ai/status` | baseline | whether AI is connected (key set yes/no, organization switch), limits, usage today |
 | PUT | `/api/ai/settings` | `ai.configure` | `{enabled}`; off by default; audited |
 | POST | `/api/ai/ask` | `ai.use` | `{question}` (at most 400 characters) → answer, citations, what was sent, unmatched figures; 409 `ai_not_connected`, 429 `ai_limit_user`/`ai_limit_org`, 504 `ai_timeout`, 503 `ai_unavailable` |

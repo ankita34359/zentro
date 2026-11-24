@@ -21,7 +21,7 @@ export function registerModelRoutes(registry: RouteRegistry, deps: { permissions
     return fn(a, String(res.locals.requestId ?? ""), permissions.capsOf(res, a));
   };
   const id = (v: { params: unknown }) => (v.params as { id: string }).id;
-  const component = z.object({ key: z.string().min(1).max(40), label: z.string().min(1).max(80), weight: z.number().min(0).max(100), providerKey: z.string().min(1).max(60), minSample: z.number().int().min(0).max(1000).optional(), config: z.record(z.string(), z.unknown()).optional() }).strict();
+  const component = z.object({ key: z.string().min(1).max(40), label: z.string().min(1).max(80), weight: z.number().min(0).max(100), providerKey: z.string().min(1).max(60), minSample: z.number().int().min(0).max(1000).optional(), config: z.record(z.string().max(60), z.union([z.string().max(200), z.number().min(-1e12).max(1e12), z.boolean(), z.null(), z.array(z.string().max(60)).max(30)])).refine((o) => Object.keys(o).length <= 20, "Too many settings").optional() }).strict();
 
   registry.add({
     method: "get",
@@ -44,7 +44,7 @@ export function registerModelRoutes(registry: RouteRegistry, deps: { permissions
     access: { kind: "permission", key: "performance.configure" },
     takesEntityId: true,
     summary: "The what-if calculator: `{modelId, values: {<componentKey>: 0..100 | null}, periodClosed?}` runs the model on the typed values and stores NOTHING. null means no data (not zero). Returns the total, status, weight coverage, confidence, each component with its effective weight and points, and the plain-words explanation",
-    schema: { body: z.object({ modelId: uuid, values: z.record(z.string(), z.number().nullable()), periodClosed: z.boolean().optional() }).strict() },
+    schema: { body: z.object({ modelId: uuid, values: z.record(z.string().max(60), z.number().min(-1e12).max(1e12).nullable()).refine((o) => Object.keys(o).length <= 50, "Too many values"), periodClosed: z.boolean().optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => models.preview(a, r, c, v.body as Parameters<ModelService["preview"]>[3]))),
   });
   registry.add({
@@ -70,7 +70,7 @@ export function registerModelRoutes(registry: RouteRegistry, deps: { permissions
     access: { kind: "permission", key: "performance.configure" },
     takesEntityId: true,
     summary: "Change a model: `{name?, roleFamilyId?, designationId?, isDefault?, minWeightCoverage?, minConfidenceForFinal?, bands?, components?}`. A draft is edited in place; editing an ACTIVE or retired model starts the next version as a draft (the old version and the scores that used it are untouched; 409 draft_exists when one is already open). Audited with the weights before and after",
-    schema: { params: idParams, body: z.object({ name: z.string().min(1).max(80).optional(), roleFamilyId: uuid.nullable().optional(), designationId: uuid.nullable().optional(), isDefault: z.boolean().optional(), minWeightCoverage: z.number().optional(), minConfidenceForFinal: z.number().optional(), bands: z.array(z.object({ min: z.number(), label: z.string().min(1).max(40) }).strict()).max(8).optional(), components: z.array(component).max(20).optional() }).strict() },
+    schema: { params: idParams, body: z.object({ name: z.string().min(1).max(80).optional(), roleFamilyId: uuid.nullable().optional(), designationId: uuid.nullable().optional(), isDefault: z.boolean().optional(), minWeightCoverage: z.number().min(-1e12).max(1e12).optional(), minConfidenceForFinal: z.number().min(-1e12).max(1e12).optional(), bands: z.array(z.object({ min: z.number().min(-1e12).max(1e12), label: z.string().min(1).max(40) }).strict()).max(8).optional(), components: z.array(component).max(20).optional() }).strict() },
     handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => models.update(a, r, c, id(v), v.body as ModelInput))),
   });
   registry.add({

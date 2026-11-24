@@ -83,7 +83,7 @@ export class AuthService {
 
   tooMany(ms: number): HttpError {
     const seconds = Math.max(1, Math.ceil(ms / 1000));
-    return new HttpError(429, "rate_limited", "Too many attempts. Wait a little and try again.", { retryAfterSeconds: seconds });
+    return new HttpError(429, "rate_limited", seconds <= 90 ? "Too many attempts, try again in a minute." : `Too many attempts, try again in ${Math.ceil(seconds / 60)} minutes.`, { retryAfterSeconds: seconds });
   }
 
   // ---------- registration ----------

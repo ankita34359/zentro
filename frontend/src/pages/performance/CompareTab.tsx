@@ -36,6 +36,9 @@ export function CompareTab({ periods, periodId, onPeriod }: { periods: PeriodVie
   const result: CompareResult | undefined = savedId ? snap.data?.result : live.data;
   const loading = savedId ? snap.isPending : live.isPending;
   const error = savedId ? snap.error : live.error;
+  const families = (structure.data?.roleFamilies ?? []).filter((f) => !f.archivedAt);
+  // someone with no role family of their own (for example the Owner) would otherwise see an empty page: ask them to pick one
+  const needsFamily = !savedId && !family && canCompare && result !== undefined && result.roleFamily === null && families.length > 0;
   return (
     <div className="space-y-5">
       <Card>
@@ -60,9 +63,20 @@ export function CompareTab({ periods, periodId, onPeriod }: { periods: PeriodVie
       {loading ? <PageSkeleton /> : error ? <ErrorState title="The comparison could not be made" error={error} onRetry={() => void (savedId ? snap.refetch() : live.refetch())} /> : result ? (
         <>
           {savedId && snap.data && <p role="status" className="rounded-lg border bg-muted/40 px-3 py-2 text-label">Saved comparison “{snap.data.name}”, shown exactly as it was saved on {formatDateTime(snap.data.createdAt, "UTC")}. <button type="button" className="font-medium text-primary-ink underline" onClick={() => setSavedId(null)}>Back to live data</button></p>}
-          <Result result={result} />
-          {canCompare && result.entries.length > 1 && !savedId && <Why result={result} />}
-          {canCompare && !savedId && <SaveForm filters={filters} onSaved={(id) => setSavedId(id)} />}
+          {needsFamily ? (
+            <Card aria-label="Choose a role family">
+              <CardHeader><CardTitle>Choose a role family to compare</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-label text-muted-foreground">You are not in a role family yourself, so there is no group of peers to compare you with. Pick the role family you want to look at (real or demo).</p>
+                <div className="max-w-xs"><SelectField label="Role family to compare" value="" onChange={(e) => { setSavedId(null); setFamily(e.target.value); }}>
+                  <option value="">Choose a role family…</option>
+                  {families.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </SelectField></div>
+              </CardContent>
+            </Card>
+          ) : <Result result={result} />}
+          {canCompare && !needsFamily && result.entries.length > 1 && !savedId && <Why result={result} />}
+          {canCompare && !savedId && !needsFamily && <SaveForm filters={filters} onSaved={(id) => setSavedId(id)} />}
         </>
       ) : null}
       {canCompare && <Saved onOpen={setSavedId} />}

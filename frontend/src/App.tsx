@@ -15,6 +15,7 @@ import {
   AcceptInvitePage,
   AuditPage,
   AiSettingsPage,
+  SystemPage,
   StructurePage,
   DemoPage,
   DesignPage,
@@ -98,6 +99,9 @@ export function AppRoutes() {
           </Route>
           <Route element={<RequireCapability any={["performance.view_components"]} />}>
             <Route path="/settings/scoring" element={<ScoringPage />} />
+          </Route>
+          <Route element={<RequireCapability any={["org.settings"]} />}>
+            <Route path="/settings/system" element={<SystemPage />} />
           </Route>
           <Route element={<RequireCapability any={["ai.configure"]} />}>
             <Route path="/settings/ai" element={<AiSettingsPage />} />

@@ -39,7 +39,7 @@ const validTimezone = (tz: string): boolean => {
 const createOrgBody = z
   .object({
     name: z.string().trim().min(2, "Use at least 2 characters").max(80),
-    timezone: z.string().refine(validTimezone, "Unknown time zone").optional().default("UTC"),
+    timezone: z.string().max(64).refine(validTimezone, "Unknown time zone").optional().default("UTC"),
   })
   .strict();
 
