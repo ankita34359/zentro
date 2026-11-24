@@ -236,3 +236,51 @@ describe("full Team Performance and Leadership with the demo company (batch H)",
     expect(r.departments).toEqual([]);
   });
 });
+
+describe("Team Performance date range (batch K)", () => {
+  it("this month, last month, this quarter and custom dates change the task numbers for exactly those dates, and say which scoring period the scores come from and how much of the range it covers", async () => {
+    const { owner, emma, core } = await setup();
+    const task = await created("/api/tasks", { title: "Finished today", assigneeIds: [emma.membershipId], dueAt: day(0) }, owner);
+    expect((await post(t.app, `/api/tasks/${task}/updates`, { type: "status_change", toStatus: "in_progress", note: "start" }, emma.cookie)).status).toBe(201);
+    const fin = await post(t.app, `/api/tasks/${task}/updates`, { type: "status_change", toStatus: "completed", note: "done" }, emma.cookie);
+    expect(fin.status, JSON.stringify(fin.body)).toBe(201);
+    await created("/api/performance/periods", { name: "Right now", startDate: day(-45), endDate: day(45) }, owner);
+    const card = async (q: string) => {
+      const r = await get(t.app, `/api/team-performance?${q}`, owner);
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return { data: r.body.data, core: r.body.data.teams.find((x: { id: string }) => x.id === core) };
+    };
+    // nothing asked for: no range, no activity (the page works as before)
+    const plain = await card("");
+    expect(plain.data.range).toBeNull();
+    expect(plain.core.activity).toBeNull();
+    // this month: today is inside it, so the task finished today is counted, out of the team's tasks
+    const month = await card("range=this_month");
+    expect(month.data.range).toMatchObject({ preset: "this_month", label: "This month" });
+    expect(month.core.activity).toMatchObject({ completed: 1, dueOnTime: 1 });
+    expect(month.core.activity.due).toBeGreaterThanOrEqual(1); // the late task from the setup may fall in this month too
+    expect(month.core.activity.sample).toBeGreaterThanOrEqual(2);
+    expect(month.data.range.scores.period.name).toBe("Right now");
+    expect(month.data.range.scores.note).toMatch(/covers 100% of this range/);
+    // last month: the task was finished today, not last month; the period only partly overlaps it
+    const last = await card("range=last_month");
+    expect(last.core.activity.completed).toBe(0);
+    expect(last.data.range.from < last.data.range.to).toBe(true);
+    expect(last.data.range.scores.coveragePct).toBeLessThan(100);
+    expect(last.data.range.scores.note).toMatch(/covers \d+% of this range/);
+    const quarter = await card("range=this_quarter");
+    expect(quarter.core.activity.completed).toBe(1);
+    // custom dates in the far past: no scoring period overlaps, so no scores (never a guess) and no tasks counted
+    const past = await card("range=custom&from=2020-01-01&to=2020-02-01");
+    expect(past.data.period).toBeNull();
+    expect(past.data.range.scores).toMatchObject({ period: null, coveragePct: 0 });
+    expect(past.data.range.scores.note).toMatch(/No scoring period overlaps these dates/);
+    expect(past.core.average).toBeNull();
+    expect(past.core.activity).toMatchObject({ completed: 0, due: 0 });
+    // bad input is refused with a plain message
+    expect((await get(t.app, "/api/team-performance?range=custom", owner)).status).toBe(400);
+    expect((await get(t.app, "/api/team-performance?range=custom&from=2020-02-01&to=2020-01-01", owner)).status).toBe(400);
+    expect((await get(t.app, "/api/team-performance?range=custom&from=2015-01-01&to=2020-01-01", owner)).status).toBe(400);
+    expect((await get(t.app, "/api/team-performance?range=forever", owner)).status).toBe(400);
+  });
+});

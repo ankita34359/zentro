@@ -18,6 +18,8 @@ const BEHIND = new Set(["at_risk", "delayed"]);
 export interface ObjectiveLine { id: string; title: string; health: string | null; attainmentPct: number | null; elapsedPct: number; dataState: string }
 export interface MemberScore { total: number | null; status: string; confidence: number; confidenceLabel: string; scoreId: string; scorecardId: string }
 export interface TeamCard {
+  /** Only when a date range was picked: counted for exactly those dates, out of `sample` tasks of the team's people. */
+  activity: null | { completed: number; due: number; dueOnTime: number; sample: number };
   id: string;
   name: string;
   department: string | null;
@@ -34,7 +36,8 @@ export interface TeamCard {
   tasks: null | { open: number; overdue: number; done: number; blocked: number };
 }
 export interface TeamComparison { department: string; teams: { id: string; name: string; average: number | null; n: number; eligible: boolean; rank: number | null }[]; note: string }
-export interface TeamPerformance { today: string; period: { id: string; name: string; status: string } | null; periods: { id: string; name: string; status: string }[]; teams: TeamCard[]; comparisons: TeamComparison[] }
+export interface TeamRange { preset: string; label: string; from: string; to: string; days: number; scores: { period: { id: string; name: string; start: string; end: string } | null; coveragePct: number; note: string } }
+export interface TeamPerformance { range: TeamRange | null; today: string; period: { id: string; name: string; status: string } | null; periods: { id: string; name: string; status: string }[]; teams: TeamCard[]; comparisons: TeamComparison[] }
 
 export interface ContributionLine { id: string; title: string; level: string; department: string | null; owner: string | null; health: string | null; attainmentPct: number | null; contributionPct: number | null }
 export interface RangeInfo { preset: string; from: string; to: string; days: number }
@@ -106,17 +109,44 @@ export class DashboardService {
   private pick(tdb: ReturnType<AuthStore["tenant"]>, id?: string) {
     const periods = this.o.store.scorecards(tdb).periods();
     const chosen = (id ? periods.find((p) => p.id === id) : undefined) ?? periods.find((p) => p.status === "open") ?? periods[0];
-    return { periods: periods.map((p) => ({ id: p.id, name: p.name, status: p.status })), period: chosen ? { id: chosen.id, name: chosen.name, status: chosen.status } : null };
+    return { periods: periods.map((p) => ({ id: p.id, name: p.name, status: p.status })), period: chosen ? { id: chosen.id, name: chosen.name, status: chosen.status } : null, all: periods };
   }
   private scoresOf(auth: AuthContext, requestId: string, caps: Capabilities, periodId: string | null): Map<string, MemberScore> {
     if (!periodId) return new Map();
     return new Map(this.o.performance.scorecards(auth, requestId, caps, { periodId }).map((c) => [c.subject.id, { total: c.total, status: c.status, confidence: Math.round(c.confidence * 100) / 100, confidenceLabel: c.confidenceLabel, scoreId: c.scoreId, scorecardId: c.scorecardId }]));
   }
+  /** What happened in exactly the dates picked: tasks finished inside them, tasks that fell due inside them, and how many of those were finished by their due date. */
+  private activity(tasks: TaskRow[], w: { from: string; to: string }): TeamCard["activity"] {
+    const inside = (d: string | null): boolean => d !== null && d.slice(0, 10) >= w.from && d.slice(0, 10) <= w.to;
+    const due = tasks.filter((x) => inside(x.due_at));
+    return { completed: tasks.filter((x) => inside(x.completed_at)).length, due: due.length, dueOnTime: due.filter((x) => x.completed_at !== null && x.due_at !== null && x.completed_at.slice(0, 10) <= x.due_at.slice(0, 10)).length, sample: tasks.length };
+  }
   private mean(values: number[]): number | null {
     return values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10 : null;
   }
 
-  teamPerformance(auth: AuthContext, requestId: string, caps: Capabilities, q: { periodId?: string } = {}): TeamPerformance {
+  /** A date range for Team Performance: this month, last month, this quarter or custom dates (at most two years). Null when none was asked for. */
+  private teamRange(today: string, q: { range?: string; from?: string; to?: string }): { preset: string; label: string; from: string; to: string; days: number } | null {
+    if (!q.range) return null;
+    const [y, m] = [Number(today.slice(0, 4)), Number(today.slice(5, 7))];
+    const pad = (n: number): string => String(n).padStart(2, "0");
+    const first = (yy: number, mm: number): string => `${yy}-${pad(mm)}-01`;
+    const lastOf = (yy: number, mm: number): string => addDays(first(mm === 12 ? yy + 1 : yy, mm === 12 ? 1 : mm + 1), -1);
+    let r: { preset: string; label: string; from: string; to: string };
+    if (q.range === "this_month") r = { preset: q.range, label: "This month", from: first(y, m), to: today };
+    else if (q.range === "last_month") { const [py, pm] = m === 1 ? [y - 1, 12] : [y, m - 1]; r = { preset: q.range, label: "Last month", from: first(py, pm), to: lastOf(py, pm) }; }
+    else if (q.range === "this_quarter") { const qs = Math.floor((m - 1) / 3) * 3 + 1; r = { preset: q.range, label: "This quarter", from: first(y, qs), to: today }; }
+    else if (q.range === "custom") {
+      const day = /^\d{4}-\d{2}-\d{2}$/;
+      if (!q.from || !q.to || !day.test(q.from) || !day.test(q.to) || Number.isNaN(Date.parse(q.from)) || Number.isNaN(Date.parse(q.to))) throw new HttpError(400, "invalid_date", "Pick a start and an end date.");
+      if (q.to < q.from) throw new HttpError(400, "invalid_date", "The end of the range comes before its start.");
+      if (Math.round((Date.parse(q.to) - Date.parse(q.from)) / 86_400_000) > 730) throw new HttpError(400, "invalid_date", "A range is at most two years.");
+      r = { preset: "custom", label: `${q.from} to ${q.to}`, from: q.from, to: q.to > today ? today : q.to };
+    } else throw new HttpError(400, "invalid_value", "Choose this month, last month, this quarter or custom dates.");
+    return { ...r, days: Math.max(1, Math.round((Date.parse(r.to) - Date.parse(r.from)) / 86_400_000) + 1) };
+  }
+
+  teamPerformance(auth: AuthContext, requestId: string, caps: Capabilities, q: { periodId?: string; range?: string; from?: string; to?: string } = {}): TeamPerformance {
     const { ctx, tdb, today } = this.base(auth, requestId);
     const me = ctx.membershipId;
     const structure = this.o.store.structure(tdb);
@@ -128,7 +158,21 @@ export class DashboardService {
     const rows = people.teamRows({ asOf: today });
     const seePeople = caps.scope("people.view");
     const canName = (m: string): boolean => m === me || seePeople.all || seePeople.members.has(m);
-    const { periods, period } = this.pick(tdb, q.periodId);
+    const window = this.teamRange(today, q);
+    const picked = this.pick(tdb, q.periodId);
+    let { periods, period } = picked;
+    let teamRange: TeamRange | null = null;
+    if (window) {
+      // scores belong to scoring periods, so the range uses the period that overlaps it most and says how much of the range that period covers; no overlap means no scores, never a guess
+      let best: { p: (typeof picked.all)[number]; overlap: number } | null = null;
+      for (const p of picked.all) {
+        const overlap = Math.round((Date.parse(p.end_date < window.to ? p.end_date : window.to) - Date.parse(p.start_date > window.from ? p.start_date : window.from)) / 86_400_000) + 1;
+        if (overlap > 0 && (!best || overlap > best.overlap)) best = { p, overlap };
+      }
+      period = best ? { id: best.p.id, name: best.p.name, status: best.p.status } : null;
+      const coveragePct = best ? Math.min(100, Math.round((best.overlap / window.days) * 100)) : 0;
+      teamRange = { ...window, scores: { period: best ? { id: best.p.id, name: best.p.name, start: best.p.start_date, end: best.p.end_date } : null, coveragePct, note: best ? `Scores come from the scoring period "${best.p.name}" (${best.p.start_date} to ${best.p.end_date}), which covers ${coveragePct}% of this range. Task numbers below are counted for exactly the dates you picked.` : "No scoring period overlaps these dates, so there are no scores for this range. Task numbers below are still counted for exactly the dates you picked." } };
+    }
     const scores = this.scoresOf(auth, requestId, caps, period?.id ?? null);
     const okrOn = caps.has("okr.view");
     const objectives = okrOn ? this.o.okr.list(auth, requestId, caps, { level: "team" }).filter((o) => o.lifecycle === "active" || o.lifecycle === "completed") : [];
@@ -169,6 +213,7 @@ export class DashboardService {
         mentoring: mentoringOn ? { pairs: tp.length, activePairs: tp.filter((p) => p.status === "active").length, sessions: tp.reduce((n, p) => n + p.activityCount, 0), menteesMeasured: measured.length, averageImprovement: this.mean(measured), caveat: "Mentee results have many causes. 50 means no change; this shows how mentees changed, not what a mentor alone caused." } : null,
         objectives: okrOn ? objectives.filter((o) => o.team?.id === t.id).map((o) => this.line(o)) : null,
         kpis: caps.has("kpi.view") ? { series: teamSeries.length, byStatus, missingPeriods: teamSeries.reduce((n, s) => n + s.missing.length, 0), items: teamSeries.filter((s) => s.status === "critical" || s.status === "warning" || s.missing.length > 0).sort((a, b) => (rank[a.status] ?? 2) - (rank[b.status] ?? 2) || b.missing.length - a.missing.length).slice(0, 5).map((s) => ({ kpiId: s.kpi.id, name: s.kpi.name, subject: subjectName(s), status: s.status, missing: s.missing.length })) } : null,
+        activity: tasksOn && window ? this.activity(theirTasks, window) : null,
         tasks: tasksOn ? { open: theirTasks.filter((x) => open(x.status)).length, overdue: theirTasks.filter((x) => open(x.status) && x.due_at !== null && x.due_at < today).length, done: theirTasks.filter((x) => x.status === "completed").length, blocked: theirTasks.filter((x) => x.status === "blocked").length } : null,
       };
     });
@@ -181,7 +226,7 @@ export class DashboardService {
       const ranked = rowsC.filter((r) => r.eligible).sort((a, b) => (b.average as number) - (a.average as number));
       comparisons.push({ department: dept, teams: rowsC.map((r) => ({ ...r, rank: ranked.length >= 2 ? ranked.findIndex((x) => x.id === r.id) + 1 || null : null })), note: ranked.length >= 2 ? "Teams of the same department, ranked only when at least 3 people on each have a score. Teams do different work: read the gap as a question, not a verdict." : "Not enough data to compare: a team needs at least 3 people with a score you can see, and at least 2 such teams." });
     }
-    return { today, period, periods, teams: out.sort((a, b) => (a.department ?? "").localeCompare(b.department ?? "") || a.name.localeCompare(b.name)), comparisons };
+    return { range: teamRange, today, period, periods, teams: out.sort((a, b) => (a.department ?? "").localeCompare(b.department ?? "") || a.name.localeCompare(b.name)), comparisons };
   }
 
   // ---------- Leadership ----------

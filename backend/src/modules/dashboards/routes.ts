@@ -21,8 +21,8 @@ export function registerDashboardRoutes(registry: RouteRegistry, deps: { permiss
     path: "/api/team-performance",
     access: { kind: "baseline" },
     summary: "`?periodId` picks the period the scores are read for. One card per team the caller can see, with member scores (only those the caller may read), the team average with how many people it rests on, a comparison with other teams of the same department (only with at least 3 scored people each) and a mentoring summary: everyone may call it, and it returns only teams inside their `org.view` scope (an empty list when they have none) (their own teams, or the teams of their department, or all): members (named only where `people.view` allows, the rest counted), team objectives with health, KPI status for the team and its members, and task progress (open, overdue, blocked, done). A section the caller has no permission for (`okr.view`, `kpi.view`, `task.view`) is null",
-    schema: { query: z.object({ periodId: z.string().uuid().optional() }).strict() },
-    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => dashboards.teamPerformance(a, r, c, v.query as { periodId?: string }))),
+    schema: { query: z.object({ periodId: z.string().uuid().optional(), range: z.enum(["this_month", "last_month", "this_quarter", "custom"]).optional(), from: z.string().max(10).optional(), to: z.string().max(10).optional() }).strict() },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => dashboards.teamPerformance(a, r, c, v.query as { periodId?: string; range?: string; from?: string; to?: string }))),
   });
   registry.add({
     method: "get",

@@ -4,11 +4,13 @@ import { Link } from "react-router";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { PageHeader } from "@/components/common/PageHeader";
+import { FormField } from "@/components/common/FormField";
 import { PageSkeleton } from "@/components/common/PageSkeleton";
+import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/common/SelectField";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getTeamPerformance, type TeamCard } from "@/services/dashboards";
+import { getTeamPerformance, type TeamCard, type TeamPerformanceQuery } from "@/services/dashboards";
 import type { Health } from "@/services/okr";
 import { HealthBadge } from "@/pages/okrs/okrUi";
 import { pct, statusCounts } from "./parts";
@@ -18,7 +20,13 @@ const STATUS_WORD: Record<string, string> = { final: "Final", provisional: "Prov
 /** Team Performance (stage 6.2): one card per team the person may see, with member scores, the team average and what it rests on, a fair comparison, and mentoring. */
 export default function TeamPerformancePage() {
   const [periodId, setPeriodId] = useState<string | undefined>(undefined);
-  const q = useQuery({ queryKey: ["team-performance", periodId ?? "default"], queryFn: () => getTeamPerformance(periodId), retry: false, placeholderData: (p) => p });
+  const [range, setRange] = useState<"" | "this_month" | "last_month" | "this_quarter" | "custom">("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [applied, setApplied] = useState<{ from: string; to: string } | null>(null);
+  const params: TeamPerformanceQuery = range === "" ? { periodId } : range === "custom" ? { range, from: applied?.from, to: applied?.to } : { range };
+  const waitingForDates = range === "custom" && !applied;
+  const q = useQuery({ queryKey: ["team-performance", params], queryFn: () => getTeamPerformance(params), retry: false, placeholderData: (p) => p, enabled: !waitingForDates });
   const period = q.data?.period ?? null;
   return (
     <>
@@ -28,7 +36,27 @@ export default function TeamPerformancePage() {
         <EmptyState illustration="team" title="No team data in your scope yet">Teams you belong to or look after appear here once they exist and you can see them.</EmptyState>
       ) : (
         <div className="space-y-6">
-          {q.data.periods.length > 0 && <div className="max-w-xs"><SelectField label="Scores for the period" value={period?.id ?? ""} onChange={(e) => setPeriodId(e.target.value)}>{q.data.periods.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.status})</option>)}</SelectField></div>}
+          <section aria-label="Date range" className="space-y-2">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-full max-w-xs"><SelectField label="Dates" value={range} onChange={(e) => { setRange(e.target.value as typeof range); setApplied(null); }}>
+                <option value="">Use the scoring period</option><option value="this_month">This month</option><option value="last_month">Last month</option><option value="this_quarter">This quarter</option><option value="custom">Custom dates</option>
+              </SelectField></div>
+              {range === "custom" && (
+                <form className="flex flex-wrap items-end gap-3" aria-label="Custom dates" onSubmit={(e) => { e.preventDefault(); if (from && to) setApplied({ from, to }); }}>
+                  <FormField label="From" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} required />
+                  <FormField label="To" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} required />
+                  <Button type="submit" disabled={!from || !to}>Show</Button>
+                </form>
+              )}
+            </div>
+            {q.data.range && (
+              <div className="max-w-prose space-y-1 text-caption text-muted-foreground" aria-label="What this range shows">
+                <p><span className="font-medium text-foreground">{q.data.range.label}</span> ({q.data.range.from} to {q.data.range.to}, {q.data.range.days} {q.data.range.days === 1 ? "day" : "days"}).</p>
+                <p>{q.data.range.scores.note}</p>
+              </div>
+            )}
+          </section>
+          {!q.data.range && q.data.periods.length > 0 && <div className="max-w-xs"><SelectField label="Scores for the period" value={period?.id ?? ""} onChange={(e) => setPeriodId(e.target.value)}>{q.data.periods.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.status})</option>)}</SelectField></div>}
           {q.data.comparisons.length > 0 && (
             <section aria-label="Team comparison" className="space-y-3">
               <h2 className="text-heading font-semibold">Comparing teams</h2>
@@ -79,6 +107,13 @@ function TeamCardView({ t, periodId }: { t: TeamCard; periodId: string | null })
             </>
           )}
         </section>
+        {t.activity && (
+          <section aria-label={`Tasks in the range for ${t.name}`}>
+            <h3 className="text-label font-semibold">Tasks in these dates</h3>
+            <p className="text-label">{t.activity.completed} finished · {t.activity.due} fell due{t.activity.due > 0 ? ` (${t.activity.dueOnTime} finished by their due date)` : ""}</p>
+            <p className="text-caption text-muted-foreground">Counted from {t.activity.sample} {t.activity.sample === 1 ? "task" : "tasks"} of the people in this team that you may see.</p>
+          </section>
+        )}
         <section aria-label={`Objectives of ${t.name}`}>
           <h3 className="text-label font-semibold">Team objectives</h3>
           {t.objectives === null ? <p className="text-caption text-muted-foreground">You do not have access to objectives.</p> : t.objectives.length === 0 ? <p className="text-caption text-muted-foreground">No team objective yet.</p> : (
