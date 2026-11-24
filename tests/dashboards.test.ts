@@ -132,3 +132,26 @@ describe("Integrations status (batch G)", () => {
     }
   });
 });
+
+describe("with the demo company (batch G)", () => {
+  it("the four pages have real content, and Remove demo data still works (nothing new is stored)", async () => {
+    t = makeAuthApp();
+    const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
+    expect((await post(t.app, "/api/demo/load", undefined, owner)).status).toBe(201);
+    const teams = (await get(t.app, "/api/team-performance", owner)).body.data.teams as { objectives: unknown[] | null; tasks: { open: number } | null; memberCount: number }[];
+    expect(teams.length).toBeGreaterThanOrEqual(10);
+    expect(teams.every((x) => x.memberCount > 0)).toBe(true);
+    expect(teams.some((x) => (x.objectives?.length ?? 0) > 0)).toBe(true);
+    expect(teams.some((x) => (x.tasks?.open ?? 0) > 0)).toBe(true);
+    const lead = (await get(t.app, "/api/leadership/overview", owner)).body.data;
+    expect(lead.objectives.length).toBeGreaterThanOrEqual(3);
+    expect(lead.objectives.some((o: { contributors: unknown[] }) => o.contributors.length > 0)).toBe(true);
+    expect(lead.kpis.series).toBeGreaterThan(5);
+    const ins = (await get(t.app, "/api/ai/insights", owner)).body.data.insights as { key: string }[];
+    expect(ins.length).toBeGreaterThanOrEqual(2);
+    expect((await get(t.app, "/api/integrations/status", owner)).body.data.events.some((e: { last30Days: number | null }) => (e.last30Days ?? 0) > 0)).toBe(true);
+    expect((await post(t.app, "/api/demo/remove", undefined, owner)).status).toBe(200);
+    expect((await get(t.app, "/api/team-performance", owner)).body.data.teams).toEqual([]);
+    expect((await get(t.app, "/api/ai/insights", owner)).body.data.insights).toEqual([]);
+  });
+});

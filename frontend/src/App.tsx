@@ -24,6 +24,10 @@ import {
   NotificationSettingsPage,
   KpiPage,
   PerformancePage,
+  TeamPerformancePage,
+  LeadershipPage,
+  InsightsPage,
+  IntegrationsPage,
   OkrPage,
   OnboardingPage,
   OrganizationPage,
@@ -107,10 +111,20 @@ export function AppRoutes() {
             <Route path="/kpis/*" element={<KpiPage />} />
           </Route>
           <Route path="/performance/*" element={<PerformancePage />} />
+          <Route path="/team-performance/*" element={<TeamPerformancePage />} />
+          <Route element={<RequireCapability any={["leadership.view"]} />}>
+            <Route path="/leadership/*" element={<LeadershipPage />} />
+          </Route>
+          <Route element={<RequireCapability any={["ai.use", "ai.view_insights"]} />}>
+            <Route path="/ai/*" element={<InsightsPage />} />
+          </Route>
+          <Route element={<RequireCapability any={["integrations.view"]} />}>
+            <Route path="/integrations/*" element={<IntegrationsPage />} />
+          </Route>
           <Route element={<RequireCapability any={["org.view"]} />}>
             <Route path="/organization/*" element={<OrganizationPage />} />
           </Route>
-          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs" && n.key !== "kpis" && n.key !== "performance").map((n) => (
+          {NAV_ITEMS.filter((n) => n.key !== "overview" && n.key !== "settings" && n.key !== "organization" && n.key !== "my-work" && n.key !== "okrs" && n.key !== "kpis" && n.key !== "performance" && n.key !== "team-performance" && n.key !== "leadership" && n.key !== "ai" && n.key !== "integrations").map((n) => (
             <Route key={n.key} path={`${n.path}/*`} element={<SectionPage sectionKey={n.key} />} />
           ))}
         </Route>
