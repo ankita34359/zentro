@@ -275,6 +275,12 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | GET / PATCH | `/api/evidence/:id` | `evidence.view` (scope, confidentiality) | |
 | POST | `/api/evidence/:id/verify` | `evidence.verify` (scope) | `{status, note}` |
 | POST | `/api/evidence/:id/withdraw` | `evidence.submit` (the person who attached it; only while `unverified`) | no body; hides it, removes its file, audited (409 `not_withdrawable`) |
+| POST / GET | `/api/export` | `org.settings` | POST: zip of CSV files of the organization's own data (audited); GET: what it contains and what is left out |
+| GET / PUT | `/api/integrations/webhooks` | `integrations.view` / `integrations.manage` | The outgoing webhook: host only, switches, limits; PUT `{url?, enabled?, events?}`; the signing secret is returned once |
+| POST | `/api/integrations/webhooks/rotate-secret`, `/api/integrations/webhooks/test` | `integrations.manage` | New secret (shown once); one immediate test delivery |
+| GET | `/api/integrations/deliveries`, `/api/integrations/endpoints` | `integrations.view` | The delivery log; the incoming endpoints (never a token) |
+| POST / DELETE | `/api/integrations/endpoints[/:id]` | `integrations.manage` | Create (token shown once) or delete an incoming endpoint |
+| POST | `/api/inbound/:id` | public: the endpoint's secret token | Create a task or record a KPI value from viaSocket; 401 wrong or deleted token, 429 beyond 60 a minute |
 | GET | `/api/system` | `org.settings` | App version, migrations, database size, the daily backup (last run, copies by name, newest), background jobs. Never a path or a file's contents |
 | GET | `/api/ai/status` | baseline | whether AI is connected (key set yes/no, organization switch), limits, usage today |
 | PUT | `/api/ai/settings` | `ai.configure` | `{enabled}`; off by default; audited |

@@ -297,3 +297,14 @@ Setting those two addresses needs a viaSocket sign-in as you, so it is one of th
 ## 11. Version drift
 
 viaSocket's docs change quickly (their guide is versioned `2026-11-20.6`; Curevia's SDK pin is two minor versions of API behind). Everything viaSocket-specific lives in `backend/src/integrations/viasocket/` behind our own interfaces (`ViaSocketClient`, `AiProvider`), the SDK version is pinned exactly, and each stage-8 sub-stage begins by re-reading the relevant viaSocket page and re-running `check:viasocket`, so drift is contained and visible.
+
+## Batch L: what is real now (webhook out, endpoints in)
+
+Zentro talks to viaSocket (or anything that can receive a webhook or send a request) in two plain ways, both set up on the Integrations page by an administrator.
+
+**Zentro to viaSocket (outgoing).** In viaSocket make a flow that starts with a webhook and copy its address. In Zentro: Integrations, Send events, paste the address, Save address. A signing secret appears once: copy it into viaSocket. Switch on the events you want, switch the webhook on, press Send test event. Each message is a POST with a JSON body `{id, type, occurredAt, organizationId, entity, data}` and the headers `X-Zentro-Event`, `X-Zentro-Delivery` and `X-Zentro-Signature: t=<unix seconds>,v1=<hex>`. To check it, compute HMAC-SHA256 of the text `<t>.<raw body>` with the signing secret, compare with `v1`, and reject a `t` more than five minutes old. Answer with any 2xx code within 8 seconds. A 5xx, 408, 429, timeout or network failure is retried after 1, 5, 30, 120 and 360 minutes; any other answer is final.
+
+**viaSocket to Zentro (incoming).** In Zentro: Integrations, Incoming endpoints, give it a name and choose what it does (create a task, or record a value for one KPI). Copy the token (shown once) and the address. In viaSocket add a "send a request" step: POST to that address with the header `Authorization: Bearer <token>` and a JSON body: `{"title": "Call the customer"}` for a task (optional `description`, `priority`, `dueAt` as YYYY-MM-DD, `assigneeId`), or `{"value": 42, "periodStart": "2026-11-01"}` for a KPI value (optional `valueStatus`, `note`). Deleting the endpoint stops its token at once.
+
+What is never sent or shown: private notes, review ratings and summaries, evidence titles and notes, files, passwords, and any secret. What is not built yet is listed as Planned on the page: the embedded flow builder, notification channels and reports, AI-approved actions, and alerts (M91).
+

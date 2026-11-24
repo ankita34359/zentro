@@ -13,6 +13,7 @@ import { DemoRepository } from "../../demo/repositories/demo.js";
 import { OkrRepository } from "../../okr/repositories/okr.js";
 import { KpiRepository } from "../../kpi/repositories/kpi.js";
 import { EvidenceRepository } from "../../evidence/repositories/evidence.js";
+import { IntegrationsRepository } from "../../integrations/repositories/integrations.js";
 import { ExportRepository } from "../../exports/repositories/export.js";
 import { AiRepository } from "../../ai/repositories/ai.js";
 import { ReviewRepository } from "../../reviews/repositories/reviews.js";
@@ -52,6 +53,7 @@ export interface AuthStore {
   evidence(tdb: TenantDb): EvidenceRepository;
   ai(tdb: TenantDb): AiRepository;
   exports(tdb: TenantDb): ExportRepository;
+  integrations(tdb: TenantDb): IntegrationsRepository;
   transaction<T>(fn: () => T): T;
 }
 
@@ -84,6 +86,7 @@ export function createAuthStore(db: Database.Database): AuthStore {
     evidence: (tdb) => new EvidenceRepository(tdb),
     ai: (tdb) => new AiRepository(tdb),
     exports: (tdb) => new ExportRepository(tdb),
+    integrations: (tdb) => new IntegrationsRepository(tdb),
     transaction: (fn) => db.transaction(fn)(),
   };
 }

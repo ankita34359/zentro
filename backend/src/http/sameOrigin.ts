@@ -22,6 +22,8 @@ export function sameOriginCheck(appUrl: string | undefined) {
   const configured = hostOf(appUrl);
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (SAFE.has(req.method) || !req.path.startsWith("/api/")) return next();
+    // incoming calls from viaSocket come from a server, with no Origin, and are authenticated by a secret token in a header (never by a cookie, which this route ignores), so there is nothing for a cross-site page to ride on
+    if (req.path.startsWith("/api/inbound/")) return next();
     const source = hostOf(req.headers.origin) ?? (req.headers.origin === undefined ? hostOf(req.headers.referer) : null);
     const allowed = new Set<string>();
     if (configured) allowed.add(configured);

@@ -48,6 +48,7 @@ describe("route registry: every route declares its protection", () => {
     t = makeTestApp();
     const rows = t.registry.list().map((r) => `${r.method.toUpperCase()} ${r.path} ${r.access.kind}`).sort();
     expect(rows).toEqual([
+      "DELETE /api/integrations/endpoints/:id permission",
       "DELETE /api/kpis/:id/assignments/:aid permission",
       "DELETE /api/objectives/:id permission",
       "DELETE /api/objectives/:id/assignments/:aid permission",
@@ -72,7 +73,10 @@ describe("route registry: every route declares its protection", () => {
       "GET /api/export permission",
       "GET /api/hierarchy/reporting permission",
       "GET /api/hierarchy/tree permission",
+      "GET /api/integrations/deliveries permission",
+      "GET /api/integrations/endpoints permission",
       "GET /api/integrations/status permission",
+      "GET /api/integrations/webhooks permission",
       "GET /api/invitations permission",
       "GET /api/kpis permission",
       "GET /api/kpis/:id permission",
@@ -179,6 +183,10 @@ describe("route registry: every route declares its protection", () => {
       "POST /api/export permission",
       "POST /api/hierarchy/move permission",
       "POST /api/hierarchy/reporting permission",
+      "POST /api/inbound/:id public",
+      "POST /api/integrations/endpoints permission",
+      "POST /api/integrations/webhooks/rotate-secret permission",
+      "POST /api/integrations/webhooks/test permission",
       "POST /api/invitations permission",
       "POST /api/invitations/:id/regenerate permission",
       "POST /api/invitations/:id/revoke permission",
@@ -231,6 +239,7 @@ describe("route registry: every route declares its protection", () => {
       "POST /api/teams/:id/members permission",
       "POST /api/teams/:id/restore permission",
       "PUT /api/ai/settings permission",
+      "PUT /api/integrations/webhooks permission",
       "PUT /api/kpis/:id/thresholds permission",
       "PUT /api/objectives/:id/parent permission",
       "PUT /api/preferences baseline",

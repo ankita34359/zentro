@@ -35,8 +35,10 @@ export interface LeadershipView {
 export interface Insight { key: string; severity: "attention" | "info"; title: string; summary: string; count: number; to: string; items: { label: string; detail: string; to: string }[] }
 export interface InsightsView { today: string; insights: Insight[]; ask: { enabled: false; reason: string }; note: string }
 export interface IntegrationsView {
-  viaSocket: { connected: false; status: string; settings: { name: string; set: boolean }[] };
-  events: { type: string; description: string; status: "recorded" | "planned"; last30Days: number | null }[];
+  viaSocket: { connected: boolean; status: string; settings: { name: string; set: boolean }[] };
+  automations: { webhook: { configured: boolean; enabled: boolean }; endpoints: number };
+  planned: { name: string; note: string }[];
+  events: { type: string; description: string; status: "available" | "recorded" | "planned"; last30Days: number | null }[];
   steps: string[];
   note: string;
 }

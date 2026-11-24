@@ -159,10 +159,17 @@ describe("AI Intelligence insights (batch G)", () => {
   });
 });
 
+const WEBHOOK = (over: Record<string, unknown> = {}) => ({
+  configured: false, enabled: false, host: null, secretSet: false, secretCreatedAt: null,
+  events: [{ type: "task.created", description: "A task was created.", enabled: false }, { type: "kpi.threshold", description: "A KPI crossed a threshold.", enabled: true }],
+  limits: { timeoutSeconds: 8, maxPayloadBytes: 16384, maxAttempts: 6, retryMinutes: [1, 5, 30, 120, 360] },
+  signing: { header: "X-Zentro-Signature", algorithm: "HMAC-SHA256", how: "The header reads t=<unix seconds>,v1=<hex>." }, ...over,
+});
+
 describe("Integrations (batch G)", () => {
   it("shows Not connected, which settings are set (names only), the steps and the events with their status", async () => {
     setMe(withCaps({ "integrations.view": ["all_in_scope"] }));
-    serve({ "/api/integrations/status": { viaSocket: { connected: false, status: "Not connected", settings: [{ name: "VIASOCKET_ORG_ID", set: true }, { name: "VIASOCKET_EMBED_SECRET", set: false }] }, steps: ["Create a viaSocket project."], note: "Nothing is sent yet.", events: [{ type: "task.created", description: "A task was created.", status: "recorded", last30Days: 12 }, { type: "period.closed", description: "A period was closed.", status: "planned", last30Days: null }] } });
+    serve({ "/api/integrations/webhooks": WEBHOOK(), "/api/integrations/deliveries": [], "/api/integrations/endpoints": [], "/api/integrations/status": { viaSocket: { connected: false, status: "Not connected", settings: [{ name: "VIASOCKET_ORG_ID", set: true }, { name: "VIASOCKET_EMBED_SECRET", set: false }] }, automations: { webhook: { configured: false, enabled: false }, endpoints: 0 }, planned: [{ name: "Alerts (M91)", note: "Planned for its own later batch." }], steps: ["Create a viaSocket project."], note: "Nothing is sent yet.", events: [{ type: "task.created", description: "A task was created.", status: "recorded", last30Days: 12 }, { type: "period.closed", description: "A period was closed.", status: "planned", last30Days: null }] } });
     renderApp("/integrations");
     expect(await screen.findByText("Not connected")).toBeTruthy();
     const settings = screen.getByRole("list", { name: "Settings" });
@@ -171,7 +178,8 @@ describe("Integrations (batch G)", () => {
     expect(screen.getByText("Create a viaSocket project.")).toBeTruthy();
     const table = screen.getByRole("table", { name: "Events" });
     expect(within(table).getByText("Recorded")).toBeTruthy();
-    expect(within(table).getByText("Planned")).toBeTruthy();
+    expect(within(table).getAllByText("Planned").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("region", { name: "Still planned" }).textContent).toMatch(/Alerts \(M91\)/); // M91 stays Planned
     expect(within(table).getByText("12")).toBeTruthy();
     expect(screen.getByText("Early version")).toBeTruthy();
   });
@@ -182,3 +190,95 @@ describe("Integrations (batch G)", () => {
     expect(await screen.findByText("You do not have access to this page")).toBeTruthy();
   });
 });
+
+describe("viaSocket automations (batch L)", () => {
+  const ADMIN = { "integrations.view": ["all_in_scope"], "integrations.manage": ["all_in_scope"] };
+  const STATUS = { viaSocket: { connected: false, status: "Not connected", settings: [] }, automations: { webhook: { configured: false, enabled: false }, endpoints: 0 }, planned: [{ name: "Alerts (M91)", note: "Planned for its own later batch." }], steps: [], note: "n", events: [{ type: "task.created", description: "A task was created.", status: "available", last30Days: 3 }, { type: "period.closed", description: "A period was closed.", status: "planned", last30Days: null }] };
+  const DELIVERY = { id: "d1", at: "2026-11-24T10:00:00.000Z", eventType: "test.ping", status: "delivered", attempts: 1, responseCode: 200, error: null, isTest: true, nextAttemptAt: null };
+  const server = (extra: (url: string, init?: RequestInit) => Response | undefined) => stubFetch((url, init) => {
+    const e = extra(url, init);
+    if (e) return e;
+    const m = init?.method ?? "GET";
+    if (m === "GET" && url === "/api/integrations/status") return envelope(STATUS);
+    if (m === "GET" && url === "/api/integrations/webhooks") return envelope(WEBHOOK());
+    if (m === "GET" && url === "/api/integrations/deliveries?limit=50") return envelope([DELIVERY]);
+    if (m === "GET" && url === "/api/integrations/endpoints") return envelope([{ id: "e1", name: "Flow one", kind: "task", path: "/api/inbound/e1", tokenPrefix: "zin_abcd", createdAt: "2026-11-24T09:00:00.000Z", lastUsedAt: null, calls: 2, kpiId: null }]);
+    if (url === "/api/notifications") return envelope({ notifications: [], unreadCount: 0, nextCursor: null });
+    return json(HEALTH_OK);
+  });
+
+  it("the administrator saves an address and is shown the signing secret ONCE; the delivery log and the endpoints list never show a secret", async () => {
+    setMe(withCaps(ADMIN));
+    const f = server((url, init) => (url === "/api/integrations/webhooks" && init?.method === "PUT" ? envelope(WEBHOOK({ configured: true, host: "hooks.example.com", secretSet: true, signingSecret: "whsec_SHOWN-ONCE-123" })) : undefined));
+    renderApp("/integrations");
+    const card = await screen.findByRole("region", { name: /Send events/ }).catch(() => screen.findByLabelText("Send events"));
+    await userEvent.type(await within(card).findByLabelText("viaSocket webhook address (https)"), "https://hooks.example.com/abc");
+    await userEvent.click(within(card).getByRole("button", { name: "Save address" }));
+    const secret = await screen.findByRole("group", { name: "Signing secret (shown once)" });
+    expect((within(secret).getByLabelText("Signing secret (shown once)") as HTMLInputElement).value).toBe("whsec_SHOWN-ONCE-123");
+    expect(JSON.parse(String((f.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "PUT")![1] as RequestInit).body))).toEqual({ url: "https://hooks.example.com/abc" });
+    await userEvent.click(within(secret).getByRole("button", { name: "I have saved it" }));
+    expect(screen.queryByDisplayValue("whsec_SHOWN-ONCE-123")).toBeNull(); // gone for good
+    const log = screen.getByLabelText("Delivery log");
+    expect(await within(log).findByText("Delivered")).toBeTruthy();
+    expect(within(log).getByText("200")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/whsec_SHOWN|zin_abcd[A-Za-z0-9]{6}/);
+  });
+
+  it("event switches, Send test event and the on/off switch call the server; the result of the test is told in words", async () => {
+    setMe(withCaps(ADMIN));
+    const f = server((url, init) => {
+      if (url === "/api/integrations/webhooks" && init?.method === "PUT") return envelope(WEBHOOK({ configured: true, host: "hooks.example.com", secretSet: true }));
+      if (url === "/api/integrations/webhooks/test") return envelope({ ...DELIVERY, status: "dead", responseCode: 500, error: "http_500" });
+      return undefined;
+    });
+    // a saved address so the buttons are enabled
+    const base = f.getMockImplementation()!;
+    f.mockImplementation((url: unknown, init?: RequestInit) => (String(url) === "/api/integrations/webhooks" && (init?.method ?? "GET") === "GET" ? Promise.resolve(envelope(WEBHOOK({ configured: true, host: "hooks.example.com", secretSet: true }))) : (base as (u: unknown, i?: RequestInit) => Promise<Response>)(url, init)));
+    renderApp("/integrations");
+    const card = await screen.findByLabelText("Send events");
+    expect(await within(card).findByText(/hooks\.example\.com/)).toBeTruthy();
+    await userEvent.click(within(card).getByRole("checkbox", { name: /task\.created/ }));
+    await waitFor(() => expect(f.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "PUT" && JSON.parse(String((c[1] as RequestInit).body)).events?.["task.created"] === true)).toBe(true));
+    await userEvent.click(within(card).getByRole("button", { name: /Send test event/ }));
+    expect(await within(card).findByText(/Test event not delivered \(answer 500\)/)).toBeTruthy();
+    await userEvent.click(within(card).getByRole("button", { name: "Switch the webhook on" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "PUT" && JSON.parse(String((c[1] as RequestInit).body)).enabled === true)).toBe(true));
+  });
+
+  it("an incoming endpoint is created with its token shown once and its address and header spelled out, and deleted after a confirmation", async () => {
+    setMe(withCaps(ADMIN));
+    const f = server((url, init) => {
+      if (url === "/api/integrations/endpoints" && init?.method === "POST") return envelope({ id: "e2", name: "Leads flow", kind: "task", path: "/api/inbound/e2", tokenPrefix: "zin_wxyz", createdAt: "x", lastUsedAt: null, calls: 0, kpiId: null, token: "zin_TOKEN-SHOWN-ONCE" }, 201);
+      if (url === "/api/integrations/endpoints/e1" && init?.method === "DELETE") return envelope({ deleted: true });
+      return undefined;
+    });
+    renderApp("/integrations");
+    const card = await screen.findByLabelText("Incoming endpoints");
+    expect(await within(card).findByText("Flow one")).toBeTruthy();
+    expect(within(card).getByText(/token zin_abcd… · used 2 times/)).toBeTruthy();
+    await userEvent.type(within(card).getByLabelText("Endpoint name"), "Leads flow");
+    await userEvent.click(within(card).getByRole("button", { name: "Create endpoint" }));
+    const shown = await screen.findByRole("group", { name: /Token for "Leads flow"/ });
+    expect((within(shown).getByLabelText(/Token for "Leads flow"/) as HTMLInputElement).value).toBe("zin_TOKEN-SHOWN-ONCE");
+    expect(card.textContent).toMatch(/\/api\/inbound\/e2/);
+    expect(card.textContent).toMatch(/Authorization: Bearer/);
+    await userEvent.click(within(shown).getByRole("button", { name: "I have saved it" }));
+    expect(screen.queryByDisplayValue("zin_TOKEN-SHOWN-ONCE")).toBeNull();
+    await userEvent.click(within(card).getByRole("button", { name: "Delete Flow one" }));
+    expect(f.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "DELETE")).toBe(false); // asks first
+    await userEvent.click(within(card).getByRole("button", { name: "Yes, delete" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/integrations/endpoints/e1" && (c[1] as RequestInit)?.method === "DELETE")).toBe(true));
+  });
+
+  it("a person who may only view sees the log and the lists but none of the buttons or forms", async () => {
+    setMe(withCaps({ "integrations.view": ["all_in_scope"] }));
+    server(() => undefined);
+    renderApp("/integrations");
+    const log = await screen.findByLabelText("Delivery log");
+    expect(await within(log).findByText("Delivered")).toBeTruthy();
+    for (const name of ["Save address", "Send test event", "Create endpoint", "Make a new signing secret"]) expect(screen.queryByRole("button", { name: new RegExp(name) })).toBeNull();
+    expect(screen.queryByRole("form", { name: "New endpoint" })).toBeNull();
+  });
+});
+

@@ -17,7 +17,7 @@ export interface BusinessEvent {
 export class EventWriter {
   constructor(
     private readonly store: AuthStore,
-    private readonly clock: () => number = Date.now,
+    private readonly clock: () => number = () => Date.now(),
   ) {}
 
   record(tdb: TenantDb, ctx: Pick<TenantCtx, "membershipId">, e: BusinessEvent): boolean {

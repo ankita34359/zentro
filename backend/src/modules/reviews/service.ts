@@ -2,6 +2,7 @@ import type { TenantCtx } from "../../db/tenant.js";
 import { HttpError, notFound } from "../../lib/errors.js";
 import { newId } from "../../lib/ids.js";
 import type { AuditService } from "../audit/service.js";
+import type { EventWriter } from "../automation/events.js";
 import type { AuthStore } from "../auth/repositories/store.js";
 import type { AuthContext, AuthService } from "../auth/service.js";
 import type { Capabilities } from "../permissions/service.js";
@@ -30,7 +31,7 @@ export interface ReviewInput { rating?: number | null; sharedSummary?: string; d
  * receives the field at all. Nothing written in a review is copied into the audit log, only that it was written.
  */
 export class ReviewService {
-  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService }) {}
+  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; events: EventWriter }) {}
 
   private ctx(auth: AuthContext, requestId: string): TenantCtx {
     return this.o.auth.tenantCtx(auth, requestId);
@@ -110,6 +111,8 @@ export class ReviewService {
     const now = this.now();
     this.o.store.transaction(() => {
       w.repo.insert({ id, periodId: period.id, subjectId: input.subjectId, reviewerId: ctx.membershipId, ...c, submittedAt: input.submit ? now : null, now });
+      // ids only: no rating, no summary and never the private notes
+      if (input.submit) this.o.events.record(w.tdb, ctx, { eventType: "review.submitted", entityType: "performance_review", entityId: id, dedupeKey: `review.submitted:${id}`, payload: { reviewId: id, subjectId: input.subjectId, periodId: period.id } });
       this.o.audit.record(w.tdb, ctx, { action: input.submit ? "review.submit" : "review.create", entityType: "performance_review", entityId: id, summary: `${input.submit ? "Submitted" : "Started"} a review of ${subject.display_name} for "${period.name}"`, after: { status: input.submit ? "submitted" : "draft", rating: c.rating, hasPrivateNotes: c.privateNotes !== "" } });
     });
     return this.view(w, caps, ctx.membershipId, w.repo.review(id)!, period.name)!;
@@ -129,6 +132,7 @@ export class ReviewService {
     const now = this.now();
     this.o.store.transaction(() => {
       w.repo.update({ id, ...c, status: submitting ? "submitted" : r.status, submittedAt: submitting ? now : r.submitted_at, now });
+      if (submitting) this.o.events.record(w.tdb, ctx, { eventType: "review.submitted", entityType: "performance_review", entityId: id, dedupeKey: `review.submitted:${id}`, payload: { reviewId: id, subjectId: r.subject_membership_id, periodId: period.id } });
       this.o.audit.record(w.tdb, ctx, { action: submitting ? "review.submit" : "review.update", entityType: "performance_review", entityId: id, summary: `${submitting ? "Submitted" : "Changed"} the review of ${this.nm(w, r.subject_membership_id)} for "${period.name}"`, before: { status: r.status, rating: r.rating }, after: { status: submitting ? "submitted" : r.status, rating: c.rating, hasPrivateNotes: c.privateNotes !== "" } });
     });
     return this.view(w, caps, ctx.membershipId, w.repo.review(id)!, period.name)!;

@@ -4,6 +4,7 @@ import { HttpError, notFound } from "../../lib/errors.js";
 import { newId } from "../../lib/ids.js";
 import { RateLimiter } from "../../lib/rateLimit.js";
 import type { AuditService } from "../audit/service.js";
+import type { EventWriter } from "../automation/events.js";
 import type { AuthStore } from "../auth/repositories/store.js";
 import type { AuthContext, AuthService } from "../auth/service.js";
 import type { OkrService } from "../okr/service.js";
@@ -48,7 +49,7 @@ export interface EvidenceInput { title: string; evidenceType?: string; descripti
 export class EvidenceService {
   /** File uploads per person: every attempt counts (20 in 10 minutes), because a file is the one thing a person can make the server store in bulk. */
   private readonly uploads = new RateLimiter({ max: 20, windowMs: 10 * 60_000, blockMs: 5 * 60_000, maxBlockMs: 60 * 60_000 });
-  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; tasks: TaskService; okr: OkrService }) {}
+  constructor(private readonly o: { store: AuthStore; auth: AuthService; audit: AuditService; tasks: TaskService; okr: OkrService; events: EventWriter }) {}
 
   private ctx(auth: AuthContext, requestId: string): TenantCtx {
     return this.o.auth.tenantCtx(auth, requestId);
@@ -175,6 +176,8 @@ export class EvidenceService {
     if (input.status !== "verified" && !note) throw new HttpError(400, "note_required", "Say why it is rejected or what is missing.");
     this.o.store.transaction(() => {
       w.repo.verify(id, input.status, ctx.membershipId, note, this.now());
+      // ids and the outcome only: never the note, the title or the file
+      this.o.events.record(w.tdb, ctx, { eventType: "evidence.verified", entityType: "evidence", entityId: id, dedupeKey: `evidence.verified:${id}:${input.status}:${this.now()}`, payload: { evidenceId: id, status: input.status, subjectId: e.related_membership_id ?? e.submitted_by_membership_id } });
       this.o.audit.record(w.tdb, ctx, { action: "evidence.verify", entityType: "evidence", entityId: id, summary: `Marked evidence "${e.title}" ${input.status.replace("_", " ")}`, before: { status: e.verification_status }, after: { status: input.status } });
     });
     return this.one(auth, requestId, caps, id);

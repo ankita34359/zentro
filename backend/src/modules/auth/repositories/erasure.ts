@@ -7,7 +7,7 @@ import { PeopleRepository } from "../../people/repositories/people.js";
  * Deleting an organization or an account must cover ALL of them: a test lists the tables that have an
  * `organization_id` column and fails when one is missing here, so a later stage that adds a table cannot forget.
  */
-export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "demo_data_batches", "automation_events", "notification_preferences", "notifications", "daily_updates", "task_comments", "task_updates", "task_assignments", "task_dependencies", "tasks", "objective_progress_history", "key_results", "objective_assignments", "objective_relationships", "objectives", "kpi_measurements", "kpi_thresholds", "kpi_assignments", "kpis", "ai_requests", "organization_ai_settings", "evidence_files", "evidence_links", "evidence", "performance_reviews", "mentorship_progress", "mentorship_activities", "mentorship_assignments", "performance_comparisons", "performance_score_components", "performance_scores", "performance_scorecards", "performance_periods", "scoring_model_components", "scoring_models", "reporting_relationships", "team_memberships", "department_memberships", "designation_assignments", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
+export const ORGANIZATION_TABLES_IN_DELETE_ORDER = ["audit_logs", "demo_data_batches", "automation_events", "notification_preferences", "notifications", "daily_updates", "task_comments", "task_updates", "task_assignments", "task_dependencies", "tasks", "objective_progress_history", "key_results", "objective_assignments", "objective_relationships", "objectives", "kpi_measurements", "kpi_thresholds", "kpi_assignments", "kpis", "ai_requests", "organization_ai_settings", "webhook_deliveries", "webhook_settings", "inbound_endpoints", "evidence_files", "evidence_links", "evidence", "performance_reviews", "mentorship_progress", "mentorship_activities", "mentorship_assignments", "performance_comparisons", "performance_score_components", "performance_scores", "performance_scorecards", "performance_periods", "scoring_model_components", "scoring_models", "reporting_relationships", "team_memberships", "department_memberships", "designation_assignments", "designations", "role_families", "teams", "departments", "invitations", "user_role_assignments", "role_permissions", "roles", "organization_memberships"] as const;
 
 export interface MemberCounts {
   /** Other people who have joined and still belong (active or suspended). People who left, and people only invited, do not count: invitations are counted separately. */
@@ -67,6 +67,9 @@ export class ErasureRepository {
     tdb.run("DELETE FROM kpi_thresholds WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM kpi_assignments WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM kpis WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM webhook_deliveries WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM webhook_settings WHERE organization_id = @organization_id");
+    tdb.run("DELETE FROM inbound_endpoints WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM ai_requests WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM organization_ai_settings WHERE organization_id = @organization_id");
     tdb.run("DELETE FROM evidence_files WHERE organization_id = @organization_id");
