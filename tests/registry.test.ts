@@ -121,6 +121,7 @@ describe("route registry: every route declares its protection", () => {
       "GET /api/tasks/:id permission",
       "GET /api/tasks/:id/comments permission",
       "GET /api/tasks/:id/updates permission",
+      "GET /api/system permission",
       "GET /api/team-performance baseline",
       "GET /healthz public",
       "PATCH /api/departments/:id permission",

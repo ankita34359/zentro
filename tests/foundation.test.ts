@@ -60,11 +60,12 @@ describe("cron tick route", () => {
     const res = await request(t.app).get("/api/cron/tick").set("Authorization", `Bearer ${CRON}`);
     expect(res.status).toBe(202);
     expect(res.body).toEqual({ accepted: true, started: true });
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 300));
     const rows = t.db.prepare("SELECT job_name, status FROM scheduled_job_runs ORDER BY job_name").all();
     expect(rows).toEqual([
       { job_name: "kpi.thresholds", status: "ok" },
       { job_name: "okr.health", status: "ok" },
+      { job_name: "platform.backup", status: "ok" },
       { job_name: "platform.housekeeping", status: "ok" },
       { job_name: "scores.recalculate", status: "ok" },
       { job_name: "tasks.reminders", status: "ok" },

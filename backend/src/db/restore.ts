@@ -40,7 +40,7 @@ interface LogEntry {
   backupBytes: number;
 }
 
-const REQUEST = /^(pre-[A-Za-z0-9._-]+\.db)(?:@([A-Za-z0-9_-]{1,40}))?$/;
+const REQUEST = /^((?:pre|daily)-[A-Za-z0-9._-]+\.db)(?:@([A-Za-z0-9_-]{1,40}))?$/;
 const LOG_FILE = "restore-log.json";
 const KEEP_PRE_RESTORE = 3;
 
@@ -117,7 +117,7 @@ export function applyRestoreRequest(opts: { dataDir: string; request: string | u
   };
 
   const m = REQUEST.exec(request);
-  if (!m) return refuse("RESTORE_BACKUP must be a backup file name from the backups folder, for example pre-0005-2026-11-22T15-12-49-405Z.db");
+  if (!m) return refuse("RESTORE_BACKUP must be a backup file name from the backups folder, for example daily-2026-11-24T03-00-00-000Z.db or pre-0005-2026-11-22T15-12-49-405Z.db");
   const name = m[1]!;
   const backupDir = path.join(dataDir, "backups");
   const source = path.join(backupDir, name);

@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, FlaskConical, Gauge, Network, ScrollText, ShieldCheck, Sparkles, UserCog, Users } from "lucide-react";
+import { Bell, ChevronRight, FlaskConical, Gauge, Network, ScrollText, ServerCog, ShieldCheck, Sparkles, UserCog, Users } from "lucide-react";
 import { Link } from "react-router";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ const ITEMS: { to: string; title: string; body: string; icon: typeof Users; any?
   { to: "/settings/structure", title: "Organization structure", body: "Departments, teams and sub-teams, role families and designations; rename the organization.", icon: Network, any: ["org.view"] },
   { to: "/settings/audit", title: "Audit log", body: "Who changed what and when: roles, assignments, invitations and people.", icon: ScrollText, any: ["audit.view"] },
   { to: "/settings/scoring", title: "Scoring", body: "What each kind of role is measured on, how much each part counts, and a calculator to try it.", icon: Gauge, any: ["performance.view_components"] },
+  { to: "/settings/system", title: "System", body: "App version, database size, the daily backup and the background jobs. Only administrators see this.", icon: ServerCog, any: ["org.settings"] },
   { to: "/settings/ai", title: "AI", body: "See whether AI is connected and switch it on or off for your organization. It is off until you do.", icon: Sparkles, any: ["ai.configure"] },
   { to: "/settings/demo", title: "Demo data", body: "Load a fictional company to see every page full, view as a demo person, and remove it all again.", icon: FlaskConical, any: ["demo.manage"] },
   { to: "/settings/notifications", title: "Notifications", body: "Choose which reminders and updates reach your bell.", icon: Bell },
