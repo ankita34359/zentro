@@ -4,6 +4,7 @@ import type { RouteRegistry } from "../../http/registry.js";
 import { unauthenticated } from "../../lib/errors.js";
 import { authOf } from "../auth/guards.js";
 import type { PermissionService } from "../permissions/service.js";
+import { z } from "zod";
 import type { DashboardService } from "./service.js";
 
 /** Team Performance, Leadership, rule-based insights and integrations status: first, read-only versions (batch G). */
@@ -19,15 +20,17 @@ export function registerDashboardRoutes(registry: RouteRegistry, deps: { permiss
     method: "get",
     path: "/api/team-performance",
     access: { kind: "baseline" },
-    summary: "One card per team the caller can see: everyone may call it, and it returns only teams inside their `org.view` scope (an empty list when they have none) (their own teams, or the teams of their department, or all): members (named only where `people.view` allows, the rest counted), team objectives with health, KPI status for the team and its members, and task progress (open, overdue, blocked, done). A section the caller has no permission for (`okr.view`, `kpi.view`, `task.view`) is null",
-    handler: (_req, res) => sendData(res, call(res, (a, r, c) => dashboards.teamPerformance(a, r, c))),
+    summary: "`?periodId` picks the period the scores are read for. One card per team the caller can see, with member scores (only those the caller may read), the team average with how many people it rests on, a comparison with other teams of the same department (only with at least 3 scored people each) and a mentoring summary: everyone may call it, and it returns only teams inside their `org.view` scope (an empty list when they have none) (their own teams, or the teams of their department, or all): members (named only where `people.view` allows, the rest counted), team objectives with health, KPI status for the team and its members, and task progress (open, overdue, blocked, done). A section the caller has no permission for (`okr.view`, `kpi.view`, `task.view`) is null",
+    schema: { query: z.object({ periodId: z.string().uuid().optional() }).strict() },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => dashboards.teamPerformance(a, r, c, v.query as { periodId?: string }))),
   });
   registry.add({
     method: "get",
     path: "/api/leadership/overview",
     access: { kind: "permission", key: "leadership.view" },
-    summary: "Company objectives with health and attainment and the department and team objectives that contribute to each (from the alignment links), risks (behind pace, overdue, no data) and KPI health counts. Only with `leadership.view` over everyone",
-    handler: (_req, res) => sendData(res, call(res, (a, r, c) => dashboards.leadership(a, r, c))),
+    summary: "`?range=30d|90d|180d|365d` or `?from&to` (at most two years) and `?periodId`. Company objectives with health, attainment and a six-point trend over the range, the contributing objectives, executive (organization-level) KPIs with their last six periods, a drill-down department, team and person (scores only where readable), risks (personal objectives grouped), KPI health counts and a summary of plain sentences built from the numbers. Only with `leadership.view` over everyone",
+    schema: { query: z.object({ range: z.enum(["30d", "90d", "180d", "365d"]).optional(), from: z.string().max(10).optional(), to: z.string().max(10).optional(), periodId: z.string().uuid().optional() }).strict() },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => dashboards.leadership(a, r, c, v.query as { range?: string; from?: string; to?: string; periodId?: string }))),
   });
   registry.add({
     method: "get",

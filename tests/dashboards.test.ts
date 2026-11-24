@@ -155,3 +155,84 @@ describe("with the demo company (batch G)", () => {
     expect((await get(t.app, "/api/ai/insights", owner)).body.data.insights).toEqual([]);
   });
 });
+
+describe("full Team Performance and Leadership with the demo company (batch H)", () => {
+  async function demo() {
+    t = makeAuthApp();
+    const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
+    expect((await post(t.app, "/api/demo/load", undefined, owner)).status).toBe(201);
+    return owner;
+  }
+  it("Team Performance: member scores with explainability ids, a team average with its sample size, a comparison inside a department, and a mentoring summary", async () => {
+    const owner = await demo();
+    const r = (await get(t.app, "/api/team-performance", owner)).body.data;
+    expect(r.period).toMatchObject({ status: "open" });
+    expect(r.periods.length).toBe(2);
+    const platform = r.teams.find((x: { name: string }) => x.name.includes("Platform")) ?? r.teams[0];
+    const scored = platform.members.filter((m: { score: { total: number | null } | null }) => m.score && m.score.total !== null);
+    expect(scored.length).toBeGreaterThan(0);
+    expect(scored[0].score).toMatchObject({ scoreId: expect.any(String), scorecardId: expect.any(String), confidenceLabel: expect.any(String) });
+    expect(platform.average).toMatchObject({ n: expect.any(Number), of: platform.memberCount });
+    const withAvg = r.teams.filter((x: { average: unknown }) => x.average !== null);
+    expect(withAvg.length).toBeGreaterThan(3);
+    const small = r.teams.find((x: { average: { n: number } | null }) => x.average && x.average.n < 3);
+    if (small) expect(small.average.note).toMatch(/only \d+ of|Based on/);
+    expect(r.comparisons.length).toBeGreaterThan(0);
+    for (const c of r.comparisons) {
+      expect(c.note.length).toBeGreaterThan(20);
+      for (const x of c.teams) expect(x.eligible).toBe(x.n >= 3); // never ranked on fewer than 3 people
+      expect(c.teams.filter((x: { rank: number | null }) => x.rank !== null).every((x: { eligible: boolean }) => x.eligible)).toBe(true);
+    }
+    expect(r.teams.some((x: { mentoring: { pairs: number } | null }) => (x.mentoring?.pairs ?? 0) > 0)).toBe(true);
+    const m = r.teams.find((x: { mentoring: { pairs: number } | null }) => (x.mentoring?.pairs ?? 0) > 0).mentoring;
+    expect(m.caveat).toMatch(/many causes/);
+    // the closed period can be chosen too
+    const closed = r.periods.find((p: { status: string }) => p.status === "closed");
+    expect((await get(t.app, `/api/team-performance?periodId=${closed.id}`, owner)).body.data.period.id).toBe(closed.id);
+    expect((await get(t.app, "/api/team-performance?periodId=nope", owner)).status).toBe(400);
+  });
+  it("a team lead sees only their own team's scores; nobody's private review note ever appears", async () => {
+    const owner = await demo();
+    const ps = (await get(t.app, "/api/demo/personas", owner)).body.data as { id: string; designation: string; roles: string[] }[];
+    const emp = ps.find((p) => p.roles.includes("Employee") && p.designation === "Software Engineer")!;
+    const asEmp = await post(t.app, `/api/demo/view-as/${emp.id}`, undefined, owner);
+    const cookies = ([] as string[]).concat((asEmp.headers["set-cookie"] as unknown as string[]) ?? []).map((c) => c.split(";")[0]).filter((c) => /^zentro_(admin_)?session=/.test(c)).join("; ");
+    const r = await get(t.app, "/api/team-performance", cookies);
+    expect(r.status).toBe(200);
+    expect(r.body.data.teams.length).toBe(1);
+    const mine = r.body.data.teams[0];
+    expect(mine.members.every((m: { score: { total: number | null } | null; id: string }) => m.id === emp.id || m.score === null)).toBe(true); // a teammate's score is not theirs to read
+    expect(r.body.data.comparisons).toEqual([]);
+    expect(JSON.stringify(r.body)).not.toMatch(/privateNotes|Not for sharing|Candid note|stretch assignment/);
+  });
+  it("Leadership: a range (preset or custom), trends for company objectives, executive KPIs with six periods, drill-down to people, grouped risks and a summary", async () => {
+    const owner = await demo();
+    const r = (await get(t.app, "/api/leadership/overview?range=180d", owner)).body.data;
+    expect(r.range).toMatchObject({ preset: "180d", days: 180 });
+    expect(r.objectives[0].trend).toHaveLength(6);
+    expect(r.objectives.some((o: { trend: { value: number | null }[] }) => o.trend.some((p) => p.value !== null))).toBe(true);
+    expect(r.objectives[0].trend.every((p: { value: number | null }) => p.value === null || (p.value >= 0 && p.value <= 100))).toBe(true); // a missing value is null, never 0
+    expect(r.executiveKpis.length).toBeGreaterThan(0);
+    expect(r.executiveKpis[0].trend.length).toBeLessThanOrEqual(6);
+    expect(r.departments.length).toBeGreaterThanOrEqual(5);
+    const team = r.departments.flatMap((d: { teams: unknown[] }) => d.teams).find((x: { members: unknown[] }) => x.members.length > 0);
+    expect(team.members[0]).toHaveProperty("score");
+    expect(r.groupedRisks.some((g: { level: string; count: number }) => g.level === "individual" && g.count >= 1)).toBe(true);
+    expect(r.risks.every((x: { level: string }) => x.level !== "individual")).toBe(true); // personal ones are grouped, not repeated
+    expect(r.summary.length).toBeGreaterThanOrEqual(3);
+    expect(r.summary.join(" ")).toMatch(/company objectives? (is|are) active/);
+    expect(r.summary.join(" ")).toMatch(/\d+% done with \d+% of the time passed/);
+    const custom = (await get(t.app, `/api/leadership/overview?from=${day(-30)}&to=${day(0)}`, owner)).body.data;
+    expect(custom.range).toMatchObject({ preset: "custom", days: 30 });
+    expect((await get(t.app, `/api/leadership/overview?from=${day(0)}&to=${day(-5)}`, owner)).status).toBe(400);
+    expect((await get(t.app, "/api/leadership/overview?range=7d", owner)).status).toBe(400);
+  });
+  it("Leadership with no data says so in the summary instead of inventing anything", async () => {
+    t = makeAuthApp();
+    const owner = await signUpWithOrg(t.app, "o@example.com", "Empty");
+    const r = (await get(t.app, "/api/leadership/overview", owner)).body.data;
+    expect(r.objectives).toEqual([]);
+    expect(r.summary[0]).toBe("There is no active company objective yet.");
+    expect(r.departments).toEqual([]);
+  });
+});
