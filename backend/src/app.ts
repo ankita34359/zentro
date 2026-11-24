@@ -132,12 +132,13 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerModelRoutes(registry, { permissions, models: new ModelService({ store, auth, audit }) });
   registerPerformanceRoutes(registry, { permissions, performance: performanceService });
   registerReviewRoutes(registry, { permissions, reviews: new ReviewService({ store, auth, audit }) });
-  registerMentorshipRoutes(registry, { permissions, mentorship: new MentorshipService({ store, auth, audit }) });
+  const mentorshipService = new MentorshipService({ store, auth, audit });
+  registerMentorshipRoutes(registry, { permissions, mentorship: mentorshipService });
   registerComparisonRoutes(registry, { permissions, comparison: new ComparisonService({ store, auth, audit }) });
   registerKpiRoutes(registry, { permissions, kpis: new KpiService({ store, auth, audit }) });
   registerOverviewRoutes(registry, { permissions, overview: new OverviewService({ store, auth, tasks: taskService, okr: okrService, measurements: measurementService }) });
   const alignmentService = new AlignmentService({ store, auth, audit, okr: okrService });
-  registerDashboardRoutes(registry, { permissions, dashboards: new DashboardService({ store, auth, okr: okrService, alignment: alignmentService, measurements: measurementService, performance: performanceService }) });
+  registerDashboardRoutes(registry, { permissions, dashboards: new DashboardService({ store, auth, okr: okrService, alignment: alignmentService, measurements: measurementService, performance: performanceService, mentorship: mentorshipService }) });
   registerDemoRoutes(registry, { auth, permissions, demo: demoService, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   registerAccountRoutes(registry, { auth, permissions, accounts, invitations, sessionSecret: opts.config.sessionSecret, nodeEnv: opts.config.nodeEnv });
   opts.extraRoutes?.(registry);

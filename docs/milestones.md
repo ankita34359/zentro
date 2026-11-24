@@ -92,10 +92,10 @@ The blueprint (this document set) is Milestone 0. Stage 1.1 comes first because 
 | ID | Stage | Delivers | Live check | Needs from you | Size |
 | --- | --- | --- | --- | --- | --- |
 | 6.1 | Overview dashboard (live, batch C) | Capability-adaptive widgets, getting-started checklist | View as employee, manager, department head, CEO: different widgets, all from real rows | | M |
-| 6.2 | Team Performance (first read-only version, batch G) | Team page and manager/department views | Open a team: objectives, KPIs, task distribution, members, mentorship | | M |
+| 6.2 | Team Performance (batch G first version, batch H full) | Team page and manager/department views | Open a team: objectives, KPIs, task distribution, members, mentorship | | M |
 | 6.3 | Performance Intelligence page | Scorecards, compare, trends, evidence tabs with charts | Walk the tabs with demo data; chart gaps for missing data; "view as table" | | M |
-| 6.4 | Leadership dashboard (first read-only version, batch G) | Company performance, strategic objectives, department contribution, executive KPIs, risks, drill-down, waterfall | Click Company → Department → Team → Individual | | L |
-| 6.5 | Historical analytics | Date-range filter everywhere (7 days to custom), period comparison | Switch presets; compare this and last quarter | | M |
+| 6.4 | Leadership dashboard (batch G first version, batch H full; no waterfall) | Company performance, strategic objectives, department contribution, executive KPIs, risks, drill-down, waterfall | Click Company → Department → Team → Individual | | L |
+| 6.5 | Historical analytics (batch H: date range on Leadership only) | Date-range filter everywhere (7 days to custom), period comparison | Switch presets; compare this and last quarter | | M |
 
 ## 8. Milestone 7: AI Intelligence
 
