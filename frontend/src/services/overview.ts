@@ -19,6 +19,6 @@ export interface Overview {
   objectives: null | { items: { id: string; title: string; attainmentPct: number | null; dataState: "ok" | "insufficient" | "none"; elapsedPct: number; keyResultCount: number; health: string | null }[]; total: number };
   kpis: null | { totals: { series: number; byStatus: Record<string, number>; missingPeriods: number; kpis: number }; attention: { kpiId: string; kpiName: string; subject: { name: string }; status: string; label: string; missing: number }[] };
   checklist: ChecklistItem[];
-  flags: { demoLoaded: boolean; canManageDemo: boolean; canSetUp: boolean };
+  flags: { demoLoaded: boolean; canManageDemo: boolean; canSetUp: boolean; canSeeServerStatus: boolean };
 }
 export const getOverview = () => api<Overview>("/api/overview");

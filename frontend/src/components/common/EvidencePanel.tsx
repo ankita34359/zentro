@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { problemText } from "@/lib/authForm";
-import { attachEvidenceFile, CONFIDENTIALITY_LABEL, createEvidence, EVIDENCE_TYPE_LABEL, evidenceFileUrl, listEvidence, readFileAsBase64, verifyEvidence, VERIFICATION_LABEL, type EvidenceView } from "@/services/evidence";
+import { attachEvidenceFile, CONFIDENTIALITY_LABEL, createEvidence, EVIDENCE_TYPE_LABEL, evidenceFileUrl, listEvidence, readFileAsBase64, verifyEvidence, VERIFICATION_LABEL, withdrawEvidence, type EvidenceView } from "@/services/evidence";
 
 const VARIANT = { verified: "onTrack", rejected: "offTrack", needs_info: "atRisk", unverified: "dashed" } as const;
 
@@ -36,6 +36,8 @@ function Item({ e, onChange }: { e: EvidenceView; onChange: () => void }) {
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState<null | "rejected" | "needs_info">(null);
   const verify = useMutation({ mutationFn: (v: { status: string; note?: string }) => verifyEvidence(e.id, v), onSuccess: () => { setAsking(null); setNote(""); onChange(); } });
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const withdraw = useMutation({ mutationFn: () => withdrawEvidence(e.id), onSuccess: () => { setConfirmWithdraw(false); onChange(); } });
   return (
     <li className="space-y-1 rounded-lg border bg-card p-3 text-label">
       <div className="flex flex-wrap items-center gap-2">
@@ -50,6 +52,15 @@ function Item({ e, onChange }: { e: EvidenceView; onChange: () => void }) {
       {e.file && <p><a className="text-primary-ink underline" href={evidenceFileUrl(e.id)}>Download {e.file.filename}</a> <span className="text-caption text-muted-foreground">({Math.max(1, Math.round(e.file.sizeBytes / 1024))} KB)</span></p>}
       {e.verification.by && <p className="text-caption text-muted-foreground">{VERIFICATION_LABEL[e.verification.status]} by {e.verification.by.name}{e.verification.note ? `: ${e.verification.note}` : ""}</p>}
       {e.can.attachFile && <FileForm id={e.id} onDone={onChange} />}
+      {e.can.withdraw && !confirmWithdraw && <div><Button size="sm" variant="ghost" aria-label={`Withdraw ${e.title}`} onClick={() => setConfirmWithdraw(true)}>Withdraw</Button></div>}
+      {e.can.withdraw && confirmWithdraw && (
+        <div role="group" aria-label="Confirm withdraw" className="flex flex-wrap items-center gap-2">
+          <span>Withdraw this evidence? It is hidden from the lists and its file is removed; the audit log keeps a record.</span>
+          <Button size="sm" variant="outline" disabled={withdraw.isPending} onClick={() => withdraw.mutate()}>Yes, withdraw</Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirmWithdraw(false)}>Keep it</Button>
+          {withdraw.isError && <span role="alert" className="text-off-track-ink">{withdraw.error instanceof Error ? withdraw.error.message : "It could not be withdrawn."}</span>}
+        </div>
+      )}
       {e.can.verify && e.verification.status !== "verified" && !asking && (
         <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" aria-label={`Verify ${e.title}`} disabled={verify.isPending} onClick={() => verify.mutate({ status: "verified" })}>Verify</Button><Button size="sm" variant="ghost" onClick={() => setAsking("rejected")}>Reject</Button><Button size="sm" variant="ghost" onClick={() => setAsking("needs_info")}>Ask for more</Button></div>
       )}

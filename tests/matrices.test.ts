@@ -237,6 +237,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/evidence/:id/file": { params: { id: evidenceA }, body: { filename: "a.txt", dataBase64: "aGk=" } },
       "/api/evidence/:id/links": { params: { id: evidenceA }, body: { type: "task", id: taskA } },
       "/api/evidence/:id/verify": { params: { id: evidenceA }, body: { status: "verified" } },
+      "/api/evidence/:id/withdraw": { params: { id: evidenceA } },
       "/api/performance/compare": { params: {}, body: { periodId: periodA } },
       "/api/performance/compare/difference": { params: {}, body: { periodId: periodA, a: personA.membershipId, b: personA.membershipId } },
       "/api/performance/comparisons": { params: {}, body: { name: "Hacked by B", periodId: periodA } },

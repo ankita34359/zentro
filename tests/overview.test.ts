@@ -29,7 +29,7 @@ describe("Overview (stage 6.1)", () => {
     expect(o.organization.completedByDay).toHaveLength(14);
     expect(o.organization.completedByDay.every((d: { count: number }) => d.count === 0)).toBe(true);
     expect(o.checklist.map((c: { key: string; done: boolean }) => [c.key, c.done])).toEqual([["departments", false], ["people", false], ["reporting", false], ["objective", false], ["kpi", false], ["tasks", false]]);
-    expect(o.flags).toEqual({ demoLoaded: false, canManageDemo: true, canSetUp: true });
+    expect(o.flags).toEqual({ demoLoaded: false, canManageDemo: true, canSetUp: true, canSeeServerStatus: true });
   });
 
   it("the checklist ticks by itself as real data appears", async () => {
@@ -114,10 +114,14 @@ describe("Overview (stage 6.1)", () => {
     expect(e.preset).toBe("personal");
     expect(e.organization).toBeNull();
     expect(e.personal).toMatchObject({ open: 2, overdue: 1, blocked: 1 });
+    // the Server status card is for administrators only: an employee and a manager are not told to show it, the owner is
+    expect(e.flags.canSeeServerStatus).toBe(false);
 
     const m = await overview(mgr.cookie);
     expect(m.preset).toBe("team");
     expect(m.organization).toBeNull();
+    expect(m.flags.canSeeServerStatus).toBe(false);
+    expect((await overview(owner)).flags.canSeeServerStatus).toBe(true);
     expect(m.team).toMatchObject({ label: "Your people", people: 1, openTasks: 2, overdueTasks: 1, blockedTasks: 1 });
     expect(m.team.needsAttention).toEqual([{ id: emp.membershipId, name: "Emma Employee", overdue: 1, blocked: 1 }]);
     expect(JSON.stringify(m)).not.toContain("Sam");

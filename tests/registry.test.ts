@@ -171,6 +171,7 @@ describe("route registry: every route declares its protection", () => {
       "POST /api/evidence/:id/file permission",
       "POST /api/evidence/:id/links permission",
       "POST /api/evidence/:id/verify permission",
+      "POST /api/evidence/:id/withdraw permission",
       "POST /api/hierarchy/move permission",
       "POST /api/hierarchy/reporting permission",
       "POST /api/invitations permission",

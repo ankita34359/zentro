@@ -164,14 +164,54 @@ describe("Evidence in the demo company (stage 4.6)", () => {
     expect(mine.some((e) => e.submittedBy.id === emp.id)).toBe(true);
     expect(mine.every((e) => e.submittedBy.id === emp.id || e.confidentiality === "organization")).toBe(true); // others' evidence only when it was shared organization-wide
     expect(mine.length).toBeLessThan(all.length / 2);
-    // a real item attached to a demo task
+    // real items attached to a demo task never block the removal: one attached ONLY to demo records goes with them (even withdrawn, with a file),
+    // one that also points at something real stays and only loses its link to the demo task
     const demoTask = one<{ id: string }>("SELECT id FROM tasks WHERE is_demo = 1 LIMIT 1").id;
-    const real = await post(t.app, "/api/evidence", { title: "My own note", links: [{ type: "task", id: demoTask }] }, owner);
-    expect(real.status, JSON.stringify(real.body)).toBe(201);
+    const realTask = (await post(t.app, "/api/tasks", { title: "A real task" }, owner)).body.data.id as string;
+    const onlyDemo = await post(t.app, "/api/evidence", { title: "My own note", links: [{ type: "task", id: demoTask }] }, owner);
+    expect(onlyDemo.status, JSON.stringify(onlyDemo.body)).toBe(201);
+    expect((await post(t.app, `/api/evidence/${onlyDemo.body.data.id}/file`, { filename: "n.txt", dataBase64: b64("hi") }, owner)).status).toBe(201);
+    const withdrawnOne = await post(t.app, "/api/evidence", { title: "Taken back", links: [{ type: "task", id: demoTask }] }, owner);
+    expect((await post(t.app, `/api/evidence/${withdrawnOne.body.data.id}/withdraw`, undefined, owner)).status).toBe(200);
+    const both = await post(t.app, "/api/evidence", { title: "Both worlds", links: [{ type: "task", id: demoTask }, { type: "task", id: realTask }] }, owner);
+    expect(both.status).toBe(201);
     const removed = await post(t.app, "/api/demo/remove", undefined, owner);
     expect(removed.status, JSON.stringify(removed.body)).toBe(200);
     expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence WHERE is_demo = 1").n).toBe(0);
-    expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence").n).toBe(1); // the real one stays
-    expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence_links").n).toBe(0); // its link to the demo task went with the task
+    expect((t.db.prepare("SELECT title FROM evidence").all() as { title: string }[]).map((r) => r.title)).toEqual(["Both worlds"]);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence_files").n).toBe(0);
+    expect((t.db.prepare("SELECT target_id FROM evidence_links").all() as { target_id: string }[]).map((r) => r.target_id)).toEqual([realTask]); // the link to the demo task went with the task
+  });
+
+  it("a person withdraws their own unverified evidence: hidden everywhere, file removed, audited with who and when; verified, rejected or someone else's cannot be withdrawn", async () => {
+    const { max, emma, zed, task } = await setup();
+    const id = (await attach(emma.cookie, { links: [{ type: "task", id: task }] })).body.data.id as string;
+    expect((await post(t.app, `/api/evidence/${id}/file`, { filename: "a.txt", dataBase64: b64("proof") }, emma.cookie)).status).toBe(201);
+    expect((await get(t.app, `/api/evidence/${id}`, emma.cookie)).body.data.can.withdraw).toBe(true);
+    expect((await get(t.app, `/api/evidence/${id}`, max.cookie)).body.data.can.withdraw).toBe(false); // the manager cannot withdraw someone else's
+    expect(code(await post(t.app, `/api/evidence/${id}/withdraw`, undefined, max.cookie))).toBe("permission_denied");
+    expect((await post(t.app, `/api/evidence/${id}/withdraw`, undefined, zed.cookie)).status).toBe(404); // not even visible
+    const w = await post(t.app, `/api/evidence/${id}/withdraw`, undefined, emma.cookie);
+    expect(w.status, JSON.stringify(w.body)).toBe(200);
+    // hidden from the item, the lists and the file download; kept in the table and the audit log with who and when
+    expect((await get(t.app, `/api/evidence/${id}`, emma.cookie)).status).toBe(404);
+    expect((await get(t.app, "/api/evidence", emma.cookie)).body.data).toEqual([]);
+    expect((await get(t.app, `/api/evidence?targetType=task&targetId=${task}`, emma.cookie)).body.data).toEqual([]);
+    expect((await get(t.app, `/api/evidence/${id}/file`, emma.cookie)).status).toBe(404);
+    expect(one<{ verification_status: string; withdrawn_at: string; withdrawn_by_membership_id: string }>("SELECT verification_status, withdrawn_at, withdrawn_by_membership_id FROM evidence WHERE id = ?", id)).toMatchObject({ verification_status: "withdrawn", withdrawn_by_membership_id: emma.membershipId });
+    expect(one<{ withdrawn_at: string }>("SELECT withdrawn_at FROM evidence WHERE id = ?", id).withdrawn_at).toBeTruthy();
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence_files WHERE evidence_id = ?", id).n).toBe(0);
+    const audit = one<{ actor_membership_id: string; created_at: string }>("SELECT actor_membership_id, created_at FROM audit_logs WHERE action = 'evidence.withdraw' AND entity_id = ?", id);
+    expect(audit.actor_membership_id).toBe(emma.membershipId);
+    expect(audit.created_at).toBeTruthy();
+    expect((await post(t.app, `/api/evidence/${id}/withdraw`, undefined, emma.cookie)).status).toBe(404); // already gone
+    // verified or rejected evidence cannot be withdrawn
+    const v = (await attach(emma.cookie, { title: "Checked" })).body.data.id as string;
+    expect((await post(t.app, `/api/evidence/${v}/verify`, { status: "verified" }, max.cookie)).status).toBe(200);
+    expect(code(await post(t.app, `/api/evidence/${v}/withdraw`, undefined, emma.cookie))).toBe("not_withdrawable");
+    const r = (await attach(emma.cookie, { title: "Refused" })).body.data.id as string;
+    expect((await post(t.app, `/api/evidence/${r}/verify`, { status: "rejected", note: "Not enough" }, max.cookie)).status).toBe(200);
+    expect(code(await post(t.app, `/api/evidence/${r}/withdraw`, undefined, emma.cookie))).toBe("not_withdrawable");
+    expect((await get(t.app, `/api/evidence/${v}`, emma.cookie)).body.data.can.withdraw).toBe(false);
   });
 });
