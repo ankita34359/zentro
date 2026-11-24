@@ -196,7 +196,7 @@ describe("full Team Performance and Leadership with the demo company (batch H)",
     const ps = (await get(t.app, "/api/demo/personas", owner)).body.data as { id: string; designation: string; roles: string[] }[];
     const emp = ps.find((p) => p.roles.includes("Employee") && p.designation === "Software Engineer")!;
     const asEmp = await post(t.app, `/api/demo/view-as/${emp.id}`, undefined, owner);
-    const cookies = ([] as string[]).concat((asEmp.headers["set-cookie"] as unknown as string[]) ?? []).map((c) => c.split(";")[0]).filter((c) => /^zentro_(admin_)?session=/.test(c)).join("; ");
+    const cookies = ([] as string[]).concat((asEmp.headers["set-cookie"] as unknown as string[]) ?? []).map((c) => c.split(";")[0] ?? "").filter((c) => /^zentro_(admin_)?session=/.test(c)).join("; ");
     const r = await get(t.app, "/api/team-performance", cookies);
     expect(r.status).toBe(200);
     expect(r.body.data.teams.length).toBe(1);
