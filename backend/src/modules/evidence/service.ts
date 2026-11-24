@@ -35,7 +35,7 @@ export interface EvidenceView {
   file: { filename: string; contentType: string; sizeBytes: number } | null;
   links: { type: string; id: string }[];
   isDemo: boolean;
-  can: { verify: boolean; attachFile: boolean };
+  can: { verify: boolean; attachFile: boolean; withdraw: boolean };
 }
 export interface EvidenceInput { title: string; evidenceType?: string; description?: string; externalRef?: string | null; occurredOn?: string; relatedMembershipId?: string | null; confidentiality?: string; links?: { type: string; id: string }[] }
 
@@ -72,7 +72,7 @@ export class EvidenceService {
       id: e.id, type: e.evidence_type, title: e.title, description: e.description, externalRef: e.external_ref, about: this.who(w, e.related_membership_id), submittedBy: this.who(w, e.submitted_by_membership_id)!, occurredOn: e.occurred_on,
       verification: { status: e.verification_status, by: this.who(w, e.verified_by_membership_id), at: e.verified_at, note: e.verification_note }, confidentiality: e.confidentiality,
       file: f ? { filename: f.filename, contentType: f.content_type, sizeBytes: f.size_bytes } : null, links: links.get(e.id) ?? [], isDemo: e.is_demo === 1,
-      can: { verify: caps.has("evidence.verify") && this.covers(caps, "evidence.verify", subject) && e.submitted_by_membership_id !== me, attachFile: e.submitted_by_membership_id === me && !f },
+      can: { verify: caps.has("evidence.verify") && this.covers(caps, "evidence.verify", subject) && e.submitted_by_membership_id !== me, attachFile: e.submitted_by_membership_id === me && !f, withdraw: e.submitted_by_membership_id === me && e.verification_status === "unverified" },
     };
   }
   private maps(w: ReturnType<EvidenceService["world"]>) {
@@ -175,6 +175,22 @@ export class EvidenceService {
       this.o.audit.record(w.tdb, ctx, { action: "evidence.verify", entityType: "evidence", entityId: id, summary: `Marked evidence "${e.title}" ${input.status.replace("_", " ")}`, before: { status: e.verification_status }, after: { status: input.status } });
     });
     return this.one(auth, requestId, caps, id);
+  }
+
+  /** The person who attached evidence may take it back while it is still "not verified yet". It is hidden, its file is removed, and the audit log keeps who and when. */
+  withdraw(auth: AuthContext, requestId: string, caps: Capabilities, id: string): { id: string; withdrawn: true } {
+    const ctx = this.ctx(auth, requestId);
+    const w = this.world(ctx);
+    const e = this.find(w, caps, ctx.membershipId, id);
+    if (e.submitted_by_membership_id !== ctx.membershipId) throw new HttpError(403, "permission_denied", "Only the person who attached the evidence can withdraw it.");
+    if (e.verification_status !== "unverified") throw new HttpError(409, "not_withdrawable", "Only evidence that is still not verified can be withdrawn.");
+    const file = w.repo.file(id);
+    this.o.store.transaction(() => {
+      w.repo.withdraw(id, ctx.membershipId, this.now());
+      w.repo.deleteFile(id);
+      this.o.audit.record(w.tdb, ctx, { action: "evidence.withdraw", entityType: "evidence", entityId: id, summary: `Withdrew evidence "${e.title}"`, before: { status: e.verification_status, file: file ? file.filename : null }, after: { status: "withdrawn" } });
+    });
+    return { id, withdrawn: true };
   }
 
   // ---------- files ----------

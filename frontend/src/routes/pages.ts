@@ -19,6 +19,7 @@ export const UsersPage = lazyWithPreload(() => import("@/pages/settings/UsersPag
 export const RolesPage = lazyWithPreload(() => import("@/pages/settings/RolesPage"));
 export const StructurePage = lazyWithPreload(() => import("@/pages/settings/StructurePage"));
 export const AuditPage = lazyWithPreload(() => import("@/pages/settings/AuditPage"));
+export const AiSettingsPage = lazyWithPreload(() => import("@/pages/settings/AiSettingsPage"));
 export const OrganizationPage = lazyWithPreload(() => import("@/pages/organization/OrganizationPage"));
 export const MyWorkPage = lazyWithPreload(() => import("@/pages/mywork/MyWorkPage"));
 export const OkrPage = lazyWithPreload(() => import("@/pages/okrs/OkrPage"));

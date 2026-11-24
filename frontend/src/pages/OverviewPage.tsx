@@ -319,6 +319,8 @@ export default function OverviewPage() {
   const steps = o?.checklist ?? DEFAULT_STEPS;
   const done = steps.filter((s) => s.done).length;
   const showChecklist = !o || o.flags.canSetUp || done < steps.length;
+  // the server's health details are for people who administer the organization; nobody else sees this card
+  const showServerStatus = o?.flags.canSeeServerStatus === true;
   const emptyOrg = o !== undefined && o.checklist.every((c) => !c.done);
   return (
     <>
@@ -365,7 +367,7 @@ export default function OverviewPage() {
           </>
         )}
         {showChecklist && (
-        <StaggerItem className="lg:col-span-2">
+        <StaggerItem className={showServerStatus ? "lg:col-span-2" : "lg:col-span-3"}>
           <Card className="h-full">
             <CardHeader className="flex-row items-start justify-between gap-4">
               <div className="space-y-3">
@@ -407,6 +409,7 @@ export default function OverviewPage() {
           </Card>
         </StaggerItem>
         )}
+        {showServerStatus && (
         <StaggerItem className={showChecklist ? "" : "lg:col-span-3"}>
           <Card className="h-full">
             <CardHeader>
@@ -418,6 +421,7 @@ export default function OverviewPage() {
             </CardContent>
           </Card>
         </StaggerItem>
+        )}
       </Stagger>
     </>
   );

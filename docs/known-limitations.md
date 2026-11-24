@@ -173,3 +173,12 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **View as lasts one hour and is read only.** There is no way to act as a demo person; the audit log says who looked at whom.
 - **Overview numbers are counted per request** from the task, people and structure rows (a few thousand rows is instant); there is no cache and no history of the numbers yet (6.5). Charts are small hand-drawn SVG (a bar per day, a stacked bar) with a "view as table" switch; interactive charts arrive with the dashboards stages.
 - The Overview shows OKR and KPI widgets only once those exist (3.1, 3.3); until then the getting-started steps for them show their stage.
+
+## Added in batch J (AI layer, evidence withdrawal)
+
+- **AI answers are not stored.** The question and answer exist only on screen; the request log keeps the shape (length, records, outcome). There is no conversation history yet.
+- **The figure check is a warning.** Figures in an answer that are not in the records sent are listed as unchecked; they are not removed. Dates and counts the model works out itself can show up there.
+- **The daily limits (20 a person, 200 an organization) and the model are constants in the code**, not settings. A day is a UTC day.
+- **Only Anthropic is a provider**, and only for Ask AI. Daily Planner, risk explanations, alignment proposals and approvals (7.2 to 7.7) are not built.
+- **Withdrawn evidence cannot be brought back** from the screen (the row and the audit entry stay in the database). A rejected item or one that asks for more information cannot be withdrawn; it can be replaced by attaching a new one.
+

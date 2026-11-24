@@ -86,6 +86,18 @@ describe("Evidence panel (stage 4.3)", () => {
     await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/evidence/e1/verify")).toBe(true));
     expect(bodyOf(f.mock.calls.find((c) => c[0] === "/api/evidence/e1/verify")!)).toEqual({ status: "rejected", note: "No" });
   });
+  it("the person who attached unverified evidence can withdraw it after a confirmation; nobody else sees the button", async () => {
+    setMe(withCaps(EVCAPS));
+    const f = evServer([EV({ can: { verify: false, attachFile: false, withdraw: true } }), EV({ id: "e2", title: "Someone else's", can: { verify: false, attachFile: false, withdraw: false } })], (url, init) => (url === "/api/evidence/e1/withdraw" && init?.method === "POST" ? envelope({ id: "e1", withdrawn: true }) : undefined));
+    renderApp("/okrs?objective=o1");
+    const panel = await screen.findByRole("region", { name: "Evidence" });
+    expect(await within(panel).findByText("Someone else's")).toBeTruthy();
+    expect(within(panel).getAllByRole("button", { name: /^Withdraw/ })).toHaveLength(1);
+    await userEvent.click(within(panel).getByRole("button", { name: "Withdraw Draft of the report" }));
+    expect(f.mock.calls.some((c) => c[0] === "/api/evidence/e1/withdraw")).toBe(false); // asks first
+    await userEvent.click(within(panel).getByRole("button", { name: "Yes, withdraw" }));
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === "/api/evidence/e1/withdraw" && (c[1] as RequestInit)?.method === "POST")).toBe(true));
+  });
   it("without evidence.view there is no evidence section at all", async () => {
     setMe(withCaps(ALL));
     server();

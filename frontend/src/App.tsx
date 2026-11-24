@@ -14,6 +14,7 @@ import { RequireCapability } from "@/routes/RequireCapability";
 import {
   AcceptInvitePage,
   AuditPage,
+  AiSettingsPage,
   StructurePage,
   DemoPage,
   DesignPage,
@@ -97,6 +98,9 @@ export function AppRoutes() {
           </Route>
           <Route element={<RequireCapability any={["performance.view_components"]} />}>
             <Route path="/settings/scoring" element={<ScoringPage />} />
+          </Route>
+          <Route element={<RequireCapability any={["ai.configure"]} />}>
+            <Route path="/settings/ai" element={<AiSettingsPage />} />
           </Route>
           <Route element={<RequireCapability any={["audit.view"]} />}>
             <Route path="/settings/audit" element={<AuditPage />} />

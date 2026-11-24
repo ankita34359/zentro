@@ -106,7 +106,7 @@ describe("Leadership (stages 6.4 and 6.5)", () => {
 describe("AI Intelligence insights (batch G)", () => {
   it("lists insights with numbers and links, and the Ask AI box is disabled and says why", async () => {
     setMe(withCaps({ "ai.view_insights": ["own"] }));
-    serve({ "/api/ai/insights": { today: "x", ask: { enabled: false, reason: "An AI provider has to be connected first. Nothing on this page was written by an AI." }, note: "These insights are plain rules.", insights: [{ key: "behind_pace", severity: "attention", count: 8, title: "2 objectives are behind pace", summary: "Progress is behind.", to: "/okrs?health=at_risk", items: [{ label: "Win customers", detail: "10% done, 50% of the time has passed (at risk)", to: "/okrs?objective=o1" }] }] } });
+    serve({ "/api/ai/status": { connected: false, reason: "No AI key has been added to the server yet.", keyConfigured: false, enabledForOrganization: false, canUse: true, canConfigure: false, limits: { perUserPerDay: 20, perOrganizationPerDay: 200, maxQuestionChars: 400 }, usedToday: { you: 0, organization: 0 } }, "/api/ai/insights": { today: "x", ask: { enabled: false, reason: "An AI provider has to be connected first. Nothing on this page was written by an AI." }, note: "These insights are plain rules.", insights: [{ key: "behind_pace", severity: "attention", count: 8, title: "2 objectives are behind pace", summary: "Progress is behind.", to: "/okrs?health=at_risk", items: [{ label: "Win customers", detail: "10% done, 50% of the time has passed (at risk)", to: "/okrs?objective=o1" }] }] } });
     renderApp("/ai");
     const list = await screen.findByRole("list", { name: "Insights" });
     expect(within(list).getByText("2 objectives are behind pace")).toBeTruthy();
@@ -115,7 +115,8 @@ describe("AI Intelligence insights (batch G)", () => {
     expect(within(list).getByText(/And 7 more/)).toBeTruthy();
     const ask = screen.getByRole("group", { name: "Ask AI" });
     expect((within(ask).getByRole("textbox") as HTMLInputElement).disabled).toBe(true);
-    expect(within(ask).getByText(/AI provider has to be connected first/)).toBeTruthy();
+    expect(await within(ask).findByText("AI is not connected.")).toBeTruthy();
+    expect(within(ask).getByText(/No AI key has been added to the server yet/)).toBeTruthy();
     expect(screen.getByText("Early version")).toBeTruthy();
   });
   it("nothing to flag shows a calm empty state", async () => {

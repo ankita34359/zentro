@@ -72,7 +72,7 @@ describe("permission matrix: every role template × every route that needs a per
     // stage 5.2 adds the performance reads: everyone reads their OWN score and what it is made of (docs/permission-model.md 2.1);
     // each of these answers only with the caller's own scorecards plus those inside the scope their role grants
     // (`performance.view_scores`/`view_components`), which tests/scorecards.test.ts checks for every role.
-    expect(baselineGets).toEqual(["/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/overview", "/api/performance/compare", "/api/performance/periods", "/api/performance/reviews", "/api/performance/scorecards", "/api/performance/scorecards/:id", "/api/performance/scorecards/for", "/api/performance/scores/:id", "/api/performance/trends", "/api/preferences", "/api/team-performance"]);
+    expect(baselineGets).toEqual(["/api/ai/status", "/api/auth/delete-account/preview", "/api/auth/me", "/api/daily-updates", "/api/my-work", "/api/notifications", "/api/organization", "/api/overview", "/api/performance/compare", "/api/performance/periods", "/api/performance/reviews", "/api/performance/scorecards", "/api/performance/scorecards/:id", "/api/performance/scorecards/for", "/api/performance/scores/:id", "/api/performance/trends", "/api/preferences", "/api/team-performance"]);
   });
 
   it("every role can use the baseline routes without any permission", async () => {
@@ -237,6 +237,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/evidence/:id/file": { params: { id: evidenceA }, body: { filename: "a.txt", dataBase64: "aGk=" } },
       "/api/evidence/:id/links": { params: { id: evidenceA }, body: { type: "task", id: taskA } },
       "/api/evidence/:id/verify": { params: { id: evidenceA }, body: { status: "verified" } },
+      "/api/evidence/:id/withdraw": { params: { id: evidenceA } },
       "/api/performance/compare": { params: {}, body: { periodId: periodA } },
       "/api/performance/compare/difference": { params: {}, body: { periodId: periodA, a: personA.membershipId, b: personA.membershipId } },
       "/api/performance/comparisons": { params: {}, body: { name: "Hacked by B", periodId: periodA } },

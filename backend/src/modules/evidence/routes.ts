@@ -68,6 +68,15 @@ export function registerEvidenceRoutes(registry: RouteRegistry, deps: { permissi
   });
   registry.add({
     method: "post",
+    path: "/api/evidence/:id/withdraw",
+    access: { kind: "permission", key: "evidence.submit" },
+    takesEntityId: true,
+    summary: "Withdraw your own evidence while it is still `unverified`. It is hidden from lists and counts, its file is removed, and the audit log keeps who and when (409 not_withdrawable once it is verified, rejected or awaiting information; 403 for anyone but the person who attached it). Audited",
+    schema: { params: idParams },
+    handler: (_req, res, v) => sendData(res, call(res, (a, r, c) => evidence.withdraw(a, r, c, id(v)))),
+  });
+  registry.add({
+    method: "post",
     path: "/api/evidence/:id/file",
     access: { kind: "permission", key: "evidence.submit" },
     takesEntityId: true,

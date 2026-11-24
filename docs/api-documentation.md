@@ -274,6 +274,10 @@ The hourly job `kpi.thresholds` looks at every series again and flags a period t
 | GET / POST | `/api/evidence` | `evidence.view` / `evidence.submit` | `?type&status&relatedId&targetType&targetId` |
 | GET / PATCH | `/api/evidence/:id` | `evidence.view` (scope, confidentiality) | |
 | POST | `/api/evidence/:id/verify` | `evidence.verify` (scope) | `{status, note}` |
+| POST | `/api/evidence/:id/withdraw` | `evidence.submit` (the person who attached it; only while `unverified`) | no body; hides it, removes its file, audited (409 `not_withdrawable`) |
+| GET | `/api/ai/status` | baseline | whether AI is connected (key set yes/no, organization switch), limits, usage today |
+| PUT | `/api/ai/settings` | `ai.configure` | `{enabled}`; off by default; audited |
+| POST | `/api/ai/ask` | `ai.use` | `{question}` (at most 400 characters) → answer, citations, what was sent, unmatched figures; 409 `ai_not_connected`, 429 `ai_limit_user`/`ai_limit_org`, 504 `ai_timeout`, 503 `ai_unavailable` |
 | POST / DELETE | `/api/evidence/:id/links` | `evidence.submit` | Link to objective, key result, KPI measurement, review… |
 | PUT | `/api/evidence/:id/file` | `evidence.submit` | Raw body, size and type capped |
 | GET | `/api/evidence/:id/file` | `evidence.view` (+ restricted rule) | Authenticated download, re-checks confidentiality |

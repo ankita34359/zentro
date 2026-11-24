@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -10,7 +10,7 @@ import { PageSkeleton } from "@/components/common/PageSkeleton";
 import { StatusPill } from "@/components/common/StatusPill";
 import OverviewPage from "@/pages/OverviewPage";
 import { ApiError } from "@/services/api";
-import { HEALTH_OK, json, stubFetch } from "./helpers";
+import { HEALTH_OK, envelope, json, stubFetch } from "./helpers";
 
 const withClient = (ui: React.ReactNode) => (
   <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -73,9 +73,27 @@ describe("StatusPill (fed by /healthz)", () => {
   });
 });
 
+const OVERVIEW_STUB = (canSeeServerStatus: boolean) => ({
+  today: "2026-11-24", preset: "personal", personal: { unalignedOpen: 0, open: 0, overdue: 0, dueToday: 0, blocked: 0, completedRecently: 0, unreadNotifications: 0, next: null },
+  team: null, organization: null, objectives: null, kpis: null, checklist: [],
+  flags: { demoLoaded: false, canManageDemo: false, canSetUp: false, canSeeServerStatus },
+});
+const stubWith = (health: (url: string) => Response | Promise<Response>, canSee = true) =>
+  stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW_STUB(canSee)) : health(url)));
+
 describe("Overview server status", () => {
+  it("is hidden from a person without the admin permission, and no health request is made", async () => {
+    const seen: string[] = [];
+    stubFetch((url) => { seen.push(url); return url === "/api/overview" ? envelope(OVERVIEW_STUB(false)) : json(HEALTH_OK); });
+    render(withClient(<OverviewPage />));
+    expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
+    await waitFor(() => expect(seen).toContain("/api/overview"));
+    expect(screen.queryByText("Server status")).toBeNull();
+    expect(seen.some((u) => u.includes("healthz"))).toBe(false);
+  });
+
   it("shows real health values, and 'None yet' before the first tick", async () => {
-    stubFetch(() => json({ ...HEALTH_OK, lastTick: null }));
+    stubWith(() => json({ ...HEALTH_OK, lastTick: null }));
     render(withClient(<OverviewPage />));
     expect(await screen.findByText("2 of 2 applied")).toBeTruthy();
     expect(screen.getByText("None yet")).toBeTruthy();
@@ -84,7 +102,7 @@ describe("Overview server status", () => {
 
   it("shows an error state with retry when the server is unreachable, then recovers", async () => {
     let fail = true;
-    stubFetch(() => (fail ? new Response("<html>502</html>", { status: 502 }) : json(HEALTH_OK)));
+    stubWith(() => (fail ? new Response("<html>502</html>", { status: 502 }) : json(HEALTH_OK)));
     render(withClient(<OverviewPage />));
     expect(await screen.findByText("Could not reach the server")).toBeTruthy();
     fail = false;
@@ -92,9 +110,9 @@ describe("Overview server status", () => {
     expect(await screen.findByText("2 of 2 applied")).toBeTruthy();
   });
 
-  it("shows a loading state first", () => {
-    stubFetch(() => new Promise<Response>(() => undefined));
+  it("shows a loading state first", async () => {
+    stubWith(() => new Promise<Response>(() => undefined));
     render(withClient(<OverviewPage />));
-    expect(screen.getByRole("status").textContent).toContain("Loading server status");
+    expect(await screen.findByText("Loading server status")).toBeTruthy();
   });
 });

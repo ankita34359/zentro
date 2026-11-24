@@ -43,7 +43,7 @@ export interface Overview {
   /** KPI health across the series the caller may see (people with `kpi.view`). */
   kpis: null | Pick<KpiOverviewView, "totals" | "attention">;
   checklist: ChecklistItem[];
-  flags: { demoLoaded: boolean; canManageDemo: boolean; canSetUp: boolean };
+  flags: { demoLoaded: boolean; canManageDemo: boolean; canSetUp: boolean; canSeeServerStatus: boolean };
 }
 
 /**
@@ -174,7 +174,7 @@ export class OverviewService {
         { key: "kpi", label: "Define KPIs", to: "/kpis", done: kpisDefined, stage: null },
         { key: "tasks", label: "Assign tasks", to: "/my-work", done: [...assigns.values()].some((a) => a.length > 0), stage: null },
       ],
-      flags: { demoLoaded: demo.loadedBatch() !== undefined, canManageDemo: caps.scope("demo.manage").all, canSetUp: caps.scope("org.manage").all || caps.scope("people.manage").all },
+      flags: { demoLoaded: demo.loadedBatch() !== undefined, canManageDemo: caps.scope("demo.manage").all, canSetUp: caps.scope("org.manage").all || caps.scope("people.manage").all, canSeeServerStatus: caps.has("org.settings") },
     };
   }
 }

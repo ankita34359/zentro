@@ -131,7 +131,7 @@ const OVERVIEW = (over: Record<string, unknown> = {}) => ({
     { key: "kpi", label: "Define KPIs", to: "/kpis", done: false, stage: "3.3" },
     { key: "tasks", label: "Assign tasks", to: "/my-work", done: true, stage: null },
   ],
-  flags: { demoLoaded: true, canManageDemo: true, canSetUp: true }, ...over,
+  flags: { demoLoaded: true, canManageDemo: true, canSetUp: true, canSeeServerStatus: true }, ...over,
 });
 
 describe("Overview (stage 6.1)", () => {
@@ -174,7 +174,7 @@ describe("Overview (stage 6.1)", () => {
 
   it("an employee sees only their own work: no team, no organization widgets, and no checklist once everything is done", async () => {
     setMe(withCaps({ "task.view": ["own"] }));
-    stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({ preset: "personal", organization: null, flags: { demoLoaded: true, canManageDemo: false, canSetUp: false }, checklist: OVERVIEW().checklist.map((c) => ({ ...c, done: true })) })) : json(HEALTH_OK)));
+    stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({ preset: "personal", organization: null, flags: { demoLoaded: true, canManageDemo: false, canSetUp: false, canSeeServerStatus: false }, checklist: OVERVIEW().checklist.map((c) => ({ ...c, done: true })) })) : json(HEALTH_OK)));
     renderApp("/overview");
     expect(await screen.findByText("Your work")).toBeTruthy();
     expect(screen.queryByText("Tasks by status")).toBeNull();
@@ -183,7 +183,7 @@ describe("Overview (stage 6.1)", () => {
 
   it("a manager sees the team widget with who needs attention", async () => {
     setMe(withCaps({ "task.view": ["reports"] }));
-    stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({ preset: "team", organization: null, flags: { demoLoaded: true, canManageDemo: false, canSetUp: false }, team: { label: "Your people", people: 4, openTasks: 11, overdueTasks: 3, blockedTasks: 1, completedRecently: 6, needsAttention: [{ id: "p1", name: "Emma Employee", overdue: 2, blocked: 1 }] } })) : json(HEALTH_OK)));
+    stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({ preset: "team", organization: null, flags: { demoLoaded: true, canManageDemo: false, canSetUp: false, canSeeServerStatus: false }, team: { label: "Your people", people: 4, openTasks: 11, overdueTasks: 3, blockedTasks: 1, completedRecently: 6, needsAttention: [{ id: "p1", name: "Emma Employee", overdue: 2, blocked: 1 }] } })) : json(HEALTH_OK)));
     renderApp("/overview");
     expect(await screen.findByText("Your people")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Emma Employee" }).getAttribute("href")).toBe("/organization/people?person=p1");
@@ -192,7 +192,7 @@ describe("Overview (stage 6.1)", () => {
 
   it("an empty organization shows the demo offer to someone who may load it, and nothing is claimed as done", async () => {
     setMe(withCaps(ADMIN));
-    stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({ checklist: OVERVIEW().checklist.map((c) => ({ ...c, done: false })), flags: { demoLoaded: false, canManageDemo: true, canSetUp: true }, organization: { people: 1, departments: 0, teams: 0, tasksByStatus: {}, overdueTasks: 0, openTasks: 0, completedByDay: Array.from({ length: 14 }, (_, i) => ({ date: `2026-11-${10 + i}`, count: 0 })), departmentLoad: [] } })) : json(HEALTH_OK)));
+    stubFetch((url) => (url === "/api/overview" ? envelope(OVERVIEW({ checklist: OVERVIEW().checklist.map((c) => ({ ...c, done: false })), flags: { demoLoaded: false, canManageDemo: true, canSetUp: true, canSeeServerStatus: true }, organization: { people: 1, departments: 0, teams: 0, tasksByStatus: {}, overdueTasks: 0, openTasks: 0, completedByDay: Array.from({ length: 14 }, (_, i) => ({ date: `2026-11-${10 + i}`, count: 0 })), departmentLoad: [] } })) : json(HEALTH_OK)));
     renderApp("/overview");
     expect(await screen.findByText("See Zentro with a whole company in it")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Load demo data" }).getAttribute("href")).toBe("/settings/demo");

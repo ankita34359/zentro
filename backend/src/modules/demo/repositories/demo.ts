@@ -207,11 +207,25 @@ export class DemoRepository {
   // ----- removal, children before parents -----
 
   deleteAll(): void {
-    // evidence of the demo (and anything about or by a demo person) goes with its files and links; a REAL piece of evidence keeps existing and only loses its links to demo records
-    const DEMO_EVIDENCE = `(SELECT dev.id FROM evidence dev WHERE dev.organization_id = @organization_id AND (dev.is_demo = 1 OR dev.submitted_by_membership_id IN ${DEMO_PEOPLE} OR dev.related_membership_id IN ${DEMO_PEOPLE}))`;
-    this.tdb.run(`DELETE FROM evidence_files WHERE evidence_files.organization_id = @organization_id AND evidence_files.evidence_id IN ${DEMO_EVIDENCE}`);
-    this.tdb.run(`DELETE FROM evidence_links WHERE evidence_links.organization_id = @organization_id AND (evidence_links.evidence_id IN ${DEMO_EVIDENCE} OR evidence_links.target_id IN ${DEMO_TASKS} OR evidence_links.target_id IN (SELECT dob9.id FROM objectives dob9 WHERE dob9.organization_id = @organization_id AND dob9.is_demo = 1) OR evidence_links.target_id IN (SELECT dkr9.id FROM key_results dkr9 WHERE dkr9.organization_id = @organization_id AND dkr9.is_demo = 1))`);
-    this.tdb.run(`DELETE FROM evidence WHERE evidence.organization_id = @organization_id AND evidence.id IN ${DEMO_EVIDENCE}`);
+    // evidence of the demo (and anything about or by a demo person) goes with its files and links. A REAL piece of evidence that is attached ONLY to demo records
+    // (a demo task, objective or key result) goes too, because nothing real is left for it to describe: it never blocks the removal. Real evidence that also points at
+    // something real stays and only loses its links to demo records. Withdrawn items follow the same rules. The ids are collected first, before any link is deleted.
+    const DEMO_TARGETS = "(SELECT dt0.id FROM tasks dt0 WHERE dt0.organization_id = @organization_id AND dt0.is_demo = 1 UNION SELECT do0.id FROM objectives do0 WHERE do0.organization_id = @organization_id AND do0.is_demo = 1 UNION SELECT dk0.id FROM key_results dk0 WHERE dk0.organization_id = @organization_id AND dk0.is_demo = 1)";
+    const evidenceIds = this.tdb.all<{ id: string }>(
+      `SELECT dev.id FROM evidence dev WHERE dev.organization_id = @organization_id AND (dev.is_demo = 1 OR dev.submitted_by_membership_id IN ${DEMO_PEOPLE} OR dev.related_membership_id IN ${DEMO_PEOPLE}
+        OR (EXISTS (SELECT 1 FROM evidence_links dl WHERE dl.organization_id = @organization_id AND dl.evidence_id = dev.id AND dl.target_id IN ${DEMO_TARGETS}) AND NOT EXISTS (SELECT 1 FROM evidence_links rl WHERE rl.organization_id = @organization_id AND rl.evidence_id = dev.id AND rl.target_id NOT IN ${DEMO_TARGETS})))`,
+    ).map((r) => r.id);
+    // the ids go in as bound values, a few hundred at a time (SQLite limits how many one statement may carry)
+    for (let i = 0; i < evidenceIds.length; i += 200) {
+      const chunk = evidenceIds.slice(i, i + 200);
+      const params = Object.fromEntries(chunk.map((id, k) => [`e${k}`, id]));
+      const IDS = `(${chunk.map((_, k) => `@e${k}`).join(", ")})`;
+      this.tdb.run(`DELETE FROM evidence_files WHERE evidence_files.organization_id = @organization_id AND evidence_files.evidence_id IN ${IDS}`, params);
+      this.tdb.run(`DELETE FROM evidence_links WHERE evidence_links.organization_id = @organization_id AND evidence_links.evidence_id IN ${IDS}`, params);
+      this.tdb.run(`DELETE FROM evidence WHERE evidence.organization_id = @organization_id AND evidence.id IN ${IDS}`, params);
+    }
+    // what is left of the links to demo records (from real evidence that also points at something real)
+    this.tdb.run(`DELETE FROM evidence_links WHERE evidence_links.organization_id = @organization_id AND evidence_links.target_id IN ${DEMO_TARGETS}`);
     this.tdb.run(`DELETE FROM notifications WHERE notifications.organization_id = @organization_id AND notifications.recipient_membership_id IN ${DEMO_PEOPLE}`);
     this.tdb.run(`DELETE FROM notification_preferences WHERE notification_preferences.organization_id = @organization_id AND notification_preferences.membership_id IN ${DEMO_PEOPLE}`);
     this.tdb.run(`DELETE FROM daily_updates WHERE daily_updates.organization_id = @organization_id AND daily_updates.membership_id IN ${DEMO_PEOPLE}`);
