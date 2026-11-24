@@ -142,6 +142,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
     const mentorB = (await post(t.app, "/api/employees", { name: "Alpha secret mentee" }, ownerA)).body.data.id as string;
     const mentoringA = ((await post(t.app, "/api/mentorship/assignments", { mentorId: personA.membershipId, menteeId: mentorB, goals: "Alpha secret goals" }, ownerA)).body.data as { id: string }).id;
     const reviewA = ((await post(t.app, "/api/performance/reviews", { periodId: periodA, subjectId: personA.membershipId, sharedSummary: "Alpha secret summary", privateNotes: "Alpha secret private note" }, ownerA)).body.data as { id: string }).id;
+    const evidenceA = ((await post(t.app, "/api/evidence", { title: "Alpha secret evidence", externalRef: "https://example.com/alpha-secret", links: [{ type: "task", id: taskA }] }, ownerA)).body.data as { id: string }).id;
     const comparisonA = ((await post(t.app, "/api/performance/comparisons", { name: "Alpha secret comparison", periodId: periodA }, ownerA)).body.data as { id: string }).id;
     const keyResultA = (t.db.prepare("SELECT id FROM key_results WHERE objective_id = ?").get(objectiveA) as { id: string }).id;
     const assignmentRowA = (t.db.prepare("SELECT id FROM task_assignments WHERE task_id = ?").get(taskA) as { id: string }).id;
@@ -231,6 +232,11 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       "/api/performance/reviews": { params: {}, body: { periodId: periodA, subjectId: personA.membershipId } },
       "/api/performance/reviews/:id": { params: { id: reviewA }, body: { sharedSummary: "Hacked by B" } },
       "/api/performance/reviews/:id/acknowledge": { params: { id: reviewA } },
+      "/api/evidence": { params: {}, body: { title: "Hacked by B", links: [{ type: "task", id: taskA }] } },
+      "/api/evidence/:id": { params: { id: evidenceA } },
+      "/api/evidence/:id/file": { params: { id: evidenceA }, body: { filename: "a.txt", dataBase64: "aGk=" } },
+      "/api/evidence/:id/links": { params: { id: evidenceA }, body: { type: "task", id: taskA } },
+      "/api/evidence/:id/verify": { params: { id: evidenceA }, body: { status: "verified" } },
       "/api/performance/compare": { params: {}, body: { periodId: periodA } },
       "/api/performance/compare/difference": { params: {}, body: { periodId: periodA, a: personA.membershipId, b: personA.membershipId } },
       "/api/performance/comparisons": { params: {}, body: { name: "Hacked by B", periodId: periodA } },
@@ -285,6 +291,8 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       t.db.prepare("SELECT id, mentor_membership_id, mentee_membership_id, status, goals, end_date FROM mentorship_assignments WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM mentorship_activities WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
       t.db.prepare("SELECT id, period_id, subject_membership_id, status, shared_summary, private_notes FROM performance_reviews WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT id, title, verification_status, confidentiality FROM evidence WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co') ORDER BY id").all(),
+      t.db.prepare("SELECT COUNT(*) n FROM evidence_links WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
       t.db.prepare("SELECT COUNT(*) n FROM automation_events").get(),
       t.db.prepare("SELECT name FROM organizations ORDER BY id").all(),
       t.db.prepare("SELECT COUNT(*) n FROM audit_logs WHERE organization_id = (SELECT id FROM organizations WHERE name = 'Alpha Co')").get(),
@@ -308,7 +316,7 @@ describe("tenancy matrix: an administrator of organization B against organizatio
       const res = await call(route, ownerB, {});
       expect(res.status).toBe(200);
       const text = JSON.stringify(res.body);
-      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", modelA, periodA, cardA, scoreA, comparisonA, mentoringA, reviewA, kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
+      for (const secret of ["Alpha Co", "pending-a@example.com", "member-a@example.com", "Member Alpha", "Pending Alpha", "Alpha Engineering", "Alpha Platform", "Alpha Engineers", "Alpha Mentor", "Dana Alpha", "Alpha secret", "owner-a@example.com", modelA, periodA, cardA, scoreA, comparisonA, mentoringA, reviewA, evidenceA, kpiA, kpiAssignmentA, objectiveA, keyResultA, taskA2, parentA, objectiveAssignmentA, invA.invitation.id, personA.membershipId, idsA.employee, deptA, teamA, familyA, designationA, dirA, reportingA, teamRowA, deptRowA, taskA, commentA, assignmentRowA, notificationA]) {
         expect(text, `${route.path} leaked ${secret}`).not.toContain(secret);
       }
     }

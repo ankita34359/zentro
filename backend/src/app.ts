@@ -35,6 +35,8 @@ import { EventWriter } from "./modules/automation/events.js";
 import { NotificationService } from "./modules/notifications/service.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { TaskService } from "./modules/tasks/service.js";
+import { EvidenceService } from "./modules/evidence/service.js";
+import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { DashboardService } from "./modules/dashboards/service.js";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.js";
 import { OverviewService } from "./modules/overview/service.js";
@@ -131,6 +133,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   registerMeasurementRoutes(registry, { permissions, measurements: measurementService });
   registerModelRoutes(registry, { permissions, models: new ModelService({ store, auth, audit }) });
   registerPerformanceRoutes(registry, { permissions, performance: performanceService });
+  registerEvidenceRoutes(registry, { permissions, evidence: new EvidenceService({ store, auth, audit, tasks: taskService, okr: okrService }) });
   registerReviewRoutes(registry, { permissions, reviews: new ReviewService({ store, auth, audit }) });
   const mentorshipService = new MentorshipService({ store, auth, audit });
   registerMentorshipRoutes(registry, { permissions, mentorship: mentorshipService });
@@ -148,6 +151,7 @@ export function createApp(opts: AppOptions): { app: Express; registry: RouteRegi
   app.use(compressText());
   app.use(revalidateHealthz);
   app.use(sameOriginCheck(opts.config.appUrl));
+  app.use("/api/evidence", express.json({ limit: "3.5mb" })); // a base64 file of at most 2 MB; every other route keeps the small limit
   app.use(express.json({ limit: "100kb" }));
   registry.mount(app, opts.guards ?? createAuthGuards(auth, permissions, opts.config.sessionSecret, opts.config.nodeEnv, opts.cronSecret));
   assertAllRegistered(app, registry);
