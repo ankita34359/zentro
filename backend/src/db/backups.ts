@@ -23,16 +23,20 @@ export async function dailyBackup(db: Database.Database, dir: string, now: Date,
   const tmp = `${final}.partial`;
   try {
     await db.backup(tmp);
-    const check = new Database(tmp, { readonly: true, fileMustExist: true });
+    // the copy is made a plain single file (no -wal or -shm companions, so it can be moved or restored on its own), then checked by opening it
+    const check = new Database(tmp, { fileMustExist: true });
     try {
+      check.pragma("journal_mode = DELETE");
       const result = check.pragma("integrity_check", { simple: true });
       if (result !== "ok") throw new Error("The new backup did not pass SQLite's integrity check.");
     } finally {
       check.close();
     }
+    fs.rmSync(`${tmp}-wal`, { force: true });
+    fs.rmSync(`${tmp}-shm`, { force: true });
     fs.renameSync(tmp, final);
   } catch (e) {
-    fs.rmSync(tmp, { force: true });
+    for (const f of [tmp, `${tmp}-wal`, `${tmp}-shm`]) fs.rmSync(f, { force: true });
     throw e;
   }
   const daily = fs.readdirSync(dir).filter((f) => /^daily-.*\.db$/.test(f)).sort(); // the ISO stamp sorts oldest first

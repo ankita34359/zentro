@@ -182,3 +182,12 @@ Related: [risks](risks.md) (what could go wrong), [milestones](milestones.md).
 - **Only Anthropic is a provider**, and only for Ask AI. Daily Planner, risk explanations, alignment proposals and approvals (7.2 to 7.7) are not built.
 - **Withdrawn evidence cannot be brought back** from the screen (the row and the audit entry stay in the database). A rejected item or one that asks for more information cannot be withdrawn; it can be replaced by attaching a new one.
 
+## Added in batch K (safety, backups, errors, polish)
+
+- **Backups are on the same disk as the database.** They protect against mistakes and bad updates, not against losing the server. An off-server copy is not built. The System page and docs/RECOVERY.md say so.
+- **Restoring is still a setting** (`RESTORE_BACKUP`), not a button; docs/RECOVERY.md walks through it.
+- **Rate-limit counts are in memory.** A restart forgets them (which only favours a real person). Limits before sign-in are logged, not audited, because no organization exists yet; the general API limit is per address, so many people behind one address share it (600 calls a minute).
+- **The security policy keeps `'unsafe-inline'` for styles** (the animation library and charts set style attributes). Scripts are strictly same-origin.
+- **Team Performance by date range** counts tasks for exactly those dates, but scores belong to scoring periods: the period that overlaps the range most is used, and the page says how much of the range it covers. A range that crosses several periods is not blended.
+- **The Leadership waterfall** shows only what the server already computed; objectives with no data add nothing and say "no data".
+

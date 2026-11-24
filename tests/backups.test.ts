@@ -23,7 +23,7 @@ describe("daily backup (batch K)", () => {
     expect((copy.prepare("SELECT COUNT(*) n FROM users").get() as { n: number }).n).toBe(1);
     expect((copy.prepare("SELECT COUNT(*) n FROM organizations").get() as { n: number }).n).toBe(1);
     copy.close();
-    expect(fs.readdirSync(dir).filter((f) => f.endsWith(".partial"))).toEqual([]); // no half-written file is left behind
+    expect(fs.readdirSync(dir)).toEqual([r.file]); // one plain file: no half-written copy and no -wal or -shm companions left behind
   });
 
   it("keeps the newest 14 daily copies and removes older ones, and never touches the pre-migration copies", async () => {
