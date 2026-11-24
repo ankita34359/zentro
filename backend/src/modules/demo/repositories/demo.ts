@@ -127,6 +127,12 @@ export class DemoRepository {
   insertTaskComment(r: { id: string; taskId: string; author: string; body: string; now: string }): void {
     this.tdb.run("INSERT INTO task_comments (id, organization_id, task_id, author_membership_id, body, created_at) VALUES (@id, @organization_id, @taskId, @author, @body, @now)", r);
   }
+  insertEvidence(e: { id: string; type: string; title: string; description: string; externalRef: string | null; relatedId: string; occurredOn: string; by: string; confidentiality: string; status: string; verifiedBy: string | null; verifiedAt: string | null; note: string | null; now: string }): void {
+    this.tdb.run("INSERT INTO evidence (id, organization_id, evidence_type, title, description, source, external_ref, related_membership_id, occurred_on, submitted_by_membership_id, verification_status, verified_by_membership_id, verified_at, verification_note, confidentiality, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @type, @title, @description, 'demo', @externalRef, @relatedId, @occurredOn, @by, @status, @verifiedBy, @verifiedAt, @note, @confidentiality, 1, @now, @now)", e);
+  }
+  insertEvidenceLink(l: { id: string; evidenceId: string; type: string; targetId: string; now: string }): void {
+    this.tdb.run("INSERT OR IGNORE INTO evidence_links (id, organization_id, evidence_id, target_type, target_id, created_at) VALUES (@id, @organization_id, @evidenceId, @type, @targetId, @now)", l);
+  }
   insertReview(r: { id: string; periodId: string; subjectId: string; reviewerId: string; status: string; rating: number | null; sharedSummary: string; developmentFocus: string; privateNotes: string; submittedAt: string | null; acknowledgedAt: string | null; now: string }): void {
     this.tdb.run("INSERT INTO performance_reviews (id, organization_id, period_id, subject_membership_id, reviewer_membership_id, status, rating, shared_summary, development_focus, private_notes, submitted_at, acknowledged_at, is_demo, created_at, updated_at) VALUES (@id, @organization_id, @periodId, @subjectId, @reviewerId, @status, @rating, @sharedSummary, @developmentFocus, @privateNotes, @submittedAt, @acknowledgedAt, 1, @now, @now)", r);
   }
@@ -189,6 +195,7 @@ export class DemoRepository {
       tasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = @organization_id AND is_demo = 1"),
       objectives: one("SELECT COUNT(*) AS n FROM objectives WHERE organization_id = @organization_id AND is_demo = 1"),
       keyResults: one("SELECT COUNT(*) AS n FROM key_results WHERE organization_id = @organization_id AND is_demo = 1"),
+      evidence: one("SELECT COUNT(*) AS n FROM evidence WHERE organization_id = @organization_id AND is_demo = 1"),
       reviews: one("SELECT COUNT(*) AS n FROM performance_reviews WHERE organization_id = @organization_id AND is_demo = 1"),
       mentorships: one("SELECT COUNT(*) AS n FROM mentorship_assignments WHERE organization_id = @organization_id AND is_demo = 1"),
       periods: one("SELECT COUNT(*) AS n FROM performance_periods WHERE organization_id = @organization_id AND is_demo = 1"),
@@ -200,6 +207,11 @@ export class DemoRepository {
   // ----- removal, children before parents -----
 
   deleteAll(): void {
+    // evidence of the demo (and anything about or by a demo person) goes with its files and links; a REAL piece of evidence keeps existing and only loses its links to demo records
+    const DEMO_EVIDENCE = `(SELECT dev.id FROM evidence dev WHERE dev.organization_id = @organization_id AND (dev.is_demo = 1 OR dev.submitted_by_membership_id IN ${DEMO_PEOPLE} OR dev.related_membership_id IN ${DEMO_PEOPLE}))`;
+    this.tdb.run(`DELETE FROM evidence_files WHERE evidence_files.organization_id = @organization_id AND evidence_files.evidence_id IN ${DEMO_EVIDENCE}`);
+    this.tdb.run(`DELETE FROM evidence_links WHERE evidence_links.organization_id = @organization_id AND (evidence_links.evidence_id IN ${DEMO_EVIDENCE} OR evidence_links.target_id IN ${DEMO_TASKS} OR evidence_links.target_id IN (SELECT dob9.id FROM objectives dob9 WHERE dob9.organization_id = @organization_id AND dob9.is_demo = 1) OR evidence_links.target_id IN (SELECT dkr9.id FROM key_results dkr9 WHERE dkr9.organization_id = @organization_id AND dkr9.is_demo = 1))`);
+    this.tdb.run(`DELETE FROM evidence WHERE evidence.organization_id = @organization_id AND evidence.id IN ${DEMO_EVIDENCE}`);
     this.tdb.run(`DELETE FROM notifications WHERE notifications.organization_id = @organization_id AND notifications.recipient_membership_id IN ${DEMO_PEOPLE}`);
     this.tdb.run(`DELETE FROM notification_preferences WHERE notification_preferences.organization_id = @organization_id AND notification_preferences.membership_id IN ${DEMO_PEOPLE}`);
     this.tdb.run(`DELETE FROM daily_updates WHERE daily_updates.organization_id = @organization_id AND daily_updates.membership_id IN ${DEMO_PEOPLE}`);

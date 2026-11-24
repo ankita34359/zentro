@@ -216,6 +216,28 @@ export class DemoService {
       for (const d of company.dailyUpdates) repo.insertDailyUpdate({ id: newId(), membershipId: personId.get(d.personKey)!, day: addDays(today, d.dayOffset), summary: d.summary, blockers: d.blockers, now: at(addDays(today, d.dayOffset), 17) });
       this.insertNotifications(repo, company.tasks, taskId, personId, today, now);
 
+      // evidence behind the finished tasks (stage 4.6): most is verified by the person's manager, some is rejected, some asks for more, one item is restricted
+      {
+        const mgrOf = new Map(company.people.map((p) => [p.key, p.managerKey]));
+        const KINDS = ["task_completion", "report", "document", "delivery_record", "customer_feedback", "meeting_outcome"] as const;
+        const TITLES = ["Hand-off notes", "Review summary", "Delivery receipt", "Customer message", "Meeting notes", "Final draft"];
+        let n = 0;
+        for (const tk of company.tasks) {
+          if (tk.status !== "completed" || !tk.outcome) continue;
+          n += 1;
+          if (n % 3 === 0) continue; // a third of the finished tasks have no evidence: the gap is part of the picture
+          const manager = mgrOf.get(tk.assigneeKey);
+          const doneOn = addDays(today, tk.completedOffset ?? -1);
+          const roll = n % 10;
+          const status = !manager ? "unverified" : roll < 5 ? "verified" : roll === 5 ? "rejected" : roll === 6 ? "needs_info" : "unverified";
+          const evId = newId();
+          repo.insertEvidence({ id: evId, type: KINDS[n % KINDS.length]!, title: `${TITLES[n % TITLES.length]}: ${tk.title}`.slice(0, 190), description: "Demo evidence: what was delivered for this task.", externalRef: `https://demo.example.com/evidence/${n}`, relatedId: personId.get(tk.assigneeKey)!, occurredOn: doneOn, by: personId.get(tk.assigneeKey)!, confidentiality: n % 17 === 0 ? "restricted" : n % 5 === 0 ? "organization" : "scope", status, verifiedBy: status === "unverified" || !manager ? null : personId.get(manager)!, verifiedAt: status === "unverified" ? null : `${addDays(doneOn, 1)}T09:00:00.000Z`, note: status === "rejected" ? "The link does not show the finished work." : status === "needs_info" ? "Which release was this part of?" : null, now });
+          repo.insertEvidenceLink({ id: newId(), evidenceId: evId, type: "task", targetId: taskId.get(tk.key)!, now });
+          const krs = tk.objectiveKey ? keyResultIds.get(tk.objectiveKey) : undefined;
+          if (krs && tk.krIndex !== null && krs[tk.krIndex]) repo.insertEvidenceLink({ id: newId(), evidenceId: evId, type: "key_result", targetId: krs[tk.krIndex]!, now });
+        }
+      }
+
       // mentorship: who mentors whom, and what they did (stage 5.5), before the scores that read it
       for (const m of company.mentorships) {
         const aid = newId();

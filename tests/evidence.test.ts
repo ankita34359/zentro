@@ -140,3 +140,38 @@ describe("Evidence (stage 4.3)", () => {
     expect(after).not.toBe(before);
   });
 });
+
+describe("Evidence in the demo company (stage 4.6)", () => {
+  it("the demo has evidence in every verification state, behind tasks and key results; an employee sees only their own; Remove demo data takes it and spares a real item", async () => {
+    t = makeAuthApp();
+    const owner = await signUpWithOrg(t.app, "owner@example.com", "Acme");
+    const load = await post(t.app, "/api/demo/load", undefined, owner);
+    expect(load.status).toBe(201);
+    expect(load.body.data.counts.evidence).toBeGreaterThanOrEqual(15);
+    const all = (await get(t.app, "/api/evidence", owner)).body.data as { verification: { status: string }; links: { type: string }[]; confidentiality: string; isDemo: boolean }[];
+    const states = new Set(all.map((e) => e.verification.status));
+    for (const s of ["verified", "rejected", "needs_info", "unverified"]) expect(states.has(s), s).toBe(true);
+    expect(all.every((e) => e.isDemo)).toBe(true);
+    expect(all.some((e) => e.links.some((l) => l.type === "key_result"))).toBe(true);
+    // an employee sees their own and nothing about people outside their scope
+    const ps = (await get(t.app, "/api/demo/personas", owner)).body.data as { id: string; designation: string; roles: string[] }[];
+    const subjectIds = new Set((t.db.prepare("SELECT DISTINCT related_membership_id AS id FROM evidence").all() as { id: string }[]).map((r) => r.id));
+    const emp = ps.find((p) => p.roles.includes("Employee") && subjectIds.has(p.id))!;
+    const asEmp = await post(t.app, `/api/demo/view-as/${emp.id}`, undefined, owner);
+    const cookies = ([] as string[]).concat((asEmp.headers["set-cookie"] as unknown as string[]) ?? []).map((c) => c.split(";")[0] ?? "").filter((c) => /^zentro_(admin_)?session=/.test(c)).join("; ");
+    const mine = (await get(t.app, "/api/evidence", cookies)).body.data as { submittedBy: { id: string }; confidentiality: string }[];
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.some((e) => e.submittedBy.id === emp.id)).toBe(true);
+    expect(mine.every((e) => e.submittedBy.id === emp.id || e.confidentiality === "organization")).toBe(true); // others' evidence only when it was shared organization-wide
+    expect(mine.length).toBeLessThan(all.length / 2);
+    // a real item attached to a demo task
+    const demoTask = one<{ id: string }>("SELECT id FROM tasks WHERE is_demo = 1 LIMIT 1").id;
+    const real = await post(t.app, "/api/evidence", { title: "My own note", links: [{ type: "task", id: demoTask }] }, owner);
+    expect(real.status, JSON.stringify(real.body)).toBe(201);
+    const removed = await post(t.app, "/api/demo/remove", undefined, owner);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence WHERE is_demo = 1").n).toBe(0);
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence").n).toBe(1); // the real one stays
+    expect(one<{ n: number }>("SELECT COUNT(*) n FROM evidence_links").n).toBe(0); // its link to the demo task went with the task
+  });
+});
